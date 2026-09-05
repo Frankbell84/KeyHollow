@@ -6,12 +6,11 @@ Pull request: [#35](https://github.com/Frankbell84/KeyHollow/pull/35) (draft)
 
 ## Current task
 
-Phase 4 is integrating the independently compiled folder/presentation add-on
-through the app composition layer. The current milestone gives general image
-files the same gallery thumbnail treatment as Photos imports, using only an
-authenticated record-level read and encrypted presentation cache. Protected
-store formats, existing vaults, and `.khvault` compatibility remain unchanged.
-App Store review and TestFlight remain untouched.
+Phase 4 folder/presentation implementation and its visible-folder milestone are
+green. Frank explicitly approved TestFlight preparation. Prepare production
+Build 30 through an exact guarded delivery branch while preserving the tested
+source, production identity, protected store formats, existing vaults, and
+`.khvault` compatibility. App Store review remains untouched.
 
 ## Completed work
 
@@ -102,6 +101,12 @@ App Store review and TestFlight remain untouched.
 - Swift CodeQL: passed in 22m46s with no failed security gate.
 - Security-test and simulator artifacts were produced with recorded SHA-256
   digests.
+- App Store Connect was checked directly after approval: Build 29 is the latest
+  completed production upload, so Build 30 is the next unused number.
+- Updated both the app and embedded thumbnail extension to Build 30.
+- Replaced the stale prior-feature workflow exception with the exact guarded
+  `delivery/folder-presentation-addon` branch; ordinary feature branches remain
+  unable to upload production builds.
 - Definitive Phase 4 run [#219](https://github.com/Frankbell84/KeyHollow/actions/runs/33989008013)
   at `802252d`: passed in 28m43s.
 - Mac simulator build and complete regression/security suite: passed in 7m37s.
@@ -135,16 +140,15 @@ App Store review and TestFlight remain untouched.
 
 ## Next action
 
-The visible folder milestone is eligible for TestFlight preparation. Before
-delivery, assign the next unused production build number, run signing/archive
-identity checks, and upload only after Frank explicitly approves TestFlight.
+Run local release guards, commit and push the Build 30 preparation, and require
+fresh PR gates. Then create the exact delivery branch from that reviewed commit
+and dispatch the guarded signing/archive/upload workflow for Build 30.
 
 ## Frank's decision required
 
 - No routine decision is currently required; Frank explicitly started Phase 4.
 - Folder and presentation implementation may proceed autonomously within the
   documented acceptance criteria.
-- Frank's explicit approval is now required before this Phase 4 candidate is
-  delivered to TestFlight.
+- Frank explicitly approved this Phase 4 TestFlight delivery.
 - Any App Store review change remains out of scope without separate explicit
   approval.
