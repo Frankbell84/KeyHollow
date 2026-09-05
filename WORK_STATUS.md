@@ -122,6 +122,12 @@ App Store review and TestFlight remain untouched.
 - Visible-folder release-hygiene gate: passed locally.
 - Visible-folder build-number guard self-test: passed locally.
 - Visible-folder diff integrity check: passed locally.
+- Visible-folder CI run [#225](https://github.com/Frankbell84/KeyHollow/actions/runs/33994826801)
+  at `0739769`: passed in 23m14s.
+- Mac simulator build and complete regression/security suite: passed in 5m31s.
+- Swift CodeQL: passed in 22m33s with no failed security gate.
+- Security-test and simulator artifacts were produced with recorded SHA-256
+  digests.
 
 ## Blockers
 
@@ -129,14 +135,16 @@ App Store review and TestFlight remain untouched.
 
 ## Next action
 
-Commit and push the visible folder milestone to draft PR #35, then require the
-Mac simulator build, complete regression/security suite, and Swift CodeQL gate.
-Only after those pass should the branch advance toward TestFlight preparation.
+The visible folder milestone is eligible for TestFlight preparation. Before
+delivery, assign the next unused production build number, run signing/archive
+identity checks, and upload only after Frank explicitly approves TestFlight.
 
 ## Frank's decision required
 
 - No routine decision is currently required; Frank explicitly started Phase 4.
 - Folder and presentation implementation may proceed autonomously within the
   documented acceptance criteria.
-- Any future TestFlight delivery or App Store review change still requires
-  Frank's explicit approval.
+- Frank's explicit approval is now required before this Phase 4 candidate is
+  delivered to TestFlight.
+- Any App Store review change remains out of scope without separate explicit
+  approval.
