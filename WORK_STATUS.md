@@ -6,10 +6,11 @@ Pull request: [#35](https://github.com/Frankbell84/KeyHollow/pull/35) (draft)
 
 ## Current task
 
-Phase 4 folder/presentation implementation and its visible-folder milestone are
-green. Production Build 30 was signed and uploaded from the exact reviewed
-commit. Verify Apple processing, retain the existing internal test group, and
-add Build 30 to the `Family` TestFlight group for feedback. App Store review
+Production Build 30 was signed and uploaded from the exact reviewed commit.
+Frank's device feedback found a Phase 4 presentation inconsistency: photo tiles
+can appear visually distorted and do not carry the filename-and-size footer used
+by general-file tiles. Correct the shared gallery presentation on the isolated
+feature branch without altering protected content or Build 30. App Store review
 remains untouched.
 
 ## Completed work
@@ -107,6 +108,8 @@ remains untouched.
   delivery branch contains no unreviewed source changes.
 - Frank requested that this update also be made available to the `Family`
   TestFlight group for broader feedback.
+- Frank confirmed Build 30's file-image thumbnails render, then identified that
+  photo and file tiles still use visibly different sizing and metadata rules.
 - App Store Connect was checked directly after approval: Build 29 is the latest
   completed production upload, so Build 30 is the next unused number.
 - Updated both the app and embedded thumbnail extension to Build 30.
@@ -166,10 +169,11 @@ remains untouched.
 
 ## Next action
 
-After App Store Connect sign-in, verify Build 30 reaches `Complete` / `Ready to
-Submit`, confirm the existing internal test group remains assigned, add the
-`Family` TestFlight group, and confirm tester availability. Then collect
-physical-device feedback before any merge decision.
+Implement and test one consistent square gallery-tile contract that preserves
+image proportions while giving photos and files the same filename-and-size
+footer. Push the correction through the full Phase 4 CI gates. After App Store
+Connect sign-in, verify Build 30 and add it to the `Family` group; any corrected
+follow-up build must receive a separate guarded delivery checkpoint.
 
 ## Frank's decision required
 
@@ -177,6 +181,8 @@ physical-device feedback before any merge decision.
   entered by the agent.
 - Frank explicitly approved this Phase 4 TestFlight delivery and requested the
   `Family` group receive Build 30.
+- No decision is required for the gallery parity correction; Frank explicitly
+  requested proportional thumbnails and matching image metadata footers.
 - Device feedback and the later merge decision remain pending.
 - Any App Store review change remains out of scope without separate explicit
   approval.
