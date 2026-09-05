@@ -6,15 +6,18 @@ import Photos
 public struct PickedVaultPhoto: Identifiable, @unchecked Sendable {
     public let id = UUID()
     public let sourceAssetIdentifier: String?
+    public let displayName: String?
     public let originalData: Data
     public let thumbnailData: Data
 
     public init(
         sourceAssetIdentifier: String?,
+        displayName: String? = nil,
         originalData: Data,
         thumbnailData: Data
     ) {
         self.sourceAssetIdentifier = sourceAssetIdentifier
+        self.displayName = displayName
         self.originalData = originalData
         self.thumbnailData = thumbnailData
     }
@@ -76,6 +79,7 @@ public enum ApplePhotoPickerItemLoader {
         }
         return PickedVaultPhoto(
             sourceAssetIdentifier: result.assetIdentifier,
+            displayName: provider.suggestedName,
             originalData: originalData,
             thumbnailData: thumbnailData
         )

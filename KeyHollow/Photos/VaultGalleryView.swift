@@ -509,41 +509,41 @@ struct VaultGalleryView: View {
             }
         } label: {
             GeometryReader { proxy in
-                ZStack(alignment: .topTrailing) {
-                    Rectangle()
-                        .fill(.secondary.opacity(0.12))
+                VaultGalleryTileSurface(
+                    title: VaultPhotoPresentationMetadata.title(for: record),
+                    detail: VaultPhotoPresentationMetadata.detail(for: record)
+                ) {
+                    ZStack(alignment: .topTrailing) {
+                        if let image = thumbnails[record.id] {
+                            Image(uiImage: image)
+                                .resizable()
+                                .scaledToFill()
+                        } else {
+                            Image(systemName: "photo")
+                                .foregroundStyle(.secondary)
+                        }
 
-                    if let image = thumbnails[record.id] {
-                        Image(uiImage: image)
-                            .resizable()
-                            .scaledToFill()
-                            .frame(width: proxy.size.width, height: proxy.size.height)
-                            .clipped()
-                    } else {
-                        Image(systemName: "photo")
-                            .foregroundStyle(.secondary)
-                            .frame(width: proxy.size.width, height: proxy.size.height)
-                    }
-
-                    if isSelecting {
-                        Image(systemName: selectedPhotoIDs.contains(record.id) ? "checkmark.circle.fill" : "circle")
-                            .font(.title2)
-                            .foregroundStyle(
-                                selectedPhotoIDs.contains(record.id) ? Color.accentColor : Color.white,
-                                Color.white
-                            )
-                            .padding(8)
-                            .shadow(radius: 2)
+                        if isSelecting {
+                            Image(systemName: selectedPhotoIDs.contains(record.id) ? "checkmark.circle.fill" : "circle")
+                                .font(.title2)
+                                .foregroundStyle(
+                                    selectedPhotoIDs.contains(record.id) ? Color.accentColor : Color.white,
+                                    Color.white
+                                )
+                                .padding(8)
+                                .shadow(radius: 2)
+                        }
                     }
                 }
+                .frame(width: proxy.size.width, height: proxy.size.height)
             }
             .aspectRatio(1, contentMode: .fit)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Vault photo")
+        .accessibilityLabel(VaultPhotoPresentationMetadata.title(for: record))
         .accessibilityValue(
-            isSelecting && selectedPhotoIDs.contains(record.id) ? "Selected" : "Not selected"
+            photoAccessibilityValue(record)
         )
         .contextMenu {
             Button {
@@ -570,6 +570,13 @@ struct VaultGalleryView: View {
         .task(id: record.id) {
             await loadThumbnailIfNeeded(record)
         }
+    }
+
+    private func photoAccessibilityValue(_ record: VaultPhotoRecord) -> String {
+        let metadata = "Encrypted photo, \(VaultPhotoPresentationMetadata.detail(for: record))"
+        guard isSelecting else { return metadata }
+        let selection = selectedPhotoIDs.contains(record.id) ? "Selected" : "Not selected"
+        return "\(selection), \(metadata)"
     }
 
     private func initializeStores() async {
@@ -811,7 +818,8 @@ struct VaultGalleryView: View {
             do {
                 _ = try await store.importPhoto(
                     originalData: photo.originalData,
-                    thumbnailData: photo.thumbnailData
+                    thumbnailData: photo.thumbnailData,
+                    displayName: photo.displayName
                 )
                 progress.importedCount += 1
                 if progress.mode == .move, let identifier = photo.sourceAssetIdentifier {
@@ -931,7 +939,9 @@ struct VaultGalleryView: View {
             let originalData = try await generalFileStore.loadFile(record)
             guard !Task.isCancelled,
                   let originalImage = UIImage(data: originalData),
-                  let thumbnailData = Self.makeThumbnailData(from: originalImage),
+                  let thumbnailData = VaultGalleryThumbnailRenderer.jpegData(
+                      from: originalImage
+                  ),
                   let thumbnailImage = UIImage(data: thumbnailData) else {
                 return
             }
@@ -953,26 +963,6 @@ struct VaultGalleryView: View {
             generalFileThumbnails.removeValue(forKey: eviction)
         }
         generalFileThumbnails[id] = image
-    }
-
-    private static func makeThumbnailData(from image: UIImage) -> Data? {
-        let sourceWidth = CGFloat(image.cgImage?.width ?? Int(image.size.width * image.scale))
-        let sourceHeight = CGFloat(image.cgImage?.height ?? Int(image.size.height * image.scale))
-        let longestEdge = max(sourceWidth, sourceHeight)
-        guard longestEdge > 0 else { return nil }
-
-        let scale = min(1, 512 / longestEdge)
-        let targetSize = CGSize(
-            width: max(1, (sourceWidth * scale).rounded()),
-            height: max(1, (sourceHeight * scale).rounded())
-        )
-        let format = UIGraphicsImageRendererFormat()
-        format.scale = 1
-        format.opaque = true
-        let thumbnail = UIGraphicsImageRenderer(size: targetSize, format: format).image { _ in
-            image.draw(in: CGRect(origin: .zero, size: targetSize))
-        }
-        return thumbnail.jpegData(compressionQuality: 0.82)
     }
 
     private func importResultMessage(action: String, importedCount: Int, failedCount: Int) -> String {

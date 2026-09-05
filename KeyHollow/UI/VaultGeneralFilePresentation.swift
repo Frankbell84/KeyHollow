@@ -71,38 +71,20 @@ struct VaultGeneralFileTileView: View {
     var body: some View {
         Button { openFileManager() } label: {
             GeometryReader { proxy in
-                ZStack(alignment: .bottomLeading) {
-                    Rectangle()
-                        .fill(.secondary.opacity(0.12))
-
-                    VStack(spacing: 0) {
-                        if let thumbnail {
-                            Image(uiImage: thumbnail)
-                                .resizable()
-                                .scaledToFill()
-                                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                                .clipped()
-                        } else {
-                            Image(systemName: GeneralFilePresentation.iconName(
-                                for: record.contentTypeIdentifier
-                            ))
-                            .font(.system(size: 38, weight: .regular))
-                            .foregroundStyle(.tint)
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        }
-
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(record.displayName)
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(.primary)
-                                .lineLimit(2)
-                            Text(formattedSize)
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(8)
-                        .background(.ultraThinMaterial)
+                VaultGalleryTileSurface(
+                    title: record.displayName,
+                    detail: formattedSize
+                ) {
+                    if let thumbnail {
+                        Image(uiImage: thumbnail)
+                            .resizable()
+                            .scaledToFill()
+                    } else {
+                        Image(systemName: GeneralFilePresentation.iconName(
+                            for: record.contentTypeIdentifier
+                        ))
+                        .font(.system(size: 38, weight: .regular))
+                        .foregroundStyle(.tint)
                     }
                 }
                 .frame(width: proxy.size.width, height: proxy.size.height)

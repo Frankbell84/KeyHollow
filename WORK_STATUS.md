@@ -9,9 +9,10 @@ Pull request: [#35](https://github.com/Frankbell84/KeyHollow/pull/35) (draft)
 Production Build 30 was signed and uploaded from the exact reviewed commit.
 Frank's device feedback found a Phase 4 presentation inconsistency: photo tiles
 can appear visually distorted and do not carry the filename-and-size footer used
-by general-file tiles. Correct the shared gallery presentation on the isolated
-feature branch without altering protected content or Build 30. App Store review
-remains untouched.
+by general-file tiles. The isolated correction is implemented locally and is
+ready for remote Mac validation. Build 30 is fully processed; its `Family`
+TestFlight assignment is prepared and awaiting the final access-change
+confirmation. App Store review remains untouched.
 
 ## Completed work
 
@@ -110,6 +111,20 @@ remains untouched.
   TestFlight group for broader feedback.
 - Frank confirmed Build 30's file-image thumbnails render, then identified that
   photo and file tiles still use visibly different sizing and metadata rules.
+- Added one shared square gallery-tile surface so photo and general-file tiles
+  use the same media region, filename treatment, size/detail line, and footer.
+- Corrected file-image thumbnail generation to respect image orientation before
+  calculating dimensions, preventing portrait and rotated images from being
+  stretched.
+- Added optional photo display-name and stored-size metadata. New imports retain
+  this information; existing manifests and older `.khvault` archives remain
+  compatible because missing metadata decodes cleanly.
+- Existing photo records display their import date when their historical stored
+  size is unavailable; no protected photo is decrypted merely to populate UI.
+- Added regression coverage for legacy photo-record decoding, normalized stored
+  metadata, and orientation-preserving thumbnail dimensions.
+- Verified in App Store Connect that Build 30 is `Complete` / `Ready to Submit`
+  and remains assigned to `KeyHollow Internal`.
 - App Store Connect was checked directly after approval: Build 29 is the latest
   completed production upload, so Build 30 is the next unused number.
 - Updated both the app and embedded thumbnail extension to Build 30.
@@ -160,27 +175,30 @@ remains untouched.
   passed.
 - The only upload-run notice was a hosted-runner Homebrew trust warning for an
   existing `aws/tap`; it did not affect the app, signing, archive, or upload.
+- Gallery-parity architecture boundary gate: passed locally.
+- Gallery-parity release-hygiene gate: passed locally.
+- Gallery-parity TestFlight build-number guard self-test: passed locally.
+- Gallery-parity whitespace/diff integrity check: passed locally.
 
 ## Blockers
 
-- App Store Connect signed out while Build 30 was processing. Frank must sign
-  back in before processing status and TestFlight group availability can be
-  verified.
+- Adding Build 30 to `Family` changes beta access. The exact group is selected
+  and requires Frank's final confirmation immediately before the change.
+- Full iOS compilation and unit tests require the remote Mac CI gate.
 
 ## Next action
 
-Implement and test one consistent square gallery-tile contract that preserves
-image proportions while giving photos and files the same filename-and-size
-footer. Push the correction through the full Phase 4 CI gates. After App Store
-Connect sign-in, verify Build 30 and add it to the `Family` group; any corrected
-follow-up build must receive a separate guarded delivery checkpoint.
+Commit and push the gallery-parity correction, then require the complete Phase 4
+Mac simulator and Swift security gates. After Frank confirms the prepared access
+change, add Build 30 to `Family` and verify availability. Any corrected follow-up
+build must receive a separate guarded delivery checkpoint.
 
 ## Frank's decision required
 
-- Frank must sign back in to App Store Connect; no credentials are stored or
-  entered by the agent.
 - Frank explicitly approved this Phase 4 TestFlight delivery and requested the
   `Family` group receive Build 30.
+- Frank must confirm the prepared `Family` access change immediately before it
+  is applied.
 - No decision is required for the gallery parity correction; Frank explicitly
   requested proportional thumbnails and matching image metadata footers.
 - Device feedback and the later merge decision remain pending.
