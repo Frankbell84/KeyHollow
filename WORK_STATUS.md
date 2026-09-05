@@ -7,10 +7,10 @@ Pull request: [#35](https://github.com/Frankbell84/KeyHollow/pull/35) (draft)
 ## Current task
 
 Phase 4 folder/presentation implementation and its visible-folder milestone are
-green. Frank explicitly approved TestFlight preparation. Prepare production
-Build 30 through an exact guarded delivery branch while preserving the tested
-source, production identity, protected store formats, existing vaults, and
-`.khvault` compatibility. App Store review remains untouched.
+green. Production Build 30 was signed and uploaded from the exact reviewed
+commit. Verify Apple processing, retain the existing internal test group, and
+add Build 30 to the `Family` TestFlight group for feedback. App Store review
+remains untouched.
 
 ## Completed work
 
@@ -101,6 +101,12 @@ source, production identity, protected store formats, existing vaults, and
 - Swift CodeQL: passed in 22m46s with no failed security gate.
 - Security-test and simulator artifacts were produced with recorded SHA-256
   digests.
+- Prepared and pushed the exact reviewed release commit `1cc359d` (`Prepare
+  guarded Phase 4 Build 30`) on `feature/folder-presentation-addon`.
+- Created `delivery/folder-presentation-addon` at that exact commit; the
+  delivery branch contains no unreviewed source changes.
+- Frank requested that this update also be made available to the `Family`
+  TestFlight group for broader feedback.
 - App Store Connect was checked directly after approval: Build 29 is the latest
   completed production upload, so Build 30 is the next unused number.
 - Updated both the app and embedded thumbnail extension to Build 30.
@@ -133,22 +139,44 @@ source, production identity, protected store formats, existing vaults, and
 - Swift CodeQL: passed in 22m33s with no failed security gate.
 - Security-test and simulator artifacts were produced with recorded SHA-256
   digests.
+- Final Build 30 source-validation run
+  [#227](https://github.com/Frankbell84/KeyHollow/actions/runs/33997419767)
+  at `1cc359d`: passed in 19m53s.
+- Mac simulator build and complete regression/security suite: passed in 9m02s.
+- Swift CodeQL: passed in 19m08s with no failed security gate.
+- Simulator artifact `9978590186` was recorded with SHA-256 digest
+  `2900d9ab5f7e5efa6c357c6a73fcbd90636d1c27916eddfb8f55e6b38c72bcfc`.
+- Security-test artifact `9978590860` was recorded with SHA-256 digest
+  `133bd4e54a73936dbefe39889f5bcd2a136e008270830dbfd46b22a444da4916`.
+- Guarded TestFlight upload run
+  [#40](https://github.com/Frankbell84/KeyHollow/actions/runs/33998469992)
+  completed successfully in 2m16s from `delivery/folder-presentation-addon`.
+- Release hygiene, production identity, build-number verification, project
+  generation, cloud signing, archive, archive/module hygiene, signed IPA
+  export, Apple upload, artifact retention, and signing-material cleanup all
+  passed.
+- The only upload-run notice was a hosted-runner Homebrew trust warning for an
+  existing `aws/tap`; it did not affect the app, signing, archive, or upload.
 
 ## Blockers
 
-- None.
+- App Store Connect signed out while Build 30 was processing. Frank must sign
+  back in before processing status and TestFlight group availability can be
+  verified.
 
 ## Next action
 
-Run local release guards, commit and push the Build 30 preparation, and require
-fresh PR gates. Then create the exact delivery branch from that reviewed commit
-and dispatch the guarded signing/archive/upload workflow for Build 30.
+After App Store Connect sign-in, verify Build 30 reaches `Complete` / `Ready to
+Submit`, confirm the existing internal test group remains assigned, add the
+`Family` TestFlight group, and confirm tester availability. Then collect
+physical-device feedback before any merge decision.
 
 ## Frank's decision required
 
-- No routine decision is currently required; Frank explicitly started Phase 4.
-- Folder and presentation implementation may proceed autonomously within the
-  documented acceptance criteria.
-- Frank explicitly approved this Phase 4 TestFlight delivery.
+- Frank must sign back in to App Store Connect; no credentials are stored or
+  entered by the agent.
+- Frank explicitly approved this Phase 4 TestFlight delivery and requested the
+  `Family` group receive Build 30.
+- Device feedback and the later merge decision remain pending.
 - Any App Store review change remains out of scope without separate explicit
   approval.
