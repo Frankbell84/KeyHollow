@@ -7,14 +7,14 @@ Parent release source: `2eaf852` (Build 32)
 ## Current task
 
 The isolated unified-folder correction is implemented and remotely validated
-on `fix/unified-folder-gallery`. Photos and general files now enter one
-source-neutral presentation collection and one fixed-geometry tile. The Mac
-build, complete regression and launch suite, packaging checks, and Swift CodeQL
-all passed for exact code commit `c88fbf7`. The next gate is a separately
-approved Internal-only TestFlight build and physical-device verification.
-Secure storage, cryptography, import/export formats, folder membership, and
-protected content operations remain frozen. `Family` remains on Build 30 and
-App Store review remains untouched.
+on `fix/unified-folder-gallery`. Frank approved the next Internal-only
+TestFlight delivery. App Store Connect confirms Build 32 is the newest upload,
+so Build 33 is reserved for this correction. The app and embedded thumbnail
+extension are both set to Build 33, and production upload permission is limited
+to `main` or the exact `delivery/unified-folder-gallery` branch. The release
+source must pass the full Mac and CodeQL gates before that delivery branch is
+created and the upload is dispatched. `Family` remains on Build 30 and App
+Store review remains untouched.
 
 ## Completed work
 
@@ -123,6 +123,12 @@ App Store review remains untouched.
   `0bb1c9562fcac8d6a42a1690fd54d6860f277c379293087e4db38a30e3a8d52d`.
 - Security-test artifact `9989342373` was recorded with SHA-256 digest
   `757da37170a960f0008ed02994eb26aa5351ad1cb028845387d963714af8fa88`.
+- App Store Connect was checked immediately before release preparation: Build
+  32 is complete and no Build 33 exists.
+- Reserved Build 33 for the unified-gallery correction and synchronized the app
+  and embedded thumbnail extension build numbers.
+- Restricted the signed upload workflow to `main` or the exact immutable
+  `delivery/unified-folder-gallery` branch.
 - Phase 4 release-hygiene gate: passed locally.
 - Phase 4 whitespace audit: passed locally.
 - Thumbnail-composition architecture and release-hygiene gates: passed locally.
@@ -297,10 +303,10 @@ App Store review remains untouched.
 
 ## Next action
 
-After Frank explicitly approves the next TestFlight upload, prepare a guarded
-Internal-only delivery from exact validated code commit `c88fbf7`, rerun the
-release-source gates, upload the next unused build, and perform physical-device
-verification before any `Family` rollout or merge.
+Commit and publish the guarded Build 33 release-source checkpoint, wait for its
+Mac build/test and CodeQL gates, then create the exact immutable delivery branch
+and dispatch the approved signed upload. Keep Build 33 Internal-only for
+physical-device verification before any `Family` rollout or merge.
 
 ## Frank's decision required
 
@@ -314,7 +320,10 @@ verification before any `Family` rollout or merge.
 - Frank explicitly approved the guarded Build 32 TestFlight upload for device
   verification.
 - Frank approved beginning the unified folder-gallery correction.
-- A later TestFlight upload, `Family` rollout, merge, or App Store review change
-  still requires its own decision after corrected visual and automated evidence.
+- Frank explicitly approved the next Internal-only TestFlight upload; Build 33
+  is the verified next unused number.
+- Any TestFlight upload after Build 33, `Family` rollout, merge, or App Store
+  review change still requires its own decision after corrected visual and
+  automated evidence.
 - Any App Store review change remains out of scope without separate explicit
   approval.
