@@ -62,6 +62,9 @@ state.
 - Replaced the obsolete Build 33 delivery-branch exception with the exact
   `delivery/secure-unified-file-preview` branch. Feature and unrelated delivery
   branches remain unable to run the signed upload workflow.
+- Opened draft release review
+  [#39](https://github.com/Frankbell84/KeyHollow/pull/39) against `main` so the
+  full Build 34 source is exercised by the mandatory Mac and security workflows.
 - Frank confirmed the Build 33 folder/file UI is solid on a physical iPhone;
   that exact behavior is frozen as the hardening baseline.
 - Replaced all photo, general-file, and folder storage records at the compiled
