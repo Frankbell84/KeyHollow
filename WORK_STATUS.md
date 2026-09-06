@@ -6,11 +6,11 @@ Parent release source: `ec25031` (merged and physically accepted Build 34 source
 
 ## Current task
 
-Build 35 release-source preparation is complete on the isolated delivery branch.
-The app and thumbnail extension use one synchronized build number, and the
-guarded upload workflow recognizes only this exact delivery branch or `main`.
-The release source is locally clean and ready for an external release review;
-nothing has been merged, uploaded, assigned to testers, or submitted to Apple.
+Build 35 release-source validation is complete on the isolated delivery branch.
+Draft release PR #41 and exact run #259 prove the synchronized app/extension
+build number, modular boundaries, Mac build, complete tests, packaging, and
+Swift CodeQL at release checkpoint `dd337d6`. Nothing has been merged, uploaded,
+assigned to testers, or submitted to Apple.
 
 ## Completed work
 
@@ -69,6 +69,21 @@ nothing has been merged, uploaded, assigned to testers, or submitted to Apple.
   branches remain unable to invoke the signed upload job.
 - Build 35 release-source architecture, release-hygiene, build-number self-test,
   and diff-integrity gates passed locally.
+- Opened draft release review
+  [#41](https://github.com/Frankbell84/KeyHollow/pull/41) against `main`; it
+  remains a non-mergeable draft with TestFlight, physical-device, merge, and
+  App Store evidence explicitly unchecked.
+- Exact Build 35 release-source run
+  [#259](https://github.com/Frankbell84/KeyHollow/actions/runs/34054030844)
+  passed at release checkpoint `dd337d6` in 31m18s.
+- Mac simulator compilation, packaged-thumbnail verification, complete
+  unit/launch/security suite, release hygiene, architecture enforcement, and
+  build-number guard passed in 6m06s.
+- Swift CodeQL passed in 31m18s with no failed security gate or annotation.
+- Build 35 security-test artifact `9995497594` recorded SHA-256 digest
+  `f4426d66c3b227ba752758634c06dd29c9a7b26d4b9beb80aa014226184491bd`.
+- Build 35 simulator artifact `9995496170` recorded SHA-256 digest
+  `0d8f69c3fa8978b6d40a0bfd647c985d32c883b7acab48cd5caf6fce0ea2e0c4`.
 - Created `feature/secure-unified-file-preview` directly from hardened checkpoint
   `0d86997`; the validated gallery and release branches remain untouched.
 - Mapped the existing routing seam: Photos-origin images use the full-screen
@@ -250,9 +265,13 @@ nothing has been merged, uploaded, assigned to testers, or submitted to Apple.
 - General-file export parity architecture gate: passed locally.
 - Release hygiene and TestFlight build-number guard self-test: passed locally.
 - Diff whitespace validation: passed locally.
-- Full Mac compile, unit/launch/security suite, and CodeQL: queued by draft PR
-  #40 for exact implementation commit `2a0ce9f`; Windows cannot perform the
-  Xcode build itself.
+- Build 35 release-source run
+  [#259](https://github.com/Frankbell84/KeyHollow/actions/runs/34054030844)
+  at exact release checkpoint `dd337d6`: passed.
+- Mac compile, package verification, complete unit/launch/security suite,
+  architecture and release gates: passed in 6m06s.
+- Swift CodeQL build and vulnerability analysis: passed in 31m18s with no
+  failed security gate or annotation.
 - Secure-preview architecture, release-hygiene, build-number, and diff-integrity
   gates: passed locally.
 - Secure-preview validation run
@@ -511,21 +530,22 @@ nothing has been merged, uploaded, assigned to testers, or submitted to Apple.
 
 ## Blockers
 
-- No known engineering blocker. Creating the external release review and running
-  the signed TestFlight upload remain separate action-time approval points.
+- No known engineering blocker. The guarded signed TestFlight upload is the next
+  separate action-time approval point; merge and tester rollout remain later
+  independent decisions.
 
 ## Next action
 
-Push the exact Build 35 release-source checkpoint. After action-time approval,
-open a draft release review against `main` so its full Mac build, tests,
-architecture gates, packaging verification, and Swift CodeQL run. Do not merge,
-run the signed upload, assign tester groups, or alter App Store review state.
+After separate explicit approval, dispatch the guarded Build 35 TestFlight
+upload from exact validated checkpoint `dd337d6`. Do not merge, assign tester
+groups, or alter App Store review state as part of that upload.
 
 ## Frank's decision required
 
-- No decision is required for implementation or CI. A future TestFlight upload,
-  `Family` rollout, merge, or App Store review change requires separate explicit
-  approval after validation evidence is available.
+- Frank explicitly approved creating draft Build 35 release PR #41. That review
+  is open and its exact release-source CI is green.
+- A Build 35 TestFlight upload, `Family` rollout, merge, or App Store review
+  change each requires separate explicit approval.
 - Frank explicitly approved this Phase 4 TestFlight delivery and requested the
   `Family` group receive Build 30.
 - Build 30 is now `Testing` in both `KeyHollow Internal` and `Family`, with
@@ -552,8 +572,7 @@ run the signed upload, assign tester groups, or alter App Store review state.
 - Any TestFlight upload after Build 34, `Family` rollout, merge, or App Store
   review change still requires its own decision after corrected visual and
   automated evidence.
-- Creating the Build 35 external release review requires Frank's action-time
-  confirmation; TestFlight upload, tester assignment, merge, and App Store
-  submission remain separate later decisions.
+- Build 35 draft release review creation is complete; TestFlight upload, tester
+  assignment, merge, and App Store submission remain separate later decisions.
 - Any App Store review change remains out of scope without separate explicit
   approval.
