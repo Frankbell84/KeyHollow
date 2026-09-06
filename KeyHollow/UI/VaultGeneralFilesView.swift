@@ -1,5 +1,4 @@
 import SwiftUI
-import UIKit
 import KeyHollowGeneralFileSupportAddOn
 
 struct VaultGeneralFilesView: View {
@@ -159,8 +158,21 @@ struct VaultGeneralFilesView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+
+            Spacer()
+
+            if !isSelecting {
+                Button {
+                    selectedIDs = [record.id]
+                    exportSelected()
+                } label: {
+                    Image(systemName: "square.and.arrow.up")
+                }
+                .buttonStyle(.borderless)
+                .disabled(isWorking)
+                .accessibilityLabel("Export \(record.displayName)")
+            }
         }
-        .accessibilityElement(children: .combine)
     }
 
     private func initializeStore() async {
@@ -265,19 +277,4 @@ struct VaultGeneralFilesView: View {
         isSelecting = false
         selectedIDs.removeAll()
     }
-}
-
-private struct GeneralFileShareSheet: UIViewControllerRepresentable {
-    let urls: [URL]
-    let onComplete: () -> Void
-
-    func makeUIViewController(context: Context) -> UIActivityViewController {
-        let controller = UIActivityViewController(activityItems: urls, applicationActivities: nil)
-        controller.completionWithItemsHandler = { _, _, _, _ in
-            DispatchQueue.main.async { onComplete() }
-        }
-        return controller
-    }
-
-    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }

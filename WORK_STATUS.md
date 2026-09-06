@@ -1,21 +1,120 @@
 # KeyHollow Work Status
 
 Updated: 2026-09-06
-Branch: `delivery/secure-unified-file-preview`
-Parent release source: `7503a68` (exact delivered Build 33 source)
+Branch: `delivery/general-file-export-parity`
+Parent release source: `ec25031` (merged and physically accepted Build 34 source)
 
 ## Current task
 
-Merge the physically accepted Build 34 source through release PR #39 and add
-processed Build 34 to the explicitly approved `Family` TestFlight group. The
-delivered candidate is exact release commit `4f865b6`; its secure-preview
-application source remains exact validated commit `228f927`, and later commits
-contain status evidence only. Mark the draft ready and merge only if GitHub still
-reports the expected head, clean mergeability, and no source change after the
-green release run. Do not change App Store review state.
+Build 35 passed release-source validation, guarded upload, Apple processing,
+Frank's physical-device acceptance, and the approved `Family` rollout. The
+remaining active task is to require the exact delivery head to pass every CI
+gate, merge release PR #41, and harden the resulting `main` baseline. App Store
+review state remains out of scope.
 
 ## Completed work
 
+- Created `feature/general-file-export-parity` directly from merged Build 34
+  baseline `ec25031`; no release branch or production state is being changed.
+- Confirmed the secure general-file export and temporary-file cleanup engine
+  already exist in `KeyHollowGeneralFileSupportAddOn`. The functional gap is
+  limited to missing export controls in the unified gallery composition layer.
+- Added source-aware selection actions: photo-only selections save to Photos,
+  file-only selections export through the system share sheet, and mixed
+  selections present both choices without crowding the bottom action bar.
+- Added `Export to Files` to each general-file gallery context menu and a visible
+  per-row export button in Vault Files, so individual export no longer depends
+  on discovering a long-press action.
+- Reused the authenticated `prepareExport` boundary and guaranteed temporary
+  plaintext cleanup after the system interaction; the encrypted store and vault
+  transfer formats remain unchanged.
+- Extracted the system share-sheet adapter into one app-owned presentation
+  component, removing duplicate routing risk while keeping UIKit outside every
+  protected module.
+- Added regression coverage for photo-only, file-only, mixed, and empty
+  selection transfer modes, plus architecture markers that fail if unified
+  general-file export wiring is removed.
+- Opened draft PR #40 against `main` with an exact implementation checkpoint and
+  explicit evidence checklist; the branches report no merge conflict.
+- Remote validation run
+  [#257](https://github.com/Frankbell84/KeyHollow/actions/runs/34050577957)
+  passed every required gate at exact application source commit `2a0ce9f` and
+  evidence head `adb3575` in 25m39s.
+- Mac simulator compilation, packaged-thumbnail verification, the complete
+  unit/launch/security suite, release hygiene, architecture enforcement, and
+  the build-number guard all passed in the 9m43s build-and-test job.
+- Swift CodeQL passed in 23m46s with no failed security gate.
+- Security-test artifact `9994572552` was recorded with SHA-256 digest
+  `7a0bdc712ade36168c041873e2524404e47f083fd559645af8c5428357d2500d`.
+- Simulator artifact `9994570329` was recorded with SHA-256 digest
+  `2c55f7c2699eb199ba2c18fa7d9ace72cb0cd39aaf2863cf7682ede881292623`.
+- Final documentation-head reproducibility run
+  [#258](https://github.com/Frankbell84/KeyHollow/actions/runs/34052071992)
+  passed every required gate at head `eb1b01c` in 27m12s; the exact application
+  implementation remained `2a0ce9f`.
+- The repeated Mac build, complete unit/launch/security suite, release hygiene,
+  architecture enforcement, build-number guard, and packaged-thumbnail check
+  passed in 6m29s. Swift CodeQL passed in 27m03s.
+- Reproducibility security-test artifact `9994938931` was recorded with SHA-256
+  digest `3999176ae22ce53cee09c6d23698b1d0db3b10cccb449b4f34a2e09714bad70f`.
+- Reproducibility simulator artifact `9994937192` was recorded with SHA-256
+  digest `b7fb68d4aaf7de375414eb5ee72c3bcda6793bd14bce5657cd3b65b3077cfb48`.
+- Created `delivery/general-file-export-parity` from the exact validated review
+  head `eb1b01c`; production, TestFlight, tester groups, and App Store review
+  state remain unchanged.
+- Reserved Build 35 and synchronized `CURRENT_PROJECT_VERSION` for both the app
+  and embedded vault-thumbnail extension.
+- Replaced the obsolete Build 34 delivery-branch exception with the exact
+  `delivery/general-file-export-parity` branch. Feature and unrelated delivery
+  branches remain unable to invoke the signed upload job.
+- Build 35 release-source architecture, release-hygiene, build-number self-test,
+  and diff-integrity gates passed locally.
+- Opened draft release review
+  [#41](https://github.com/Frankbell84/KeyHollow/pull/41) against `main`; it
+  remains a non-mergeable draft with TestFlight, physical-device, merge, and
+  App Store evidence explicitly unchecked.
+- Exact Build 35 release-source run
+  [#259](https://github.com/Frankbell84/KeyHollow/actions/runs/34054030844)
+  passed at release checkpoint `dd337d6` in 31m18s.
+- Mac simulator compilation, packaged-thumbnail verification, complete
+  unit/launch/security suite, release hygiene, architecture enforcement, and
+  build-number guard passed in 6m06s.
+- Swift CodeQL passed in 31m18s with no failed security gate or annotation.
+- Build 35 security-test artifact `9995497594` recorded SHA-256 digest
+  `f4426d66c3b227ba752758634c06dd29c9a7b26d4b9beb80aa014226184491bd`.
+- Build 35 simulator artifact `9995496170` recorded SHA-256 digest
+  `0d8f69c3fa8978b6d40a0bfd647c985d32c883b7acab48cd5caf6fce0ea2e0c4`.
+- Final documentation-head reproducibility run
+  [#260](https://github.com/Frankbell84/KeyHollow/actions/runs/34055783323)
+  passed at head `dc5f539`; build/tests passed in 5m48s and Swift CodeQL passed
+  in 27m43s.
+- Frank explicitly approved dispatching the guarded signed Build 35 TestFlight
+  upload after the full release-source and reproducibility evidence passed.
+- Guarded TestFlight upload run
+  [#45](https://github.com/Frankbell84/KeyHollow/actions/runs/34058831705)
+  completed successfully in 2m46s from exact branch head `d5b816b`.
+- The upload workflow independently confirmed Build 35 was unused in App Store
+  Connect before installing signing material. Release hygiene, production
+  identity, project generation, cloud signing, archive/module hygiene, signed
+  IPA export, Apple upload, artifact retention, and signing-material cleanup all
+  passed.
+- Signed Build 35 IPA artifact `9996841104` recorded SHA-256 digest
+  `3db8cf453f9f2c6ea0a51c5eece3b3f1a62de18382b8ec0974e59982f4f87fbe`.
+- Apple finished processing Build 35. Its upload status is `Complete`, its
+  TestFlight status is `Ready to Submit`, and the upload date is September 6,
+  2026 at 4:46 PM EDT.
+- App Store Connect automatically lists `KeyHollow Internal` for Build 35.
+  `Family` is not attached, and no tester-group action was taken during this
+  verification.
+- Frank physically tested Internal Build 35 and confirmed the general-file
+  export behavior works.
+- Frank explicitly approved Build 35 `Family` rollout, PR #41 merge, and
+  post-merge hardening of the exact accepted source.
+- Added Build 35 to the `Family` TestFlight group with automatic tester
+  notification and focused guidance covering individual general-file export,
+  mixed-content opening and selection, encrypted vault transfer, metadata, and
+  layout regressions. App Store Connect now reports Build 35 as `Testing` in
+  both `KeyHollow Internal` and `Family`.
 - Created `feature/secure-unified-file-preview` directly from hardened checkpoint
   `0d86997`; the validated gallery and release branches remain untouched.
 - Mapped the existing routing seam: Photos-origin images use the full-screen
@@ -194,6 +293,20 @@ green release run. Do not change App Store review state.
 
 ## Test and build status
 
+- General-file export parity architecture gate: passed locally.
+- Release hygiene and TestFlight build-number guard self-test: passed locally.
+- Diff whitespace validation: passed locally.
+- Build 35 release-source run
+  [#259](https://github.com/Frankbell84/KeyHollow/actions/runs/34054030844)
+  at exact release checkpoint `dd337d6`: passed.
+- Mac compile, package verification, complete unit/launch/security suite,
+  architecture and release gates: passed in 6m06s.
+- Swift CodeQL build and vulnerability analysis: passed in 31m18s with no
+  failed security gate or annotation.
+- Guarded Build 35 TestFlight upload run
+  [#45](https://github.com/Frankbell84/KeyHollow/actions/runs/34058831705):
+  passed every release, signing, archive, Apple-upload, retention, and cleanup
+  step in 2m46s.
 - Secure-preview architecture, release-hygiene, build-number, and diff-integrity
   gates: passed locally.
 - Secure-preview validation run
@@ -452,19 +565,30 @@ green release run. Do not change App Store review state.
 
 ## Blockers
 
-- No known engineering, delivery, or acceptance blocker. All automated and
-  physical-device gates are complete.
+- No known engineering blocker. Family rollout is complete; final branch
+  validation, merge, and post-merge hardening are approved and in progress.
 
 ## Next action
 
-Add Build 34 to `Family`, mark release PR #39 ready, and merge its expected head
-into `main`. Verify both the tester-group assignment and resulting merge commit,
-then checkpoint the merged milestone before preparing the next narrowly scoped
-preview type. Broader PDF/audio/video/text preview remains later and must pass
-the same module, CI, and TestFlight gates.
+Require this exact delivery head to pass all mandatory checks, merge PR #41,
+then validate and checkpoint the resulting `main` commit. Do not alter App Store
+review state.
 
 ## Frank's decision required
 
+- Frank explicitly approved creating draft Build 35 release PR #41. That review
+  is open and its exact release-source CI is green.
+- Frank explicitly approved the guarded Build 35 TestFlight upload after exact
+  release-source and documentation-head CI passed.
+- Build 35 upload approval is complete. `Family` rollout, merge, and any App
+  Store review change still require separate explicit approval.
+- Build 35's upload and processing are complete. App Store Connect automatically
+  lists `KeyHollow Internal`; `Family` is not yet attached. Family rollout and
+  merge were separate gates and are now explicitly approved after acceptance.
+- Frank completed physical acceptance and explicitly approved both Build 35
+  `Family` rollout and PR #41 merge, plus hardening of the merged baseline.
+- Build 35 is now `Testing` in both `KeyHollow Internal` and `Family`; the
+  approved tester-group rollout is complete.
 - Frank explicitly approved this Phase 4 TestFlight delivery and requested the
   `Family` group receive Build 30.
 - Build 30 is now `Testing` in both `KeyHollow Internal` and `Family`, with
@@ -491,5 +615,7 @@ the same module, CI, and TestFlight gates.
 - Any TestFlight upload after Build 34, `Family` rollout, merge, or App Store
   review change still requires its own decision after corrected visual and
   automated evidence.
+- Build 35 draft release review creation is complete; TestFlight upload, tester
+  assignment, merge, and App Store submission remain separate later decisions.
 - Any App Store review change remains out of scope without separate explicit
   approval.

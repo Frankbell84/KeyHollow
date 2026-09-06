@@ -8,12 +8,44 @@ public struct VaultGallerySelection: Equatable, Sendable {
         case generalFile(UUID)
     }
 
+    public enum TransferMode: Equatable, Sendable {
+        case none
+        case photos
+        case generalFiles
+        case mixed
+    }
+
     public private(set) var items: Set<Item> = []
 
     public init() {}
 
     public var count: Int { items.count }
     public var isEmpty: Bool { items.isEmpty }
+
+    public var transferMode: TransferMode {
+        var containsPhoto = false
+        var containsGeneralFile = false
+
+        for item in items {
+            switch item {
+            case .photo:
+                containsPhoto = true
+            case .generalFile:
+                containsGeneralFile = true
+            }
+        }
+
+        switch (containsPhoto, containsGeneralFile) {
+        case (false, false):
+            return .none
+        case (true, false):
+            return .photos
+        case (false, true):
+            return .generalFiles
+        case (true, true):
+            return .mixed
+        }
+    }
 
     public func contains(_ item: Item) -> Bool {
         items.contains(item)
