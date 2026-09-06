@@ -6,13 +6,13 @@ Parent release source: `7503a68` (exact delivered Build 33 source)
 
 ## Current task
 
-Complete the explicitly approved `Family` TestFlight rollout for processed Build
-34. Release PR #39 is merged into `main` as `ec25031d`; the delivered candidate
-remains exact release commit `4f865b6`, its secure-preview application source
-remains exact validated commit `228f927`, and later pre-merge commits contain
-status evidence only. Apple requires an external TestFlight review form before
-the Family assignment can complete. Do not change App Store production-review
-state.
+Close the secure unified image-preview milestone and prepare its clean successor.
+Release PR #39 is merged into `main` as `ec25031d`, and Build 34 is actively
+`Testing` in both `KeyHollow Internal` and `Family`. The delivered candidate
+remains exact release commit `4f865b6`; its secure-preview application source
+remains exact validated commit `228f927`. Preserve these rollback and validation
+anchors while selecting the next narrowly scoped preview type. App Store
+production-review state remains untouched.
 
 ## Completed work
 
@@ -87,6 +87,11 @@ state.
   after the green release run.
 - Marked release PR #39 ready and merged its exact expected head `4d63730` into
   `main` as merge commit `ec25031d`. GitHub reported a clean, successful merge.
+- Added Build 34 to the explicitly approved `Family` external TestFlight group,
+  supplied focused image/file-routing test instructions, and submitted the
+  external beta review form with automatic tester notification enabled.
+- App Store Connect now reports Build 34 as `Testing` in both `KeyHollow
+  Internal` and `Family`; no production App Store review action was taken.
 - Frank confirmed the Build 33 folder/file UI is solid on a physical iPhone;
   that exact behavior is frozen as the hardening baseline.
 - Replaced all photo, general-file, and folder storage records at the compiled
@@ -457,19 +462,15 @@ state.
 
 ## Blockers
 
-- No engineering, delivery, acceptance, or merge blocker. Apple requires the
-  external TestFlight `What to Test` submission before Build 34 can enter
-  `Family`; the final review submission awaits the required action-time user
-  confirmation.
+- No engineering, delivery, acceptance, merge, or tester-rollout blocker. Build
+  34 is live for both approved TestFlight groups.
 
 ## Next action
 
-After Frank confirms the external TestFlight submission, provide the approved
-`What to Test` note, leave automatic tester notification enabled, and submit
-Build 34 for Apple's external beta review. Verify `Family` assignment state,
-then checkpoint the merged milestone before preparing the next narrowly scoped
-preview type. Broader PDF/audio/video/text preview remains later and must pass
-the same module, CI, and TestFlight gates.
+Checkpoint merged commit `ec25031d` as the accepted secure-image-preview baseline
+and begin the next narrowly scoped preview milestone from current `main` on a new
+isolated branch. Broader PDF/audio/video/text preview must continue to use narrow
+interfaces and pass the same module, CI, physical-device, and TestFlight gates.
 
 ## Frank's decision required
 
@@ -496,8 +497,8 @@ the same module, CI, and TestFlight gates.
 - Frank confirmed Build 34 passes physical-device preview routing and explicitly
   approved merging release PR #39.
 - Frank explicitly approved adding Build 34 to the `Family` TestFlight group.
-- Release PR #39 is merged. The separate action-time confirmation for Apple's
-  external TestFlight review submission remains required.
+- Frank confirmed Apple's external TestFlight submission. Build 34 is now
+  `Testing` in `Family` with automatic tester notification enabled.
 - Any TestFlight upload after Build 34, `Family` rollout, merge, or App Store
   review change still requires its own decision after corrected visual and
   automated evidence.
