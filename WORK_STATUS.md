@@ -1,21 +1,23 @@
 # KeyHollow Work Status
 
 Updated: 2026-09-06
-Branch: `delivery/secure-unified-file-preview`
-Parent release source: `7503a68` (exact delivered Build 33 source)
+Branch: `feature/general-file-export-parity`
+Parent release source: `ec25031` (merged and physically accepted Build 34 source)
 
 ## Current task
 
-Merge the physically accepted Build 34 source through release PR #39 and add
-processed Build 34 to the explicitly approved `Family` TestFlight group. The
-delivered candidate is exact release commit `4f865b6`; its secure-preview
-application source remains exact validated commit `228f927`, and later commits
-contain status evidence only. Mark the draft ready and merge only if GitHub still
-reports the expected head, clean mergeability, and no source change after the
-green release run. Do not change App Store review state.
+Restore export parity for non-photo files in the unified vault gallery. Expose
+the existing security-tested general-file export engine through an obvious
+individual-file action and the mixed gallery selection bar, without changing
+the encrypted file format, protected store, or accepted Build 34 data paths.
 
 ## Completed work
 
+- Created `feature/general-file-export-parity` directly from merged Build 34
+  baseline `ec25031`; no release branch or production state is being changed.
+- Confirmed the secure general-file export and temporary-file cleanup engine
+  already exist in `KeyHollowGeneralFileSupportAddOn`. The functional gap is
+  limited to missing export controls in the unified gallery composition layer.
 - Created `feature/secure-unified-file-preview` directly from hardened checkpoint
   `0d86997`; the validated gallery and release branches remain untouched.
 - Mapped the existing routing seam: Photos-origin images use the full-screen
@@ -452,19 +454,21 @@ green release run. Do not change App Store review state.
 
 ## Blockers
 
-- No known engineering, delivery, or acceptance blocker. All automated and
-  physical-device gates are complete.
+- No known engineering blocker. TestFlight delivery remains intentionally
+  unapproved for this new correction until its code and CI evidence are ready.
 
 ## Next action
 
-Add Build 34 to `Family`, mark release PR #39 ready, and merge its expected head
-into `main`. Verify both the tester-group assignment and resulting merge commit,
-then checkpoint the merged milestone before preparing the next narrowly scoped
-preview type. Broader PDF/audio/video/text preview remains later and must pass
-the same module, CI, and TestFlight gates.
+Add individual and selection-mode export controls to the unified gallery, route
+them through the existing protected export API, and add presentation regression
+coverage plus architecture markers. Run all Windows-safe gates, then push a
+draft review for the full Mac build, test, and security suite.
 
 ## Frank's decision required
 
+- No decision is required for implementation or CI. A future TestFlight upload,
+  `Family` rollout, merge, or App Store review change requires separate explicit
+  approval after validation evidence is available.
 - Frank explicitly approved this Phase 4 TestFlight delivery and requested the
   `Family` group receive Build 30.
 - Build 30 is now `Testing` in both `KeyHollow Internal` and `Family`, with
