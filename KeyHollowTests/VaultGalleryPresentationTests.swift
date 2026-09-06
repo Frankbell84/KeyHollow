@@ -3,6 +3,7 @@ import Foundation
 import UIKit
 import XCTest
 @testable import KeyHollow
+@testable import KeyHollowGalleryUI
 @testable import KeyHollowGeneralFileSupportAddOn
 @testable import KeyHollowPhotoCore
 

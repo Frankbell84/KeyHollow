@@ -69,6 +69,12 @@ TRANSFER_MODULE_FILES = {
     "KeyHollow/Transfer/PortableVaultRestoreTransactionJournal.swift",
     "KeyHollow/Transfer/EncryptedVaultTransferCoordinator.swift",
 }
+GALLERY_UI_MODULE_FILES = {
+    "KeyHollow/UI/VaultGalleryGridView.swift",
+    "KeyHollow/UI/VaultGalleryTilePresentation.swift",
+    "KeyHollow/UI/VaultFolderPresentationViews.swift",
+    "KeyHollow/UI/VaultGallerySelection.swift",
+}
 FILE_RECOGNITION_PREFIX = "KeyHollow/AddOns/FileRecognition/"
 GENERAL_FILE_SUPPORT_PREFIX = "KeyHollow/AddOns/GeneralFileSupport/"
 SECURITY_SCOPED_INGRESS_PREFIXES = (
@@ -348,6 +354,38 @@ def main() -> int:
                 f"project.yml: compiled transfer boundary is missing {marker!r}"
             )
 
+    required_gallery_ui_markers = (
+        "KeyHollowGalleryUI:",
+        "- path: KeyHollow/UI/VaultGalleryGridView.swift",
+        "- path: KeyHollow/UI/VaultGalleryTilePresentation.swift",
+        "- path: KeyHollow/UI/VaultFolderPresentationViews.swift",
+        "- path: KeyHollow/UI/VaultGallerySelection.swift",
+        "- target: KeyHollowGalleryUI",
+        "- UI/VaultGalleryGridView.swift",
+        "- UI/VaultGalleryTilePresentation.swift",
+        "- UI/VaultFolderPresentationViews.swift",
+        "- UI/VaultGallerySelection.swift",
+    )
+    for marker in required_gallery_ui_markers:
+        if marker not in project:
+            violations.append(
+                f"project.yml: compiled gallery UI boundary is missing {marker!r}"
+            )
+    gallery_ui_target = target_body(project, "KeyHollowGalleryUI")
+    if gallery_ui_target is None:
+        violations.append("project.yml: KeyHollowGalleryUI target is missing")
+    else:
+        for marker in (
+            "type: library.static",
+            "SWIFT_TREAT_WARNINGS_AS_ERRORS: YES",
+            "DEFINES_MODULE: YES",
+            "SKIP_INSTALL: YES",
+        ):
+            if marker not in gallery_ui_target:
+                violations.append(
+                    f"project.yml: KeyHollowGalleryUI is missing {marker!r}"
+                )
+
     for file in swift_files:
         path = relative(file)
         source = file.read_text(encoding="utf-8")
@@ -445,6 +483,37 @@ def main() -> int:
                     f"{', '.join(sorted(unexpected))}"
                 )
 
+        if path in GALLERY_UI_MODULE_FILES:
+            unexpected = imported - {
+                "Foundation",
+                "SwiftUI",
+                "UIKit",
+                "UniformTypeIdentifiers",
+                "KeyHollowFolderPresentationAddOn",
+                "KeyHollowGeneralFileSupportAddOn",
+                "KeyHollowPhotoCore",
+            }
+            if unexpected:
+                violations.append(
+                    f"{path}: gallery UI imports outside its allowlist: "
+                    f"{', '.join(sorted(unexpected))}"
+                )
+            for forbidden_symbol in (
+                "VaultSession",
+                "VaultUnlockService",
+                "VaultPhotoStore",
+                "VaultGeneralFileStore",
+                "VaultFolderPresentationStore",
+                "EncryptedVaultTransferCoordinator",
+                "SymmetricKey",
+                "URLSession",
+            ):
+                if re.search(rf"\b{forbidden_symbol}\b", source):
+                    violations.append(
+                        f"{path}: gallery UI directly references protected "
+                        f"capability {forbidden_symbol}"
+                    )
+
         leaked_ui = imported & UI_FRAMEWORKS
         if leaked_ui and not is_presentation(path) and path not in PHOTOS_ADAPTER_FILES:
             violations.append(
@@ -485,7 +554,8 @@ def main() -> int:
     gallery_file = SOURCE_ROOT / "Photos" / "VaultGalleryView.swift"
     gallery_source = gallery_file.read_text(encoding="utf-8")
     for required in (
-        "ForEach(visibleGalleryItems)",
+        "import KeyHollowGalleryUI",
+        "VaultGalleryGridView(",
         "VaultGalleryItemTileView(",
     ):
         if required not in gallery_source:
@@ -494,6 +564,9 @@ def main() -> int:
                 f"composition is missing {required!r}"
             )
     for obsolete in (
+        "LazyVGrid(columns:",
+        "ForEach(visibleFolders)",
+        "ForEach(visibleGalleryItems)",
         "VaultGeneralFileTileView(",
         "thumbnailCell(",
     ):
@@ -513,7 +586,8 @@ def main() -> int:
         "Architecture boundaries passed: KeyHollowVaultThumbnailExtension, "
         "KeyHollowCryptoCore, "
         "KeyHollowVaultCore, KeyHollowPhotoCore, KeyHollowPhotosAdapter, and "
-        "KeyHollowTransferCore remain separately compiled; registered add-ons "
+        "KeyHollowTransferCore remain separately compiled; KeyHollowGalleryUI "
+        "owns the visible gallery without protected capabilities; registered add-ons "
         "remain independently compiled; and core storage, "
         "cryptography, session, and transfer code "
         "remain free of UI, Photos, network, and remote SDK concerns."

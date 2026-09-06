@@ -132,6 +132,27 @@ targets:
         DEFINES_MODULE: YES
         SKIP_INSTALL: YES
 
+  KeyHollowGalleryUI:
+    type: library.static
+    platform: iOS
+    sources:
+      - path: KeyHollow/UI/VaultGalleryGridView.swift
+      - path: KeyHollow/UI/VaultGalleryTilePresentation.swift
+      - path: KeyHollow/UI/VaultFolderPresentationViews.swift
+      - path: KeyHollow/UI/VaultGallerySelection.swift
+    dependencies:
+      - target: KeyHollowGeneralFileSupportAddOn
+      - target: KeyHollowFolderPresentationAddOn
+      - target: KeyHollowPhotoCore
+    settings:
+      base:
+        PRODUCT_NAME: KeyHollowGalleryUI
+        SWIFT_VERSION: 5.0
+        SWIFT_STRICT_CONCURRENCY: complete
+        SWIFT_TREAT_WARNINGS_AS_ERRORS: YES
+        DEFINES_MODULE: YES
+        SKIP_INSTALL: YES
+
   KeyHollowVaultThumbnailExtension:
     type: app-extension
     platform: iOS
@@ -175,6 +196,10 @@ targets:
           - AddOns/FileRecognition
           - AddOns/GeneralFileSupport
           - AddOns/FolderPresentation
+          - UI/VaultGalleryGridView.swift
+          - UI/VaultGalleryTilePresentation.swift
+          - UI/VaultFolderPresentationViews.swift
+          - UI/VaultGallerySelection.swift
           - Security/CryptoBox.swift
           - Security/KeyDerivation.swift
           - Security/PasscodePolicy.swift
@@ -197,6 +222,7 @@ targets:
       - target: KeyHollowFileRecognitionAddOn
       - target: KeyHollowGeneralFileSupportAddOn
       - target: KeyHollowFolderPresentationAddOn
+      - target: KeyHollowGalleryUI
       - target: KeyHollowCryptoCore
       - target: KeyHollowPhotoCore
       - target: KeyHollowPhotosAdapter
@@ -258,6 +284,8 @@ targets:
         link: false
       - target: KeyHollowFolderPresentationAddOn
         link: false
+      - target: KeyHollowGalleryUI
+        link: false
       - target: KeyHollowCryptoCore
         link: false
       - target: KeyHollowPhotoCore
@@ -294,6 +322,7 @@ schemes:
         KeyHollowFileRecognitionAddOn: all
         KeyHollowGeneralFileSupportAddOn: all
         KeyHollowFolderPresentationAddOn: all
+        KeyHollowGalleryUI: all
         KeyHollowCryptoCore: all
         KeyHollowPhotoCore: all
         KeyHollowPhotosAdapter: all

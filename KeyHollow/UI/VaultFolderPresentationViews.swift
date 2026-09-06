@@ -1,7 +1,7 @@
 import SwiftUI
 import KeyHollowFolderPresentationAddOn
 
-struct VaultFolderTileView: View {
+public struct VaultFolderTileView: View {
     let folder: VaultFolderRecord
     let itemCount: Int
     let isEnabled: Bool
@@ -13,7 +13,23 @@ struct VaultFolderTileView: View {
         "\(itemCount) \(itemCount == 1 ? "item" : "items")"
     }
 
-    var body: some View {
+    public init(
+        folder: VaultFolderRecord,
+        itemCount: Int,
+        isEnabled: Bool,
+        open: @escaping () -> Void,
+        rename: @escaping () -> Void,
+        delete: @escaping () -> Void
+    ) {
+        self.folder = folder
+        self.itemCount = itemCount
+        self.isEnabled = isEnabled
+        self.open = open
+        self.rename = rename
+        self.delete = delete
+    }
+
+    public var body: some View {
         Button(action: open) {
             GeometryReader { proxy in
                 VStack(spacing: 0) {
@@ -57,4 +73,3 @@ struct VaultFolderTileView: View {
         }
     }
 }
-

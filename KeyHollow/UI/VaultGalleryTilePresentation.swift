@@ -54,11 +54,11 @@ enum VaultGalleryPresentationMetadata {
     }
 }
 
-enum VaultGalleryPresentationItem: Identifiable, Equatable {
+public enum VaultGalleryPresentationItem: Identifiable, Equatable {
     case photo(VaultPhotoRecord)
     case generalFile(VaultGeneralFileRecord)
 
-    var id: VaultGallerySelection.Item {
+    public var id: VaultGallerySelection.Item {
         switch self {
         case .photo(let record):
             .photo(record.id)
@@ -67,7 +67,7 @@ enum VaultGalleryPresentationItem: Identifiable, Equatable {
         }
     }
 
-    var importedAt: Date {
+    public var importedAt: Date {
         switch self {
         case .photo(let record):
             record.importedAt
@@ -76,7 +76,7 @@ enum VaultGalleryPresentationItem: Identifiable, Equatable {
         }
     }
 
-    var title: String {
+    public var title: String {
         switch self {
         case .photo(let record):
             VaultGalleryPresentationMetadata.title(
@@ -93,7 +93,7 @@ enum VaultGalleryPresentationItem: Identifiable, Equatable {
         }
     }
 
-    var detail: String {
+    public var detail: String {
         switch self {
         case .photo(let record):
             VaultGalleryPresentationMetadata.detail(
@@ -108,7 +108,7 @@ enum VaultGalleryPresentationItem: Identifiable, Equatable {
         }
     }
 
-    var iconName: String {
+    public var iconName: String {
         switch self {
         case .photo:
             "photo"
@@ -117,7 +117,7 @@ enum VaultGalleryPresentationItem: Identifiable, Equatable {
         }
     }
 
-    var isImage: Bool {
+    public var isImage: Bool {
         switch self {
         case .photo:
             true
@@ -129,7 +129,7 @@ enum VaultGalleryPresentationItem: Identifiable, Equatable {
         }
     }
 
-    var accessibilityKind: String {
+    public var accessibilityKind: String {
         switch self {
         case .photo:
             "Encrypted photo"
@@ -138,7 +138,7 @@ enum VaultGalleryPresentationItem: Identifiable, Equatable {
         }
     }
 
-    static func sourceNeutralOrder(
+    public static func sourceNeutralOrder(
         _ first: VaultGalleryPresentationItem,
         _ second: VaultGalleryPresentationItem
     ) -> Bool {
@@ -153,8 +153,8 @@ enum VaultGalleryPresentationItem: Identifiable, Equatable {
     }
 }
 
-enum VaultGalleryThumbnailRenderer {
-    static func jpegData(from image: UIImage, maximumDimension: CGFloat = 512) -> Data? {
+public enum VaultGalleryThumbnailRenderer {
+    public static func jpegData(from image: UIImage, maximumDimension: CGFloat = 512) -> Data? {
         let sourceSize = orientedPixelSize(for: image)
         let longestEdge = max(sourceSize.width, sourceSize.height)
         guard longestEdge > 0, maximumDimension > 0 else { return nil }
@@ -173,7 +173,7 @@ enum VaultGalleryThumbnailRenderer {
         return thumbnail.jpegData(compressionQuality: 0.82)
     }
 
-    static func orientedPixelSize(for image: UIImage) -> CGSize {
+    public static func orientedPixelSize(for image: UIImage) -> CGSize {
         let rawSize: CGSize
         if let cgImage = image.cgImage {
             rawSize = CGSize(width: cgImage.width, height: cgImage.height)
@@ -260,13 +260,25 @@ struct VaultGalleryTileSurface<Media: View>: View {
     }
 }
 
-struct VaultGalleryItemTileView: View {
+public struct VaultGalleryItemTileView: View {
     let item: VaultGalleryPresentationItem
     let thumbnail: UIImage?
     let selectionState: Bool?
     let action: () -> Void
 
-    var body: some View {
+    public init(
+        item: VaultGalleryPresentationItem,
+        thumbnail: UIImage?,
+        selectionState: Bool?,
+        action: @escaping () -> Void
+    ) {
+        self.item = item
+        self.thumbnail = thumbnail
+        self.selectionState = selectionState
+        self.action = action
+    }
+
+    public var body: some View {
         Button(action: action) {
             VaultGalleryTileSurface(
                 title: item.title,

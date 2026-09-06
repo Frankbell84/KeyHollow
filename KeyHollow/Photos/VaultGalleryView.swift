@@ -2,6 +2,7 @@ import SwiftUI
 import UIKit
 import UniformTypeIdentifiers
 import KeyHollowFolderPresentationAddOn
+import KeyHollowGalleryUI
 import KeyHollowGeneralFileSupportAddOn
 import KeyHollowPhotoCore
 import KeyHollowPhotosAdapter
@@ -26,6 +27,9 @@ private struct DecryptedPhoto: Identifiable {
     let image: UIImage
 }
 
+/// Application composition coordinator. Visible folder/gallery layout,
+/// tiles, and selection state are compiled in `KeyHollowGalleryUI`.
+/// This shell alone translates UI actions into authenticated store operations.
 struct VaultGalleryView: View {
     @EnvironmentObject private var session: VaultSession
 
@@ -64,59 +68,32 @@ struct VaultGalleryView: View {
 
     private let maximumCachedThumbnails = 48
 
-    private let columns = Array(
-        repeating: GridItem(.flexible(), spacing: 3),
-        count: 3
-    )
-
     var body: some View {
         VStack(spacing: 0) {
             galleryHeader
             Divider()
 
-            Group {
-                if !contentStoresLoaded {
-                    ProgressView("Opening vault…")
-                } else if visibleFolders.isEmpty,
-                          visiblePhotoRecords.isEmpty,
-                          visibleGeneralFileRecords.isEmpty,
-                          !isWorking {
-                    ContentUnavailableView(
-                        activeFolderID == nil ? "Empty Vault" : "Empty Folder",
-                        systemImage: activeFolderID == nil
-                            ? "photo.on.rectangle.angled"
-                            : "folder",
-                        description: Text(emptyGalleryDescription)
-                    )
-                } else {
-                    ScrollView {
-                        LazyVGrid(columns: columns, spacing: 3) {
-                            ForEach(visibleFolders) { folder in
-                                VaultFolderTileView(
-                                    folder: folder,
-                                    itemCount: itemCount(in: folder.id),
-                                    isEnabled: !isSelecting,
-                                    open: { openFolder(folder) },
-                                    rename: { requestFolderRename(folder) },
-                                    delete: { folderPendingDeletion = folder }
-                                )
-                            }
-
-                            ForEach(visibleGalleryItems) { item in
-                                galleryItemCell(item)
-                            }
-                        }
-                        .padding(.horizontal, 3)
-                        .padding(.vertical, 3)
-                    }
-                }
-            }
-            .overlay {
-                if isWorking {
-                    ProgressView()
-                        .padding()
-                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
-                }
+            VaultGalleryGridView(
+                isContentLoaded: contentStoresLoaded,
+                isWorking: isWorking,
+                emptyTitle: activeFolderID == nil ? "Empty Vault" : "Empty Folder",
+                emptyDescription: emptyGalleryDescription,
+                emptySystemImage: activeFolderID == nil
+                    ? "photo.on.rectangle.angled"
+                    : "folder",
+                folders: visibleFolders,
+                items: visibleGalleryItems
+            ) { folder in
+                VaultFolderTileView(
+                    folder: folder,
+                    itemCount: itemCount(in: folder.id),
+                    isEnabled: !isSelecting,
+                    open: { openFolder(folder) },
+                    rename: { requestFolderRename(folder) },
+                    delete: { folderPendingDeletion = folder }
+                )
+            } itemContent: { item in
+                galleryItemCell(item)
             }
 
             if isSelecting {

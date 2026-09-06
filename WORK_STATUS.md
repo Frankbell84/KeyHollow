@@ -6,19 +6,32 @@ Parent release source: `2eaf852` (Build 32)
 
 ## Current task
 
-Extract the gallery presentation from the application target into an
-independently compiled `KeyHollowGalleryUIAddOn`. The module will accept only
-immutable presentation values and user-action closures. It must not import or
-own vault sessions, cryptographic capabilities, encrypted stores, transfer
-coordinators, plaintext, or network clients. The refactor begins from exact
-validated Build 33 source `7503a68` on a new isolated branch; the immutable
-Build 33 delivery branch, `Family`, production, and App Store review remain
-untouched.
+The gallery presentation has been extracted from the application target into
+the independently compiled `KeyHollowGalleryUI` static library. The app now
+retains a thin authenticated coordinator while the module owns the visible
+three-column grid, unified item tiles, folder tiles, and mixed selection model.
+Local structural and hygiene gates pass; the exact implementation now requires
+the complete remote Mac build/test and CodeQL gates. The immutable Build 33
+delivery branch, `Family`, production, and App Store review remain untouched.
 
 ## Completed work
 
 - Created `refactor/gallery-ui-module` directly from exact validated Build 33
   source `7503a68`; no delivery or production branch was modified.
+- Added `KeyHollowGalleryUI` as an independently compiled static library under
+  strict concurrency with warnings treated as errors.
+- Removed the gallery grid, shared tile renderers, folder tiles, and selection
+  model from the application target so those sources compile only in the new
+  module.
+- Replaced the app-owned `LazyVGrid` with a generic module-owned grid that
+  receives immutable folder/item collections and view-building closures.
+- Kept authenticated sessions, encrypted stores, cryptographic capabilities,
+  transfer coordination, plaintext, and networking out of the UI module.
+- Extended architecture enforcement to require the module target, app-source
+  exclusions, explicit composition, a narrow import allowlist, and the absence
+  of protected capability symbols.
+- Updated gallery regression tests to compile against the extracted module
+  directly.
 - Began from verified remote `main` at merged General File Support commit
   `bbd6bfa`; no completed feature or delivery branch was reused.
 - Preserved the compiled core modules and the independently compiled File
@@ -92,6 +105,12 @@ untouched.
 
 ## Test and build status
 
+- Gallery UI module architecture boundary gate: passed locally.
+- Gallery UI module release-hygiene gate: passed locally.
+- Gallery UI module TestFlight build-number guard self-test: passed locally.
+- Gallery UI module whitespace/diff integrity check: passed locally.
+- Remote Mac generation, compile, unit/launch tests, and CodeQL: pending the
+  isolated implementation commit and draft PR.
 - Architecture boundary gate: passed locally.
 - Release-hygiene gate: passed locally.
 - TestFlight build-number guard self-test: passed locally.
@@ -297,17 +316,16 @@ untouched.
 
 ## Blockers
 
-- No known engineering blocker at the extraction checkpoint.
-- The new module has not yet passed local generation, architecture, unit, build,
-  release-hygiene, or remote Mac/CodeQL gates.
+- No known local engineering blocker remains.
+- Windows cannot perform the Xcode generation, iOS compile, simulator, or Swift
+  CodeQL gates; those remain pending on the required remote Mac workflow.
 
 ## Next action
 
-Checkpoint and publish the pre-extraction state, add the independently compiled
-gallery UI target and narrow presentation contract, remove the extracted source
-from the app target, extend architecture enforcement and tests, then run the
-complete local and remote validation gates before requesting any delivery or
-merge decision.
+Commit and publish the extraction implementation, open an isolated draft PR to
+trigger the required Mac and CodeQL workflows, then diagnose any compile or test
+failure without weakening the module boundary. No TestFlight delivery, Family
+rollout, or merge is authorized by this refactor alone.
 
 ## Frank's decision required
 
