@@ -142,6 +142,7 @@ struct VaultGalleryView: View {
     @State private var thumbnails: [UUID: UIImage] = [:]
     @State private var generalFileThumbnails: [UUID: UIImage] = [:]
     @State private var activeImagePreview: ActiveVaultImagePreview?
+    @State private var generalFileExport: PreparedGeneralFileExport?
     @State private var isSavingPreview = false
     @State private var previewMessage: String?
     @State private var showingImportOptions = false
@@ -249,6 +250,11 @@ struct VaultGalleryView: View {
         }) {
             VaultGeneralFilesView()
                 .environmentObject(session)
+        }
+        .sheet(item: $generalFileExport) { prepared in
+            GeneralFileShareSheet(urls: prepared.urls) {
+                finishGeneralFileExport(prepared)
+            }
         }
         .sheet(item: $activeImagePreview, onDismiss: clearActiveImagePreview) { active in
             VaultSecureImagePreviewView(
@@ -435,12 +441,7 @@ struct VaultGalleryView: View {
 
     private var selectionActionBar: some View {
         HStack {
-            Button {
-                saveSelectedPhotos()
-            } label: {
-                Label("Save to Photos", systemImage: "square.and.arrow.down")
-            }
-            .disabled(selectedPhotoRecords.isEmpty || isWorking)
+            selectionTransferAction
 
             Spacer()
 
@@ -454,6 +455,45 @@ struct VaultGalleryView: View {
         .padding(.horizontal)
         .padding(.vertical, 12)
         .background(.bar)
+    }
+
+    @ViewBuilder
+    private var selectionTransferAction: some View {
+        switch selection.transferMode {
+        case .none:
+            EmptyView()
+        case .photos:
+            Button {
+                saveSelectedPhotos()
+            } label: {
+                Label("Save to Photos", systemImage: "square.and.arrow.down")
+            }
+            .disabled(isWorking)
+        case .generalFiles:
+            Button {
+                exportSelectedGeneralFiles()
+            } label: {
+                Label("Export Files", systemImage: "square.and.arrow.up")
+            }
+            .disabled(isWorking)
+        case .mixed:
+            Menu {
+                Button {
+                    saveSelectedPhotos()
+                } label: {
+                    Label("Save Photos", systemImage: "square.and.arrow.down")
+                }
+
+                Button {
+                    exportSelectedGeneralFiles()
+                } label: {
+                    Label("Export Files", systemImage: "square.and.arrow.up")
+                }
+            } label: {
+                Label("Save / Export", systemImage: "square.and.arrow.up.on.square")
+            }
+            .disabled(isWorking)
+        }
     }
 
     private var sortedFolders: [VaultFolderRecord] {
@@ -622,7 +662,13 @@ struct VaultGalleryView: View {
                 delete(record)
             }
 
-        case .generalFile:
+        case .generalFile(let record):
+            Button {
+                exportGeneralFiles([record])
+            } label: {
+                Label("Export to Files", systemImage: "square.and.arrow.up")
+            }
+
             Button {
                 isSelecting = true
                 selection.selectOnly(item.id)
@@ -1261,6 +1307,40 @@ struct VaultGalleryView: View {
 
     private func saveSelectedPhotos() {
         savePhotos(selectedPhotoRecords)
+    }
+
+    private func exportSelectedGeneralFiles() {
+        exportGeneralFiles(selectedGeneralFileRecords)
+    }
+
+    private func exportGeneralFiles(_ files: [VaultGeneralFileRecord]) {
+        guard let generalFileStore, !files.isEmpty, !isWorking else { return }
+        isWorking = true
+
+        let taskID = session.startSensitiveTask { _ in
+            defer { isWorking = false }
+            do {
+                let prepared = try await generalFileStore.prepareExport(files)
+                guard !Task.isCancelled else {
+                    await generalFileStore.discardExport(prepared)
+                    return
+                }
+                session.beginSystemInteraction()
+                generalFileExport = prepared
+            } catch is CancellationError {
+                return
+            } catch {
+                message = "The selected files could not be authenticated and exported."
+            }
+        }
+        if taskID == nil { isWorking = false }
+    }
+
+    private func finishGeneralFileExport(_ prepared: PreparedGeneralFileExport) {
+        generalFileExport = nil
+        session.endSystemInteraction()
+        guard let generalFileStore else { return }
+        Task { await generalFileStore.discardExport(prepared) }
     }
 
     private func savePhotos(_ photos: [VaultPhotoRecord]) {

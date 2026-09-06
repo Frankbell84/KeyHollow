@@ -59,6 +59,23 @@ final class VaultGalleryPresentationTests: XCTestCase {
         XCTAssertTrue(selection.isEmpty)
     }
 
+    func testSelectionTransferModeExposesTheMatchingSaveAndExportPath() {
+        let photoID = UUID()
+        let fileID = UUID()
+        var selection = VaultGallerySelection()
+
+        XCTAssertEqual(selection.transferMode, .none)
+
+        selection.toggle(.photo(photoID))
+        XCTAssertEqual(selection.transferMode, .photos)
+
+        selection.toggle(.generalFile(fileID))
+        XCTAssertEqual(selection.transferMode, .mixed)
+
+        selection.toggle(.photo(photoID))
+        XCTAssertEqual(selection.transferMode, .generalFiles)
+    }
+
     func testMixedGallerySelectionReconcilesDeletedRecordsByKind() {
         let sharedID = UUID()
         let removedID = UUID()

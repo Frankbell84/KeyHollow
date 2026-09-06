@@ -18,6 +18,21 @@ the encrypted file format, protected store, or accepted Build 34 data paths.
 - Confirmed the secure general-file export and temporary-file cleanup engine
   already exist in `KeyHollowGeneralFileSupportAddOn`. The functional gap is
   limited to missing export controls in the unified gallery composition layer.
+- Added source-aware selection actions: photo-only selections save to Photos,
+  file-only selections export through the system share sheet, and mixed
+  selections present both choices without crowding the bottom action bar.
+- Added `Export to Files` to each general-file gallery context menu and a visible
+  per-row export button in Vault Files, so individual export no longer depends
+  on discovering a long-press action.
+- Reused the authenticated `prepareExport` boundary and guaranteed temporary
+  plaintext cleanup after the system interaction; the encrypted store and vault
+  transfer formats remain unchanged.
+- Extracted the system share-sheet adapter into one app-owned presentation
+  component, removing duplicate routing risk while keeping UIKit outside every
+  protected module.
+- Added regression coverage for photo-only, file-only, mixed, and empty
+  selection transfer modes, plus architecture markers that fail if unified
+  general-file export wiring is removed.
 - Created `feature/secure-unified-file-preview` directly from hardened checkpoint
   `0d86997`; the validated gallery and release branches remain untouched.
 - Mapped the existing routing seam: Photos-origin images use the full-screen
@@ -196,6 +211,11 @@ the encrypted file format, protected store, or accepted Build 34 data paths.
 
 ## Test and build status
 
+- General-file export parity architecture gate: passed locally.
+- Release hygiene and TestFlight build-number guard self-test: passed locally.
+- Diff whitespace validation: passed locally.
+- Full Mac compile, unit/launch/security suite, and CodeQL: pending the pushed
+  implementation checkpoint; Windows cannot perform the Xcode build itself.
 - Secure-preview architecture, release-hygiene, build-number, and diff-integrity
   gates: passed locally.
 - Secure-preview validation run
@@ -459,10 +479,10 @@ the encrypted file format, protected store, or accepted Build 34 data paths.
 
 ## Next action
 
-Add individual and selection-mode export controls to the unified gallery, route
-them through the existing protected export API, and add presentation regression
-coverage plus architecture markers. Run all Windows-safe gates, then push a
-draft review for the full Mac build, test, and security suite.
+Commit and push the completed export-parity implementation, open a draft review
+against `main`, and run the full Mac build, unit/launch/security suite, and
+CodeQL. Do not prepare or upload a TestFlight build until those gates pass and
+Frank gives separate release approval.
 
 ## Frank's decision required
 
