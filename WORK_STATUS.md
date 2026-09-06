@@ -1,22 +1,28 @@
 # KeyHollow Work Status
 
 Updated: 2026-09-06
-Branch: `refactor/gallery-ui-module`
+Branch: `feature/secure-unified-file-preview`
 Parent release source: `7503a68` (exact delivered Build 33 source)
 
 ## Current task
 
-The `KeyHollowGalleryUI` hardening phase is complete and remotely validated.
-Hold the clean Build 33-derived checkpoint before beginning secure file-opening
-behavior as a separately scoped next phase. The compiled UI target is
-dependency-free, accepts only immutable source-neutral presentation values and
-action closures, and is protected by CI rules against storage, session,
-cryptographic, transfer, and network coupling. No customer-facing behavior,
-vault data, Build 33 delivery, `Family`, production, or App Store review state
-changed.
+Implement the first secure unified-opening milestone on a dedicated branch from
+the green gallery-hardening checkpoint. Images imported through Files must open
+in the same full-screen viewer as Photos-origin images; tapping one item must
+never open the file-management queue. The new preview feature must be an
+independently compiled add-on with neutral immutable inputs and action closures.
+Only the application shell may resolve records, authenticate/decrypt selected
+content, or route save/delete operations. Build 33 remains the immutable gallery
+baseline; no TestFlight, `Family`, merge, production, or App Store state may
+change during implementation.
 
 ## Completed work
 
+- Created `feature/secure-unified-file-preview` directly from hardened checkpoint
+  `0d86997`; the validated gallery and release branches remain untouched.
+- Mapped the existing routing seam: Photos-origin images use the full-screen
+  decrypted viewer, while all general-file taps currently open the management
+  queue regardless of type.
 - Frank confirmed the Build 33 folder/file UI is solid on a physical iPhone;
   that exact behavior is frozen as the hardening baseline.
 - Replaced all photo, general-file, and folder storage records at the compiled
@@ -129,6 +135,8 @@ changed.
 
 ## Test and build status
 
+- Secure-preview architecture, hygiene, build-number, Mac compile/tests, and
+  CodeQL gates: pending implementation.
 - Gallery UI module architecture boundary gate: passed locally.
 - Gallery UI module release-hygiene gate: passed locally.
 - Gallery UI module TestFlight build-number guard self-test: passed locally.
@@ -356,15 +364,15 @@ changed.
 
 ## Blockers
 
-- No known engineering blocker remains for the gallery hardening phase.
+- No known engineering blocker. Windows cannot perform the Xcode/iOS gates, so
+  the completed implementation will require the normal isolated Mac review.
 
 ## Next action
 
-Preserve this rollback-ready checkpoint and draft PR #37. When the next phase
-begins, design secure file opening behind a separate narrow interface: decrypt
-only after an authenticated tap, keep temporary plaintext lifecycle-owned, and
-route image files to the same viewer as Photos-origin images without moving
-storage or cryptographic ownership into the gallery module.
+Checkpoint and push this phase start, create the dependency-free secure-preview
+module and enforcement rules, route both image sources into its one viewer, add
+safe failure/lock/deletion tests, and run all local and remote gates. Broader
+PDF/audio/video/text preview remains a later milestone behind the same contract.
 
 ## Frank's decision required
 
