@@ -6,16 +6,15 @@ Pull request: [#35](https://github.com/Frankbell84/KeyHollow/pull/35) (draft)
 
 ## Current task
 
-Production Build 30 was signed and uploaded from the exact reviewed commit.
-Frank's device feedback confirmed that Build 30 still contains two Phase 4
-presentation defects: image files can appear visually distorted and photos
-imported through Photos do not carry the filename-and-size footer used by
-general-file tiles. Frank explicitly approved a Build 31 TestFlight delivery.
-The isolated source candidate corrects both paths and the exact guarded Build
-31 release checkpoint `bc045e4` has passed the complete remote Mac and Swift
-security gates. Its immutable delivery branch and approved Apple upload are now
-the active steps. Build 30 remains unchanged and is testing in both `KeyHollow
-Internal` and `Family`. App Store review remains untouched.
+Build 31 was signed and uploaded from the exact validated release commit
+`bc045e4`. Apple processing completed and Build 31 is now `Ready to Submit` in
+TestFlight with `KeyHollow Internal` assigned. Build 31 contains the two gallery
+presentation corrections absent from Build 30: aspect-fill image thumbnails
+without distortion and filename-and-size footers for Photos imports. Adding the
+existing external `Family` group is the only remaining delivery action and is
+paused at Apple's final access step for action-time confirmation. Build 30
+remains unchanged and testing in both existing groups. App Store review remains
+untouched.
 
 ## Completed work
 
@@ -218,18 +217,28 @@ Internal` and `Family`. App Store review remains untouched.
   `2a382575cdc4bca6fe7031373a2fdcab9e616e478bffa84034accff83bc31d38`.
 - Security-test artifact `9979762432` was recorded with SHA-256 digest
   `417493a49b58c9cd767e770327c6228ecf340ea7faef8f1043d5dd77bc63aab6`.
+- Guarded TestFlight upload run
+  [#41](https://github.com/Frankbell84/KeyHollow/actions/runs/34002768326)
+  completed successfully in 2m15s from exact release commit `bc045e4`.
+- Release hygiene, production identity, unused Build 31 verification, cloud
+  signing, archive/module hygiene, signed IPA export, Apple upload, artifact
+  retention, and signing-material cleanup all passed.
+- Apple finished processing Build 31. It is `Ready to Submit` and already
+  assigned to `KeyHollow Internal`; no App Store review state was changed.
 
 ## Blockers
 
-- No engineering blocker remains. The guarded Apple upload and subsequent Apple
-  processing are the remaining delivery steps.
+- No engineering or Apple-processing blocker remains.
+- Adding Build 31 to the external `Family` group changes tester access and may
+  trigger Beta App Review, so the final Apple action awaits action-time
+  confirmation.
 
 ## Next action
 
-Create and push `delivery/gallery-parity-correction` at exact validated release
-commit `bc045e4`, dispatch the approved Build 31 upload, verify Apple processing,
-then assign it to the intended test groups. Build 30 must not be used as
-evidence for the gallery correction.
+After action-time confirmation, add Build 31 to the existing external `Family`
+group, preserve `KeyHollow Internal`, and verify the resulting TestFlight state.
+Then collect device feedback on the corrected Build 31 before any Phase 4 merge.
+Build 30 must not be used as evidence for the gallery correction.
 
 ## Frank's decision required
 
@@ -238,6 +247,8 @@ evidence for the gallery correction.
 - Build 30 is now `Testing` in both `KeyHollow Internal` and `Family`, with
   automatic tester notification enabled.
 - Frank explicitly approved the separate Build 31 TestFlight upload.
+- Build 31 is processed and assigned to `KeyHollow Internal`; adding the
+  external `Family` group awaits final confirmation at Apple's access step.
 - Device feedback on Build 31 and the later merge decision remain pending.
 - Any App Store review change remains out of scope without separate explicit
   approval.
