@@ -20,6 +20,11 @@ Build 32 and the upload workflow is restricted to the exact new delivery branch.
 The `Family` rollout remains held. Build 30 remains unchanged and testing in
 both existing groups. App Store review remains untouched.
 
+The immutable Build 32 release source is now fully validated at exact commit
+`2eaf852`. The complete Mac build/regression job and Swift CodeQL gate passed,
+and both evidence artifacts have recorded SHA-256 digests. The approved guarded
+TestFlight upload is the active next step.
+
 ## Completed work
 
 - Began from verified remote `main` at merged General File Support commit
@@ -255,21 +260,34 @@ both existing groups. App Store review remains untouched.
 - Updated the app and embedded thumbnail extension together to Build 32 and
   limited production upload permission to the exact immutable branch
   `delivery/mixed-gallery-selection`.
+- Created `delivery/mixed-gallery-selection` at exact release commit
+  `2eaf852d582ac84796c7750aa1fc632cb10445a5`; it contains no later status-only
+  changes.
+- Exact Build 32 release-source run
+  [#239](https://github.com/Frankbell84/KeyHollow/actions/runs/34029515379)
+  at `2eaf852`: passed.
+- Mac simulator build, complete unit and launch suite, release hygiene,
+  architecture enforcement, build-number guard, and packaged-thumbnail checks:
+  passed in 6m55s.
+- Swift CodeQL: passed in 29m08s with no failed security gate.
+- Simulator artifact `9988224216` was recorded with SHA-256 digest
+  `d50c8402d3d74248c7b2957f70649c73bb5d46e404999a56141816c6243f294d`.
+- Security-test artifact `9988225289` was recorded with SHA-256 digest
+  `17690a706cf004a9eb97040fa055fe642ad5ea3d69191aad2b776a72c935319e`.
 
 ## Blockers
 
 - No engineering or validation blocker remains for the mixed-selection
   correction.
 - Build 31 must not be promoted to `Family`; it does not contain this correction.
-- The exact Build 32 release-source gates and guarded Apple upload remain.
+- The guarded Build 32 Apple upload and Apple processing remain.
 
 ## Next action
 
-Commit the exact Build 32 release source, create the immutable
-`delivery/mixed-gallery-selection` branch at that commit, rerun the complete
-release-source gates, and dispatch the approved guarded Apple upload. Verify
-processing and `KeyHollow Internal` availability. Do not promote it to `Family`
-until the corrected selection behavior passes on-device.
+Dispatch the approved guarded Apple upload from exact immutable branch
+`delivery/mixed-gallery-selection` at `2eaf852`. Verify processing and
+`KeyHollow Internal` availability. Do not promote it to `Family` until the
+corrected selection behavior passes on-device.
 
 ## Frank's decision required
 
