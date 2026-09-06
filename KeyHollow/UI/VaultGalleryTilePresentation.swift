@@ -1,9 +1,6 @@
 import Foundation
 import SwiftUI
 import UIKit
-import UniformTypeIdentifiers
-import KeyHollowGeneralFileSupportAddOn
-import KeyHollowPhotoCore
 
 enum VaultGalleryTileMetrics {
     static let mediaAspectRatio: CGFloat = 1
@@ -40,107 +37,46 @@ enum VaultGalleryPresentationMetadata {
         )
     }
 
-    static func isImage(
-        contentTypeIdentifier: String?,
-        displayName: String
-    ) -> Bool {
-        if let contentTypeIdentifier,
-           UTType(contentTypeIdentifier)?.conforms(to: .image) == true {
-            return true
-        }
-        let pathExtension = (displayName as NSString).pathExtension
-        return !pathExtension.isEmpty
-            && UTType(filenameExtension: pathExtension)?.conforms(to: .image) == true
-    }
 }
 
-public enum VaultGalleryPresentationItem: Identifiable, Equatable {
-    case photo(VaultPhotoRecord)
-    case generalFile(VaultGeneralFileRecord)
+public struct VaultGalleryPresentationItem: Identifiable, Equatable, Sendable {
+    public let id: VaultGallerySelection.Item
+    public let importedAt: Date
+    public let title: String
+    public let detail: String
+    public let iconName: String
+    public let isImage: Bool
+    public let accessibilityKind: String
 
-    public var id: VaultGallerySelection.Item {
-        switch self {
-        case .photo(let record):
-            .photo(record.id)
-        case .generalFile(let record):
-            .generalFile(record.id)
-        }
-    }
-
-    public var importedAt: Date {
-        switch self {
-        case .photo(let record):
-            record.importedAt
-        case .generalFile(let record):
-            record.importedAt
-        }
-    }
-
-    public var title: String {
-        switch self {
-        case .photo(let record):
-            VaultGalleryPresentationMetadata.title(
-                displayName: record.displayName,
-                isImage: true,
-                fallback: "Photo"
-            )
-        case .generalFile(let record):
-            VaultGalleryPresentationMetadata.title(
-                displayName: record.displayName,
-                isImage: isImage,
-                fallback: "File"
-            )
-        }
-    }
-
-    public var detail: String {
-        switch self {
-        case .photo(let record):
-            VaultGalleryPresentationMetadata.detail(
-                byteCount: record.originalByteCount,
-                importedAt: record.importedAt
-            )
-        case .generalFile(let record):
-            VaultGalleryPresentationMetadata.detail(
-                byteCount: record.originalByteCount,
-                importedAt: record.importedAt
-            )
-        }
-    }
-
-    public var iconName: String {
-        switch self {
-        case .photo:
-            "photo"
-        case .generalFile(let record):
-            GeneralFilePresentation.iconName(for: record.contentTypeIdentifier)
-        }
-    }
-
-    public var isImage: Bool {
-        switch self {
-        case .photo:
-            true
-        case .generalFile(let record):
-            VaultGalleryPresentationMetadata.isImage(
-                contentTypeIdentifier: record.contentTypeIdentifier,
-                displayName: record.displayName
-            )
-        }
-    }
-
-    public var accessibilityKind: String {
-        switch self {
-        case .photo:
-            "Encrypted photo"
-        case .generalFile:
-            "Encrypted file"
-        }
+    public init(
+        id: VaultGallerySelection.Item,
+        importedAt: Date,
+        displayName: String?,
+        originalByteCount: UInt64?,
+        isImage: Bool,
+        fallbackTitle: String,
+        iconName: String,
+        accessibilityKind: String
+    ) {
+        self.id = id
+        self.importedAt = importedAt
+        self.title = VaultGalleryPresentationMetadata.title(
+            displayName: displayName,
+            isImage: isImage,
+            fallback: fallbackTitle
+        )
+        self.detail = VaultGalleryPresentationMetadata.detail(
+            byteCount: originalByteCount,
+            importedAt: importedAt
+        )
+        self.iconName = iconName
+        self.isImage = isImage
+        self.accessibilityKind = accessibilityKind
     }
 
     public static func sourceNeutralOrder(
-        _ first: VaultGalleryPresentationItem,
-        _ second: VaultGalleryPresentationItem
+        _ first: Self,
+        _ second: Self
     ) -> Bool {
         if first.importedAt != second.importedAt {
             return first.importedAt > second.importedAt

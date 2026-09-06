@@ -375,6 +375,20 @@ def main() -> int:
     if gallery_ui_target is None:
         violations.append("project.yml: KeyHollowGalleryUI target is missing")
     else:
+        expected_sources = {
+            "KeyHollow/UI/VaultGalleryGridView.swift",
+            "KeyHollow/UI/VaultGalleryTilePresentation.swift",
+            "KeyHollow/UI/VaultFolderPresentationViews.swift",
+            "KeyHollow/UI/VaultGallerySelection.swift",
+        }
+        declared_sources = set(
+            re.findall(r"(?m)^      - path: ([^\r\n]+)$", gallery_ui_target)
+        )
+        if declared_sources != expected_sources:
+            violations.append(
+                "project.yml: KeyHollowGalleryUI source ownership changed; "
+                f"expected {sorted(expected_sources)}, got {sorted(declared_sources)}"
+            )
         for marker in (
             "type: library.static",
             "SWIFT_TREAT_WARNINGS_AS_ERRORS: YES",
@@ -385,6 +399,51 @@ def main() -> int:
                 violations.append(
                     f"project.yml: KeyHollowGalleryUI is missing {marker!r}"
                 )
+        if re.search(r"(?m)^    dependencies:\s*$", gallery_ui_target):
+            violations.append(
+                "project.yml: KeyHollowGalleryUI must remain dependency-free; "
+                "compose storage and add-on capabilities in the application shell"
+            )
+        for forbidden_dependency in (
+            "KeyHollowCryptoCore",
+            "KeyHollowVaultCore",
+            "KeyHollowPhotoCore",
+            "KeyHollowTransferCore",
+            "KeyHollowFolderPresentationAddOn",
+            "KeyHollowGeneralFileSupportAddOn",
+        ):
+            if f"- target: {forbidden_dependency}" in gallery_ui_target:
+                violations.append(
+                    "project.yml: KeyHollowGalleryUI depends on protected/content "
+                    f"module {forbidden_dependency} instead of immutable presentation values"
+                )
+
+    gallery_grid_source = (
+        SOURCE_ROOT / "UI" / "VaultGalleryGridView.swift"
+    ).read_text(encoding="utf-8")
+    for required in (
+        "folders: [VaultGalleryFolder]",
+        "items: [VaultGalleryPresentationItem]",
+        "(VaultGalleryFolder) -> FolderContent",
+        "(VaultGalleryPresentationItem) -> ItemContent",
+    ):
+        if required not in gallery_grid_source:
+            violations.append(
+                "KeyHollow/UI/VaultGalleryGridView.swift: source-neutral UI "
+                f"contract is missing {required!r}"
+            )
+    for bypass in (
+        "Folder: Identifiable",
+        "Item: Identifiable",
+        "VaultPhotoRecord",
+        "VaultGeneralFileRecord",
+        "VaultFolderRecord",
+    ):
+        if bypass in gallery_grid_source:
+            violations.append(
+                "KeyHollow/UI/VaultGalleryGridView.swift: storage-model bypass "
+                f"entered the grid contract ({bypass})"
+            )
 
     for file in swift_files:
         path = relative(file)
@@ -488,10 +547,6 @@ def main() -> int:
                 "Foundation",
                 "SwiftUI",
                 "UIKit",
-                "UniformTypeIdentifiers",
-                "KeyHollowFolderPresentationAddOn",
-                "KeyHollowGeneralFileSupportAddOn",
-                "KeyHollowPhotoCore",
             }
             if unexpected:
                 violations.append(
@@ -501,8 +556,11 @@ def main() -> int:
             for forbidden_symbol in (
                 "VaultSession",
                 "VaultUnlockService",
+                "VaultPhotoRecord",
                 "VaultPhotoStore",
+                "VaultGeneralFileRecord",
                 "VaultGeneralFileStore",
+                "VaultFolderRecord",
                 "VaultFolderPresentationStore",
                 "EncryptedVaultTransferCoordinator",
                 "SymmetricKey",
@@ -557,6 +615,9 @@ def main() -> int:
         "import KeyHollowGalleryUI",
         "VaultGalleryGridView(",
         "VaultGalleryItemTileView(",
+        "visibleGalleryContentItems.map(\\.presentationItem)",
+        "folders: visibleGalleryFolders",
+        "items: visibleGalleryItems",
     ):
         if required not in gallery_source:
             violations.append(

@@ -2,8 +2,8 @@ import Foundation
 
 /// Presentation-only selection state spanning both protected content stores.
 /// It owns references, never plaintext or storage capabilities.
-public struct VaultGallerySelection: Equatable {
-    public enum Item: Hashable {
+public struct VaultGallerySelection: Equatable, Sendable {
+    public enum Item: Hashable, Sendable {
         case photo(UUID)
         case generalFile(UUID)
     }

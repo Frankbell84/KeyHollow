@@ -140,10 +140,6 @@ targets:
       - path: KeyHollow/UI/VaultGalleryTilePresentation.swift
       - path: KeyHollow/UI/VaultFolderPresentationViews.swift
       - path: KeyHollow/UI/VaultGallerySelection.swift
-    dependencies:
-      - target: KeyHollowGeneralFileSupportAddOn
-      - target: KeyHollowFolderPresentationAddOn
-      - target: KeyHollowPhotoCore
     settings:
       base:
         PRODUCT_NAME: KeyHollowGalleryUI

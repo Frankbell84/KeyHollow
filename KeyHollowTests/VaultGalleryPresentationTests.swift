@@ -8,6 +8,36 @@ import XCTest
 @testable import KeyHollowPhotoCore
 
 final class VaultGalleryPresentationTests: XCTestCase {
+    func testGalleryModuleContractUsesImmutableSourceNeutralValues() {
+        let itemID = UUID()
+        let importedAt = Date(timeIntervalSinceReferenceDate: 500)
+        let item = VaultGalleryPresentationItem(
+            id: .generalFile(itemID),
+            importedAt: importedAt,
+            displayName: "Evidence.pdf",
+            originalByteCount: 8_192,
+            isImage: false,
+            fallbackTitle: "File",
+            iconName: "doc",
+            accessibilityKind: "Encrypted file"
+        )
+        let folder = VaultGalleryFolder(
+            id: UUID(),
+            name: "Records",
+            itemCount: 1
+        )
+
+        XCTAssertEqual(item.id, .generalFile(itemID))
+        XCTAssertEqual(item.importedAt, importedAt)
+        XCTAssertEqual(item.title, "Evidence.pdf")
+        XCTAssertEqual(item.detail, "8 KB")
+        XCTAssertEqual(item.iconName, "doc")
+        XCTAssertFalse(item.isImage)
+        XCTAssertEqual(item.accessibilityKind, "Encrypted file")
+        XCTAssertEqual(folder.name, "Records")
+        XCTAssertEqual(folder.itemCount, 1)
+    }
+
     func testMixedGallerySelectionCountsPhotosAndGeneralFiles() {
         let photoID = UUID()
         let fileID = UUID()
@@ -69,7 +99,7 @@ final class VaultGalleryPresentationTests: XCTestCase {
 
         XCTAssertNil(decoded.displayName)
         XCTAssertNil(decoded.originalByteCount)
-        let item = VaultGalleryPresentationItem.photo(decoded)
+        let item = VaultGalleryContentItem.photo(decoded).presentationItem
         XCTAssertEqual(item.title, "Photo")
         XCTAssertFalse(item.detail.isEmpty)
     }
@@ -95,7 +125,7 @@ final class VaultGalleryPresentationTests: XCTestCase {
 
         XCTAssertEqual(record.displayName, "IMG_2735.HEIC")
         XCTAssertEqual(record.originalByteCount, UInt64(original.count))
-        let item = VaultGalleryPresentationItem.photo(record)
+        let item = VaultGalleryContentItem.photo(record).presentationItem
         XCTAssertEqual(item.title, "IMG_2735")
         XCTAssertEqual(item.detail, "2 KB")
     }
@@ -119,8 +149,8 @@ final class VaultGalleryPresentationTests: XCTestCase {
             blobName: "file.khg"
         )
 
-        let photoItem = VaultGalleryPresentationItem.photo(photo)
-        let fileItem = VaultGalleryPresentationItem.generalFile(file)
+        let photoItem = VaultGalleryContentItem.photo(photo).presentationItem
+        let fileItem = VaultGalleryContentItem.generalFile(file).presentationItem
 
         XCTAssertEqual(photoItem.title, "IMG_4130")
         XCTAssertEqual(fileItem.title, photoItem.title)
@@ -139,7 +169,7 @@ final class VaultGalleryPresentationTests: XCTestCase {
         )
 
         XCTAssertEqual(
-            VaultGalleryPresentationItem.generalFile(record).title,
+            VaultGalleryContentItem.generalFile(record).presentationItem.title,
             "Proposal.pdf"
         )
     }
@@ -162,11 +192,11 @@ final class VaultGalleryPresentationTests: XCTestCase {
             blobName: "file.khg"
         )
         let items = [
-            VaultGalleryPresentationItem.photo(olderPhoto),
-            VaultGalleryPresentationItem.generalFile(newerFile)
-        ].sorted(by: VaultGalleryPresentationItem.sourceNeutralOrder)
+            VaultGalleryContentItem.photo(olderPhoto),
+            VaultGalleryContentItem.generalFile(newerFile)
+        ].sorted(by: VaultGalleryContentItem.sourceNeutralOrder)
 
-        XCTAssertEqual(items.map(\.title), ["Newer", "Older"])
+        XCTAssertEqual(items.map(\.presentationItem.title), ["Newer", "Older"])
     }
 
     func testSharedTileGeometryIsFixedForEveryItemKind() {

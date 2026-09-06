@@ -27,6 +27,72 @@ private struct DecryptedPhoto: Identifiable {
     let image: UIImage
 }
 
+/// App-owned routing record. Storage models stop here and are translated into
+/// immutable, source-neutral values before crossing into `KeyHollowGalleryUI`.
+enum VaultGalleryContentItem: Identifiable, Equatable {
+    case photo(VaultPhotoRecord)
+    case generalFile(VaultGeneralFileRecord)
+
+    var id: VaultGallerySelection.Item {
+        switch self {
+        case .photo(let record):
+            .photo(record.id)
+        case .generalFile(let record):
+            .generalFile(record.id)
+        }
+    }
+
+    var presentationItem: VaultGalleryPresentationItem {
+        switch self {
+        case .photo(let record):
+            VaultGalleryPresentationItem(
+                id: id,
+                importedAt: record.importedAt,
+                displayName: record.displayName,
+                originalByteCount: record.originalByteCount,
+                isImage: true,
+                fallbackTitle: "Photo",
+                iconName: "photo",
+                accessibilityKind: "Encrypted photo"
+            )
+        case .generalFile(let record):
+            let image = Self.isImage(record)
+            return VaultGalleryPresentationItem(
+                id: id,
+                importedAt: record.importedAt,
+                displayName: record.displayName,
+                originalByteCount: record.originalByteCount,
+                isImage: image,
+                fallbackTitle: "File",
+                iconName: GeneralFilePresentation.iconName(
+                    for: record.contentTypeIdentifier
+                ),
+                accessibilityKind: "Encrypted file"
+            )
+        }
+    }
+
+    static func sourceNeutralOrder(
+        _ first: Self,
+        _ second: Self
+    ) -> Bool {
+        VaultGalleryPresentationItem.sourceNeutralOrder(
+            first.presentationItem,
+            second.presentationItem
+        )
+    }
+
+    private static func isImage(_ record: VaultGeneralFileRecord) -> Bool {
+        if let contentTypeIdentifier = record.contentTypeIdentifier,
+           UTType(contentTypeIdentifier)?.conforms(to: .image) == true {
+            return true
+        }
+        let pathExtension = (record.displayName as NSString).pathExtension
+        return !pathExtension.isEmpty
+            && UTType(filenameExtension: pathExtension)?.conforms(to: .image) == true
+    }
+}
+
 /// Application composition coordinator. Visible folder/gallery layout,
 /// tiles, and selection state are compiled in `KeyHollowGalleryUI`.
 /// This shell alone translates UI actions into authenticated store operations.
@@ -81,16 +147,15 @@ struct VaultGalleryView: View {
                 emptySystemImage: activeFolderID == nil
                     ? "photo.on.rectangle.angled"
                     : "folder",
-                folders: visibleFolders,
+                folders: visibleGalleryFolders,
                 items: visibleGalleryItems
             ) { folder in
                 VaultFolderTileView(
                     folder: folder,
-                    itemCount: itemCount(in: folder.id),
                     isEnabled: !isSelecting,
-                    open: { openFolder(folder) },
-                    rename: { requestFolderRename(folder) },
-                    delete: { folderPendingDeletion = folder }
+                    open: { openFolder(id: folder.id) },
+                    rename: { requestFolderRename(id: folder.id) },
+                    delete: { requestFolderDeletion(id: folder.id) }
                 )
             } itemContent: { item in
                 galleryItemCell(item)
@@ -364,6 +429,16 @@ struct VaultGalleryView: View {
         activeFolderID == nil ? sortedFolders : []
     }
 
+    private var visibleGalleryFolders: [VaultGalleryFolder] {
+        visibleFolders.map {
+            VaultGalleryFolder(
+                id: $0.id,
+                name: $0.name,
+                itemCount: itemCount(in: $0.id)
+            )
+        }
+    }
+
     private var visiblePhotoRecords: [VaultPhotoRecord] {
         records.filter {
             assignedFolderID(
@@ -380,12 +455,16 @@ struct VaultGalleryView: View {
         }
     }
 
-    private var visibleGalleryItems: [VaultGalleryPresentationItem] {
-        let photos = visiblePhotoRecords.map { VaultGalleryPresentationItem.photo($0) }
+    private var visibleGalleryContentItems: [VaultGalleryContentItem] {
+        let photos = visiblePhotoRecords.map { VaultGalleryContentItem.photo($0) }
         let files = visibleGeneralFileRecords.map {
-            VaultGalleryPresentationItem.generalFile($0)
+            VaultGalleryContentItem.generalFile($0)
         }
-        return (photos + files).sorted(by: VaultGalleryPresentationItem.sourceNeutralOrder)
+        return (photos + files).sorted(by: VaultGalleryContentItem.sourceNeutralOrder)
+    }
+
+    private var visibleGalleryItems: [VaultGalleryPresentationItem] {
+        visibleGalleryContentItems.map(\.presentationItem)
     }
 
     private var activeFolder: VaultFolderRecord? {
@@ -460,24 +539,30 @@ struct VaultGalleryView: View {
     }
 
     @ViewBuilder
-    private func galleryItemCell(_ item: VaultGalleryPresentationItem) -> some View {
-        VaultGalleryItemTileView(
-            item: item,
-            thumbnail: thumbnail(for: item),
-            selectionState: isSelecting ? selection.contains(item.id) : nil,
-            action: { handleGalleryItemTap(item) }
-        )
-        .contextMenu {
-            galleryItemContextMenu(item)
-        }
-        .task(id: item.id) {
-            await loadThumbnailIfNeeded(for: item)
+    private func galleryItemCell(
+        _ presentationItem: VaultGalleryPresentationItem
+    ) -> some View {
+        if let item = visibleGalleryContentItems.first(where: {
+            $0.id == presentationItem.id
+        }) {
+            VaultGalleryItemTileView(
+                item: presentationItem,
+                thumbnail: thumbnail(for: item),
+                selectionState: isSelecting ? selection.contains(item.id) : nil,
+                action: { handleGalleryItemTap(item) }
+            )
+            .contextMenu {
+                galleryItemContextMenu(item)
+            }
+            .task(id: item.id) {
+                await loadThumbnailIfNeeded(for: item)
+            }
         }
     }
 
     @ViewBuilder
     private func galleryItemContextMenu(
-        _ item: VaultGalleryPresentationItem
+        _ item: VaultGalleryContentItem
     ) -> some View {
         switch item {
         case .photo(let record):
@@ -518,7 +603,7 @@ struct VaultGalleryView: View {
         }
     }
 
-    private func handleGalleryItemTap(_ item: VaultGalleryPresentationItem) {
+    private func handleGalleryItemTap(_ item: VaultGalleryContentItem) {
         if isSelecting {
             selection.toggle(item.id)
             return
@@ -532,7 +617,7 @@ struct VaultGalleryView: View {
         }
     }
 
-    private func thumbnail(for item: VaultGalleryPresentationItem) -> UIImage? {
+    private func thumbnail(for item: VaultGalleryContentItem) -> UIImage? {
         switch item {
         case .photo(let record):
             thumbnails[record.id]
@@ -543,7 +628,7 @@ struct VaultGalleryView: View {
 
     @MainActor
     private func loadThumbnailIfNeeded(
-        for item: VaultGalleryPresentationItem
+        for item: VaultGalleryContentItem
     ) async {
         switch item {
         case .photo(let record):
@@ -554,7 +639,7 @@ struct VaultGalleryView: View {
     }
 
     private func presentedReference(
-        for item: VaultGalleryPresentationItem
+        for item: VaultGalleryContentItem
     ) -> VaultPresentedContentReference {
         switch item {
         case .photo(let record):
@@ -660,10 +745,17 @@ struct VaultGalleryView: View {
         showingFolderEditor = true
     }
 
-    private func requestFolderRename(_ folder: VaultFolderRecord) {
+    private func requestFolderRename(id: UUID) {
+        guard let folder = folderManifest.folders.first(where: { $0.id == id }) else {
+            return
+        }
         folderBeingRenamed = folder
         folderNameDraft = folder.name
         showingFolderEditor = true
+    }
+
+    private func requestFolderDeletion(id: UUID) {
+        folderPendingDeletion = folderManifest.folders.first { $0.id == id }
     }
 
     private func saveFolderName() {
@@ -700,10 +792,11 @@ struct VaultGalleryView: View {
         if taskID == nil { isWorking = false }
     }
 
-    private func openFolder(_ folder: VaultFolderRecord) {
+    private func openFolder(id: UUID) {
+        guard folderManifest.folders.contains(where: { $0.id == id }) else { return }
         guard !isWorking else { return }
         leaveSelectionMode()
-        activeFolderID = folder.id
+        activeFolderID = id
     }
 
     private func move(

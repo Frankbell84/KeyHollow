@@ -1,28 +1,37 @@
+import Foundation
 import SwiftUI
-import KeyHollowFolderPresentationAddOn
+
+public struct VaultGalleryFolder: Identifiable, Equatable, Sendable {
+    public let id: UUID
+    public let name: String
+    public let itemCount: Int
+
+    public init(id: UUID, name: String, itemCount: Int) {
+        self.id = id
+        self.name = name
+        self.itemCount = itemCount
+    }
+}
 
 public struct VaultFolderTileView: View {
-    let folder: VaultFolderRecord
-    let itemCount: Int
+    let folder: VaultGalleryFolder
     let isEnabled: Bool
     let open: () -> Void
     let rename: () -> Void
     let delete: () -> Void
 
     private var itemDescription: String {
-        "\(itemCount) \(itemCount == 1 ? "item" : "items")"
+        "\(folder.itemCount) \(folder.itemCount == 1 ? "item" : "items")"
     }
 
     public init(
-        folder: VaultFolderRecord,
-        itemCount: Int,
+        folder: VaultGalleryFolder,
         isEnabled: Bool,
         open: @escaping () -> Void,
         rename: @escaping () -> Void,
         delete: @escaping () -> Void
     ) {
         self.folder = folder
-        self.itemCount = itemCount
         self.isEnabled = isEnabled
         self.open = open
         self.rename = rename

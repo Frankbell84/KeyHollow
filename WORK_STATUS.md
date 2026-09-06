@@ -2,23 +2,37 @@
 
 Updated: 2026-09-06
 Branch: `refactor/gallery-ui-module`
-Parent release source: `2eaf852` (Build 32)
+Parent release source: `7503a68` (exact delivered Build 33 source)
 
 ## Current task
 
-Harden the new `KeyHollowGalleryUI` boundary before adding secure file-opening
-behavior. Build 33's folder/file UI passed Frank's physical-device check and is
-the immutable visual baseline. The hardening phase will remove the UI module's
-remaining compile-time dependencies on photo, general-file, and folder storage
-models; replace them with source-neutral immutable presentation values; and make
-CI reject any future storage, session, cryptographic, transfer, plaintext, or
-network dependency. No customer-facing behavior, vault data, Build 33 delivery,
-`Family`, production, or App Store review state may change.
+Complete and remotely validate the hardened `KeyHollowGalleryUI` boundary before
+adding secure file-opening behavior. Build 33's folder/file UI remains the
+immutable visual baseline. The implementation is locally complete: the compiled
+UI target is dependency-free, accepts only immutable source-neutral presentation
+values and action closures, and is protected by CI rules against storage,
+session, cryptographic, transfer, and network coupling. No customer-facing
+behavior, vault data, Build 33 delivery, `Family`, production, or App Store
+review state may change.
 
 ## Completed work
 
 - Frank confirmed the Build 33 folder/file UI is solid on a physical iPhone;
   that exact behavior is frozen as the hardening baseline.
+- Replaced all photo, general-file, and folder storage records at the compiled
+  gallery boundary with immutable `VaultGalleryPresentationItem` and
+  `VaultGalleryFolder` values.
+- Kept the storage-backed routing union private to the application composition
+  layer; only opaque typed IDs, normalized display metadata, and action closures
+  now cross into `KeyHollowGalleryUI`.
+- Removed every content/add-on dependency from the `KeyHollowGalleryUI` target;
+  it now compiles as a dependency-free static library with strict concurrency
+  and warnings-as-errors.
+- Strengthened CI to pin the module's exact source ownership, require the neutral
+  folder/item contract, reject generic storage-model bypasses, reject any target
+  dependency, and preserve the protected-capability/import denylist.
+- Added module-contract regression coverage for immutable item/folder values and
+  retained the mixed-selection, naming, ordering, geometry, and thumbnail tests.
 - Created `refactor/gallery-ui-module` directly from exact validated Build 33
   source `7503a68`; no delivery or production branch was modified.
 - Added `KeyHollowGalleryUI` as an independently compiled static library under
@@ -26,8 +40,8 @@ network dependency. No customer-facing behavior, vault data, Build 33 delivery,
 - Removed the gallery grid, shared tile renderers, folder tiles, and selection
   model from the application target so those sources compile only in the new
   module.
-- Replaced the app-owned `LazyVGrid` with a generic module-owned grid that
-  receives immutable folder/item collections and view-building closures.
+- Replaced the app-owned `LazyVGrid` with a module-owned grid that receives only
+  immutable gallery folder/item values and view-building closures.
 - Kept authenticated sessions, encrypted stores, cryptographic capabilities,
   transfer coordination, plaintext, and networking out of the UI module.
 - Extended architecture enforcement to require the module target, app-source
@@ -112,8 +126,10 @@ network dependency. No customer-facing behavior, vault data, Build 33 delivery,
 - Gallery UI module release-hygiene gate: passed locally.
 - Gallery UI module TestFlight build-number guard self-test: passed locally.
 - Gallery UI module whitespace/diff integrity check: passed locally.
+- Hardened source-neutral contract gate: passed locally.
+- Dependency-free target/source-ownership gate: passed locally.
 - Remote Mac generation, compile, unit/launch tests, and CodeQL: pending the
-  isolated implementation commit and draft PR.
+  hardened implementation commit and isolated draft PR.
 - Architecture boundary gate: passed locally.
 - Release-hygiene gate: passed locally.
 - TestFlight build-number guard self-test: passed locally.
@@ -325,10 +341,10 @@ network dependency. No customer-facing behavior, vault data, Build 33 delivery,
 
 ## Next action
 
-Checkpoint this hardening start, replace storage-owned records at the compiled
-UI boundary with immutable presentation values, remove the UI target's content-
-module dependencies, strengthen architecture enforcement and regression tests,
-then run all local and remote gates without changing Build 33 behavior.
+Commit and push the completed hardening phase, open its isolated draft review,
+and run the mandatory remote Mac compile, complete unit/launch suite, architecture
+and hygiene gates, and Swift CodeQL. Do not begin secure file opening until those
+results are green and reviewed against the immutable Build 33 baseline.
 
 ## Frank's decision required
 

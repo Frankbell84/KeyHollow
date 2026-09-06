@@ -4,8 +4,6 @@ import SwiftUI
 /// values and action closures; this module never receives a vault session,
 /// cryptographic capability, content store, or plaintext payload.
 public struct VaultGalleryGridView<
-    Folder: Identifiable,
-    Item: Identifiable,
     FolderContent: View,
     ItemContent: View
 >: View {
@@ -14,10 +12,10 @@ public struct VaultGalleryGridView<
     private let emptyTitle: String
     private let emptyDescription: String
     private let emptySystemImage: String
-    private let folders: [Folder]
-    private let items: [Item]
-    private let folderContent: (Folder) -> FolderContent
-    private let itemContent: (Item) -> ItemContent
+    private let folders: [VaultGalleryFolder]
+    private let items: [VaultGalleryPresentationItem]
+    private let folderContent: (VaultGalleryFolder) -> FolderContent
+    private let itemContent: (VaultGalleryPresentationItem) -> ItemContent
 
     private let columns = Array(
         repeating: GridItem(.flexible(), spacing: 3),
@@ -30,10 +28,10 @@ public struct VaultGalleryGridView<
         emptyTitle: String,
         emptyDescription: String,
         emptySystemImage: String,
-        folders: [Folder],
-        items: [Item],
-        @ViewBuilder folderContent: @escaping (Folder) -> FolderContent,
-        @ViewBuilder itemContent: @escaping (Item) -> ItemContent
+        folders: [VaultGalleryFolder],
+        items: [VaultGalleryPresentationItem],
+        @ViewBuilder folderContent: @escaping (VaultGalleryFolder) -> FolderContent,
+        @ViewBuilder itemContent: @escaping (VaultGalleryPresentationItem) -> ItemContent
     ) {
         self.isContentLoaded = isContentLoaded
         self.isWorking = isWorking
