@@ -6,15 +6,15 @@ Pull request: [#35](https://github.com/Frankbell84/KeyHollow/pull/35) (draft)
 
 ## Current task
 
-Build 31 was signed and uploaded from the exact validated release commit
-`bc045e4`. Apple processing completed and Build 31 is now `Ready to Submit` in
-TestFlight with `KeyHollow Internal` assigned. Build 31 contains the two gallery
-presentation corrections absent from Build 30: aspect-fill image thumbnails
-without distortion and filename-and-size footers for Photos imports. Adding the
-existing external `Family` group is the only remaining delivery action and is
-paused at Apple's final access step for action-time confirmation. Build 30
-remains unchanged and testing in both existing groups. App Store review remains
-untouched.
+Build 31 was signed, processed, and delivered to `KeyHollow Internal` from exact
+validated release commit `bc045e4`. Frank's device test confirms that image
+distortion is fixed and every visible item now has a filename-and-size footer.
+The same test exposed one integration defect: gallery selection still counts
+and selects photo-store records only, leaving general-file tiles disabled and
+excluded from `Select All`. The `Family` rollout is intentionally held while a
+unified mixed-content selection correction is developed on the isolated feature
+branch. Build 30 remains unchanged and testing in both existing groups. App
+Store review remains untouched.
 
 ## Completed work
 
@@ -228,17 +228,16 @@ untouched.
 
 ## Blockers
 
-- No engineering or Apple-processing blocker remains.
-- Adding Build 31 to the external `Family` group changes tester access and may
-  trigger Beta App Review, so the final Apple action awaits action-time
-  confirmation.
+- Build 31 must not be promoted to `Family`: device testing found that gallery
+  selection excludes general-file records.
 
 ## Next action
 
-After action-time confirmation, add Build 31 to the existing external `Family`
-group, preserve `KeyHollow Internal`, and verify the resulting TestFlight state.
-Then collect device feedback on the corrected Build 31 before any Phase 4 merge.
-Build 30 must not be used as evidence for the gallery correction.
+Replace the photo-only gallery selection state with one mixed-content selection
+model, make general-file tiles selectable, include every visible item in
+`Select All` and the displayed count, and make bulk deletion safely handle both
+protected stores. Add focused regression coverage and rerun all local and remote
+quality gates before proposing another TestFlight build.
 
 ## Frank's decision required
 
@@ -247,8 +246,8 @@ Build 30 must not be used as evidence for the gallery correction.
 - Build 30 is now `Testing` in both `KeyHollow Internal` and `Family`, with
   automatic tester notification enabled.
 - Frank explicitly approved the separate Build 31 TestFlight upload.
-- Build 31 is processed and assigned to `KeyHollow Internal`; adding the
-  external `Family` group awaits final confirmation at Apple's access step.
-- Device feedback on Build 31 and the later merge decision remain pending.
+- Build 31 is processed and assigned only to `KeyHollow Internal`; Frank's
+  device feedback requires a selection correction before any `Family` rollout.
+- The later merge decision remains pending corrected device evidence.
 - Any App Store review change remains out of scope without separate explicit
   approval.
