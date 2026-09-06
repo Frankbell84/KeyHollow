@@ -57,6 +57,11 @@ state.
 - Created `delivery/secure-unified-file-preview` directly from the validated
   feature head. The application source remains exact commit `228f927`; the later
   commit is evidence-only status documentation.
+- Reserved Build 34 and synchronized `CURRENT_PROJECT_VERSION` for both the app
+  and embedded vault-thumbnail extension.
+- Replaced the obsolete Build 33 delivery-branch exception with the exact
+  `delivery/secure-unified-file-preview` branch. Feature and unrelated delivery
+  branches remain unable to run the signed upload workflow.
 - Frank confirmed the Build 33 folder/file UI is solid on a physical iPhone;
   that exact behavior is frozen as the hardening baseline.
 - Replaced all photo, general-file, and folder storage records at the compiled
@@ -184,6 +189,10 @@ state.
   `3d5b8fd6059d5bdb45aa60f295c4a1787fd4d8e87aa0f15ee0ed9592389d7526`.
 - Security-test artifact `9992901544` recorded SHA-256 digest
   `3b56b84c1c7f9a0e96cbfade803bfa12dd410faaace69bbd9dcc5a8756326183`.
+- Build 34 release-source architecture, release-hygiene, build-number self-test,
+  and diff-integrity gates: passed locally.
+- Build 34 remote release-source Mac build, complete test/security suite,
+  packaged-thumbnail verification, and Swift CodeQL: pending publication.
 - Gallery UI module architecture boundary gate: passed locally.
 - Gallery UI module release-hygiene gate: passed locally.
 - Gallery UI module TestFlight build-number guard self-test: passed locally.
@@ -416,12 +425,12 @@ state.
 
 ## Next action
 
-Checkpoint and publish the delivery branch, set both bundled products to Build
-34, replace the stale release-branch exception with this exact delivery branch,
-run the complete release-source validation, and dispatch the guarded upload.
-After Apple processes it, assign only `KeyHollow Internal` and ask Frank to
-confirm that a Files-origin image opens directly in the same viewer as a
-Photos-origin image. Broader PDF/audio/video/text preview remains later.
+Commit and publish the guarded Build 34 source, open its narrow release review,
+and run the complete remote release-source validation. If every gate remains
+green, dispatch the approved upload; its API guard must independently reject 34
+if Apple already has that build. After processing, assign only `KeyHollow
+Internal` and ask Frank to verify image-opening parity. Broader
+PDF/audio/video/text preview remains later.
 
 ## Frank's decision required
 
