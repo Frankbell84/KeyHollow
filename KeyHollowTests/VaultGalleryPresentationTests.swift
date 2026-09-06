@@ -58,7 +58,13 @@ final class VaultGalleryPresentationTests: XCTestCase {
 
     @MainActor
     func testThumbnailRendererPreservesOrientedAspectRatio() throws {
-        let source = UIGraphicsImageRenderer(size: CGSize(width: 80, height: 40)).image {
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        let renderer = UIGraphicsImageRenderer(
+            size: CGSize(width: 80, height: 40),
+            format: format
+        )
+        let source = renderer.image {
             UIColor.systemBlue.setFill()
             $0.fill(CGRect(x: 0, y: 0, width: 80, height: 40))
         }

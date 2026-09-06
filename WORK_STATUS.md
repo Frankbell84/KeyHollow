@@ -10,9 +10,8 @@ Production Build 30 was signed and uploaded from the exact reviewed commit.
 Frank's device feedback found a Phase 4 presentation inconsistency: photo tiles
 can appear visually distorted and do not carry the filename-and-size footer used
 by general-file tiles. The isolated correction is implemented locally and is
-ready for remote Mac validation. Build 30 is fully processed; its `Family`
-TestFlight assignment is prepared and awaiting the final access-change
-confirmation. App Store review remains untouched.
+under remote Mac validation. Build 30 is fully processed and now testing in
+both `KeyHollow Internal` and `Family`. App Store review remains untouched.
 
 ## Completed work
 
@@ -179,26 +178,33 @@ confirmation. App Store review remains untouched.
 - Gallery-parity release-hygiene gate: passed locally.
 - Gallery-parity TestFlight build-number guard self-test: passed locally.
 - Gallery-parity whitespace/diff integrity check: passed locally.
+- First gallery-parity CI run
+  [#230](https://github.com/Frankbell84/KeyHollow/actions/runs/33999150470)
+  at `4469e19`: the app and simulator build passed, 105 of 106 unit tests
+  passed, and all launch tests passed. The new orientation test alone failed
+  because its synthetic image inherited the simulator's 3x screen scale while
+  asserting 1x dimensions.
+- The test fixture now fixes its renderer to an explicit 1x scale so it measures
+  orientation behavior deterministically across simulator devices. The
+  production thumbnail implementation was not weakened or changed.
 
 ## Blockers
 
-- Adding Build 30 to `Family` changes beta access. The exact group is selected
-  and requires Frank's final confirmation immediately before the change.
 - Full iOS compilation and unit tests require the remote Mac CI gate.
 
 ## Next action
 
-Commit and push the gallery-parity correction, then require the complete Phase 4
-Mac simulator and Swift security gates. After Frank confirms the prepared access
-change, add Build 30 to `Family` and verify availability. Any corrected follow-up
-build must receive a separate guarded delivery checkpoint.
+Commit and push the deterministic test-fixture correction, then require the
+complete Phase 4 Mac simulator and Swift security gates. Build 30 is already
+testing with both intended groups. Any corrected follow-up build must receive a
+separate guarded delivery checkpoint.
 
 ## Frank's decision required
 
 - Frank explicitly approved this Phase 4 TestFlight delivery and requested the
   `Family` group receive Build 30.
-- Frank must confirm the prepared `Family` access change immediately before it
-  is applied.
+- Build 30 is now `Testing` in both `KeyHollow Internal` and `Family`, with
+  automatic tester notification enabled.
 - No decision is required for the gallery parity correction; Frank explicitly
   requested proportional thumbnails and matching image metadata footers.
 - Device feedback and the later merge decision remain pending.
