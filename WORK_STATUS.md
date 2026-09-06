@@ -10,6 +10,7 @@ Restore export parity for non-photo files in the unified vault gallery. Expose
 the existing security-tested general-file export engine through an obvious
 individual-file action and the mixed gallery selection bar, without changing
 the encrypted file format, protected store, or accepted Build 34 data paths.
+Validate exact implementation commit `2a0ce9f` in draft review #40.
 
 ## Completed work
 
@@ -33,6 +34,8 @@ the encrypted file format, protected store, or accepted Build 34 data paths.
 - Added regression coverage for photo-only, file-only, mixed, and empty
   selection transfer modes, plus architecture markers that fail if unified
   general-file export wiring is removed.
+- Opened draft PR #40 against `main` with an exact implementation checkpoint and
+  explicit evidence checklist; the branches report no merge conflict.
 - Created `feature/secure-unified-file-preview` directly from hardened checkpoint
   `0d86997`; the validated gallery and release branches remain untouched.
 - Mapped the existing routing seam: Photos-origin images use the full-screen
@@ -214,8 +217,9 @@ the encrypted file format, protected store, or accepted Build 34 data paths.
 - General-file export parity architecture gate: passed locally.
 - Release hygiene and TestFlight build-number guard self-test: passed locally.
 - Diff whitespace validation: passed locally.
-- Full Mac compile, unit/launch/security suite, and CodeQL: pending the pushed
-  implementation checkpoint; Windows cannot perform the Xcode build itself.
+- Full Mac compile, unit/launch/security suite, and CodeQL: queued by draft PR
+  #40 for exact implementation commit `2a0ce9f`; Windows cannot perform the
+  Xcode build itself.
 - Secure-preview architecture, release-hygiene, build-number, and diff-integrity
   gates: passed locally.
 - Secure-preview validation run
@@ -479,10 +483,10 @@ the encrypted file format, protected store, or accepted Build 34 data paths.
 
 ## Next action
 
-Commit and push the completed export-parity implementation, open a draft review
-against `main`, and run the full Mac build, unit/launch/security suite, and
-CodeQL. Do not prepare or upload a TestFlight build until those gates pass and
-Frank gives separate release approval.
+Monitor PR #40's full Mac build, unit/launch/security suite, architecture gate,
+and CodeQL. Correct any code-owned failure on the same isolated branch. Do not
+prepare or upload a TestFlight build until those gates pass and Frank gives
+separate release approval.
 
 ## Frank's decision required
 
