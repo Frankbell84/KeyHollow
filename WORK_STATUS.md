@@ -22,8 +22,10 @@ both existing groups. App Store review remains untouched.
 
 The immutable Build 32 release source is now fully validated at exact commit
 `2eaf852`. The complete Mac build/regression job and Swift CodeQL gate passed,
-and both evidence artifacts have recorded SHA-256 digests. The approved guarded
-TestFlight upload is the active next step.
+and both evidence artifacts have recorded SHA-256 digests. Guarded upload run
+#42 then signed and uploaded Build 32 successfully from that exact commit. Apple
+processing and Internal-group availability remain to be verified; the App Store
+Connect browser session expired when the build list was reopened.
 
 ## Completed work
 
@@ -274,18 +276,28 @@ TestFlight upload is the active next step.
   `d50c8402d3d74248c7b2957f70649c73bb5d46e404999a56141816c6243f294d`.
 - Security-test artifact `9988225289` was recorded with SHA-256 digest
   `17690a706cf004a9eb97040fa055fe642ad5ea3d69191aad2b776a72c935319e`.
+- Guarded TestFlight upload run
+  [#42](https://github.com/Frankbell84/KeyHollow/actions/runs/34031034352)
+  completed successfully in 2m31s from exact release commit `2eaf852` on
+  `delivery/mixed-gallery-selection`.
+- Release hygiene, production identity, unused Build 32 verification, cloud
+  signing, archive/module hygiene, signed IPA export, Apple upload, artifact
+  retention, and signing-material cleanup all passed.
+- Signed IPA artifact `9988636290` was recorded with SHA-256 digest
+  `fda6e071566b5fd42386b36d4b6df206bd6335d830f8f06d727daebb582fb931`.
 
 ## Blockers
 
 - No engineering or validation blocker remains for the mixed-selection
   correction.
 - Build 31 must not be promoted to `Family`; it does not contain this correction.
-- The guarded Build 32 Apple upload and Apple processing remain.
+- Apple processing and `KeyHollow Internal` availability verification remain.
+- The App Store Connect browser session expired and requires Frank to sign in;
+  no credential is requested or stored by the project.
 
 ## Next action
 
-Dispatch the approved guarded Apple upload from exact immutable branch
-`delivery/mixed-gallery-selection` at `2eaf852`. Verify processing and
+After Frank signs back in to App Store Connect, verify Build 32 processing and
 `KeyHollow Internal` availability. Do not promote it to `Family` until the
 corrected selection behavior passes on-device.
 
