@@ -1,27 +1,155 @@
 import Foundation
 import SwiftUI
 import UIKit
+import UniformTypeIdentifiers
+import KeyHollowGeneralFileSupportAddOn
 import KeyHollowPhotoCore
 
-enum VaultPhotoPresentationMetadata {
-    static func title(for record: VaultPhotoRecord) -> String {
-        guard let displayName = record.displayName,
-              !displayName.isEmpty else { return "Photo" }
-        return displayName
+enum VaultGalleryTileMetrics {
+    static let mediaAspectRatio: CGFloat = 1
+    static let footerHeight: CGFloat = 56
+    static let selectionInset: CGFloat = 8
+}
+
+enum VaultGalleryPresentationMetadata {
+    static func title(
+        displayName: String?,
+        isImage: Bool,
+        fallback: String
+    ) -> String {
+        guard let displayName else { return fallback }
+        let trimmed = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return fallback }
+        guard isImage else { return trimmed }
+
+        let title = (trimmed as NSString).deletingPathExtension
+        return title.isEmpty ? fallback : title
     }
 
-    static func detail(for record: VaultPhotoRecord) -> String {
-        if let byteCount = record.originalByteCount {
+    static func detail(byteCount: UInt64?, importedAt: Date) -> String {
+        if let byteCount {
             return ByteCountFormatter.string(
                 fromByteCount: Int64(clamping: byteCount),
                 countStyle: .file
             )
         }
         return DateFormatter.localizedString(
-            from: record.importedAt,
+            from: importedAt,
             dateStyle: .medium,
             timeStyle: .none
         )
+    }
+
+    static func isImage(
+        contentTypeIdentifier: String?,
+        displayName: String
+    ) -> Bool {
+        if let contentTypeIdentifier,
+           UTType(contentTypeIdentifier)?.conforms(to: .image) == true {
+            return true
+        }
+        let pathExtension = (displayName as NSString).pathExtension
+        return !pathExtension.isEmpty
+            && UTType(filenameExtension: pathExtension)?.conforms(to: .image) == true
+    }
+}
+
+enum VaultGalleryPresentationItem: Identifiable, Equatable {
+    case photo(VaultPhotoRecord)
+    case generalFile(VaultGeneralFileRecord)
+
+    var id: VaultGallerySelection.Item {
+        switch self {
+        case .photo(let record):
+            .photo(record.id)
+        case .generalFile(let record):
+            .generalFile(record.id)
+        }
+    }
+
+    var importedAt: Date {
+        switch self {
+        case .photo(let record):
+            record.importedAt
+        case .generalFile(let record):
+            record.importedAt
+        }
+    }
+
+    var title: String {
+        switch self {
+        case .photo(let record):
+            VaultGalleryPresentationMetadata.title(
+                displayName: record.displayName,
+                isImage: true,
+                fallback: "Photo"
+            )
+        case .generalFile(let record):
+            VaultGalleryPresentationMetadata.title(
+                displayName: record.displayName,
+                isImage: isImage,
+                fallback: "File"
+            )
+        }
+    }
+
+    var detail: String {
+        switch self {
+        case .photo(let record):
+            VaultGalleryPresentationMetadata.detail(
+                byteCount: record.originalByteCount,
+                importedAt: record.importedAt
+            )
+        case .generalFile(let record):
+            VaultGalleryPresentationMetadata.detail(
+                byteCount: record.originalByteCount,
+                importedAt: record.importedAt
+            )
+        }
+    }
+
+    var iconName: String {
+        switch self {
+        case .photo:
+            "photo"
+        case .generalFile(let record):
+            GeneralFilePresentation.iconName(for: record.contentTypeIdentifier)
+        }
+    }
+
+    var isImage: Bool {
+        switch self {
+        case .photo:
+            true
+        case .generalFile(let record):
+            VaultGalleryPresentationMetadata.isImage(
+                contentTypeIdentifier: record.contentTypeIdentifier,
+                displayName: record.displayName
+            )
+        }
+    }
+
+    var accessibilityKind: String {
+        switch self {
+        case .photo:
+            "Encrypted photo"
+        case .generalFile:
+            "Encrypted file"
+        }
+    }
+
+    static func sourceNeutralOrder(
+        _ first: VaultGalleryPresentationItem,
+        _ second: VaultGalleryPresentationItem
+    ) -> Bool {
+        if first.importedAt != second.importedAt {
+            return first.importedAt > second.importedAt
+        }
+        let titleOrder = first.title.localizedCaseInsensitiveCompare(second.title)
+        if titleOrder != .orderedSame {
+            return titleOrder == .orderedAscending
+        }
+        return String(describing: first.id) < String(describing: second.id)
     }
 }
 
@@ -68,42 +196,110 @@ enum VaultGalleryThumbnailRenderer {
 struct VaultGalleryTileSurface<Media: View>: View {
     let title: String
     let detail: String
+    let selectionState: Bool?
     private let media: Media
 
     init(
         title: String,
         detail: String,
+        selectionState: Bool?,
         @ViewBuilder media: () -> Media
     ) {
         self.title = title
         self.detail = detail
+        self.selectionState = selectionState
         self.media = media()
     }
 
     var body: some View {
         VStack(spacing: 0) {
-            ZStack {
-                Rectangle()
-                    .fill(.secondary.opacity(0.12))
+            ZStack(alignment: .topTrailing) {
+                ZStack {
+                    Rectangle()
+                        .fill(.secondary.opacity(0.12))
 
-                media
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    media
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+                .aspectRatio(VaultGalleryTileMetrics.mediaAspectRatio, contentMode: .fit)
+                .clipped()
+
+                if let isSelected = selectionState {
+                    Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                        .font(.title2)
+                        .foregroundStyle(
+                            isSelected ? Color.accentColor : Color.white,
+                            Color.white
+                        )
+                        .padding(VaultGalleryTileMetrics.selectionInset)
+                        .shadow(radius: 2)
+                }
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .clipped()
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.primary)
-                    .lineLimit(2)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
                 Text(detail)
                     .font(.caption2)
                     .foregroundStyle(.secondary)
+                    .lineLimit(1)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(8)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+            .frame(
+                maxWidth: .infinity,
+                minHeight: VaultGalleryTileMetrics.footerHeight,
+                maxHeight: VaultGalleryTileMetrics.footerHeight,
+                alignment: .topLeading
+            )
             .background(.ultraThinMaterial)
         }
+    }
+}
+
+struct VaultGalleryItemTileView: View {
+    let item: VaultGalleryPresentationItem
+    let thumbnail: UIImage?
+    let selectionState: Bool?
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VaultGalleryTileSurface(
+                title: item.title,
+                detail: item.detail,
+                selectionState: selectionState
+            ) {
+                if let thumbnail {
+                    Image(uiImage: thumbnail)
+                        .resizable()
+                        .scaledToFill()
+                } else {
+                    Image(systemName: item.iconName)
+                        .font(.system(size: 38, weight: .regular))
+                        .foregroundStyle(
+                            item.isImage ? Color.secondary : Color.accentColor
+                        )
+                }
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(item.title)
+        .accessibilityValue(accessibilityValue)
+        .accessibilityHint(
+            selectionState == nil
+                ? "Opens this encrypted vault item"
+                : "Toggles selection for this item"
+        )
+    }
+
+    private var accessibilityValue: String {
+        let metadata = "\(item.accessibilityKind), \(item.detail)"
+        guard let isSelected = selectionState else { return metadata }
+        return "\(isSelected ? "Selected" : "Not selected"), \(metadata)"
     }
 }

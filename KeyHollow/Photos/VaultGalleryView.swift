@@ -102,45 +102,8 @@ struct VaultGalleryView: View {
                                 )
                             }
 
-                            ForEach(visibleGeneralFileRecords) { record in
-                                VaultGeneralFileTileView(
-                                    record: record,
-                                    thumbnail: generalFileThumbnails[record.id],
-                                    selectionState: isSelecting
-                                        ? selection.contains(.generalFile(record.id))
-                                        : nil,
-                                    openFileManager: { showingVaultFiles = true },
-                                    toggleSelection: {
-                                        selection.toggle(.generalFile(record.id))
-                                    }
-                                )
-                                .task(id: record.id) {
-                                    await loadGeneralFileThumbnailIfNeeded(record)
-                                }
-                                .contextMenu {
-                                    Button {
-                                        isSelecting = true
-                                        selection.selectOnly(.generalFile(record.id))
-                                    } label: {
-                                        Label("Select", systemImage: "checkmark.circle")
-                                    }
-
-                                    moveDestinationMenu(
-                                        for: VaultPresentedContentReference(
-                                            kind: .generalFile,
-                                            id: record.id
-                                        )
-                                    )
-                                    Button {
-                                        showingVaultFiles = true
-                                    } label: {
-                                        Label("Manage File", systemImage: "doc")
-                                    }
-                                }
-                            }
-
-                            ForEach(visiblePhotoRecords) { record in
-                                thumbnailCell(record)
+                            ForEach(visibleGalleryItems) { item in
+                                galleryItemCell(item)
                             }
                         }
                         .padding(.horizontal, 3)
@@ -440,6 +403,14 @@ struct VaultGalleryView: View {
         }
     }
 
+    private var visibleGalleryItems: [VaultGalleryPresentationItem] {
+        let photos = visiblePhotoRecords.map { VaultGalleryPresentationItem.photo($0) }
+        let files = visibleGeneralFileRecords.map {
+            VaultGalleryPresentationItem.generalFile($0)
+        }
+        return (photos + files).sorted(by: VaultGalleryPresentationItem.sourceNeutralOrder)
+    }
+
     private var activeFolder: VaultFolderRecord? {
         guard let activeFolderID else { return nil }
         return folderManifest.folders.first { $0.id == activeFolderID }
@@ -512,52 +483,27 @@ struct VaultGalleryView: View {
     }
 
     @ViewBuilder
-    private func thumbnailCell(_ record: VaultPhotoRecord) -> some View {
-        Button {
-            if isSelecting {
-                selection.toggle(.photo(record.id))
-            } else {
-                open(record)
-            }
-        } label: {
-            GeometryReader { proxy in
-                VaultGalleryTileSurface(
-                    title: VaultPhotoPresentationMetadata.title(for: record),
-                    detail: VaultPhotoPresentationMetadata.detail(for: record)
-                ) {
-                    ZStack(alignment: .topTrailing) {
-                        if let image = thumbnails[record.id] {
-                            Image(uiImage: image)
-                                .resizable()
-                                .scaledToFill()
-                        } else {
-                            Image(systemName: "photo")
-                                .foregroundStyle(.secondary)
-                        }
-
-                        if isSelecting {
-                            Image(systemName: selection.contains(.photo(record.id)) ? "checkmark.circle.fill" : "circle")
-                                .font(.title2)
-                                .foregroundStyle(
-                                    selection.contains(.photo(record.id)) ? Color.accentColor : Color.white,
-                                    Color.white
-                                )
-                                .padding(8)
-                                .shadow(radius: 2)
-                        }
-                    }
-                }
-                .frame(width: proxy.size.width, height: proxy.size.height)
-            }
-            .aspectRatio(1, contentMode: .fit)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(VaultPhotoPresentationMetadata.title(for: record))
-        .accessibilityValue(
-            photoAccessibilityValue(record)
+    private func galleryItemCell(_ item: VaultGalleryPresentationItem) -> some View {
+        VaultGalleryItemTileView(
+            item: item,
+            thumbnail: thumbnail(for: item),
+            selectionState: isSelecting ? selection.contains(item.id) : nil,
+            action: { handleGalleryItemTap(item) }
         )
         .contextMenu {
+            galleryItemContextMenu(item)
+        }
+        .task(id: item.id) {
+            await loadThumbnailIfNeeded(for: item)
+        }
+    }
+
+    @ViewBuilder
+    private func galleryItemContextMenu(
+        _ item: VaultGalleryPresentationItem
+    ) -> some View {
+        switch item {
+        case .photo(let record):
             Button {
                 savePhotos([record])
             } label: {
@@ -566,29 +512,79 @@ struct VaultGalleryView: View {
 
             Button {
                 isSelecting = true
-                selection.selectOnly(.photo(record.id))
+                selection.selectOnly(item.id)
             } label: {
                 Label("Select", systemImage: "checkmark.circle")
             }
 
-            moveDestinationMenu(
-                for: VaultPresentedContentReference(kind: .photo, id: record.id)
-            )
+            moveDestinationMenu(for: presentedReference(for: item))
 
             Button("Delete from Vault", role: .destructive) {
                 delete(record)
             }
-        }
-        .task(id: record.id) {
-            await loadThumbnailIfNeeded(record)
+
+        case .generalFile:
+            Button {
+                isSelecting = true
+                selection.selectOnly(item.id)
+            } label: {
+                Label("Select", systemImage: "checkmark.circle")
+            }
+
+            moveDestinationMenu(for: presentedReference(for: item))
+
+            Button {
+                showingVaultFiles = true
+            } label: {
+                Label("Manage File", systemImage: "doc")
+            }
         }
     }
 
-    private func photoAccessibilityValue(_ record: VaultPhotoRecord) -> String {
-        let metadata = "Encrypted photo, \(VaultPhotoPresentationMetadata.detail(for: record))"
-        guard isSelecting else { return metadata }
-        let state = selection.contains(.photo(record.id)) ? "Selected" : "Not selected"
-        return "\(state), \(metadata)"
+    private func handleGalleryItemTap(_ item: VaultGalleryPresentationItem) {
+        if isSelecting {
+            selection.toggle(item.id)
+            return
+        }
+
+        switch item {
+        case .photo(let record):
+            open(record)
+        case .generalFile:
+            showingVaultFiles = true
+        }
+    }
+
+    private func thumbnail(for item: VaultGalleryPresentationItem) -> UIImage? {
+        switch item {
+        case .photo(let record):
+            thumbnails[record.id]
+        case .generalFile(let record):
+            generalFileThumbnails[record.id]
+        }
+    }
+
+    @MainActor
+    private func loadThumbnailIfNeeded(
+        for item: VaultGalleryPresentationItem
+    ) async {
+        switch item {
+        case .photo(let record):
+            await loadThumbnailIfNeeded(record)
+        case .generalFile(let record):
+            await loadGeneralFileThumbnailIfNeeded(record)
+        }
+    }
+
+    private func presentedReference(
+        for item: VaultGalleryPresentationItem
+    ) -> VaultPresentedContentReference {
+        switch item {
+        case .photo(let record):
+            VaultPresentedContentReference(kind: .photo, id: record.id)
+        case .generalFile(let record):
+            VaultPresentedContentReference(kind: .generalFile, id: record.id)
+        }
     }
 
     private func initializeStores() async {
@@ -1049,8 +1045,7 @@ struct VaultGalleryView: View {
     }
 
     private var visibleSelectableItems: [VaultGallerySelection.Item] {
-        visibleGeneralFileRecords.map { .generalFile($0.id) }
-            + visiblePhotoRecords.map { .photo($0.id) }
+        visibleGalleryItems.map(\.id)
     }
 
     private var allValidSelectableItems: [VaultGallerySelection.Item] {

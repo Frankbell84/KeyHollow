@@ -6,16 +6,14 @@ Parent release source: `2eaf852` (Build 32)
 
 ## Current task
 
-Build 32 is fully processed and available only to `KeyHollow Internal`. Its
-mixed photo/general-file selection behavior works, but Frank's device test
-confirmed that the gallery still has two visibly different presentation lanes:
-file-imported images can stretch, metadata footers and image-extension display
-are inconsistent, grid rows become irregular, and selection circles move with
-the tile geometry. The corrective phase will replace those parallel UI paths
-with one source-neutral folder-item model and one fixed-geometry tile. Secure
-storage, cryptography, import/export formats, folder membership, and protected
-content operations are frozen. `Family` remains on Build 30 and App Store review
-remains untouched.
+The isolated unified-folder correction is implemented on
+`fix/unified-folder-gallery`. Photos and general files now enter one
+source-neutral presentation collection and one fixed-geometry tile. The
+correction is ready for the remote Mac build, full regression suite, security
+scan, and then an Internal-only device gate. Secure storage, cryptography,
+import/export formats, folder membership, and protected content operations
+remain frozen. `Family` remains on Build 30 and App Store review remains
+untouched.
 
 ## Completed work
 
@@ -68,6 +66,21 @@ remains untouched.
   membership and thumbnail metadata are removed without touching content.
 - Added regression coverage proving moves between folders and back to the root
   maintain at most one membership per item.
+- Replaced the separate photo and general-file gallery loops with one
+  source-neutral presentation collection ordered by import time rather than
+  protected-store kind.
+- Replaced the two tile implementations with one shared tile: a square clipped
+  media viewport, fixed 56-point metadata footer, middle-truncated title, file
+  size, and one top-right selection overlay position.
+- Normalized image naming across import sources by hiding image extensions while
+  retaining extensions for non-image files.
+- Preserved protected-store routing for open, save, move, and delete actions;
+  this presentation correction does not change encrypted content ownership.
+- Added regression tests for cross-source image naming, non-image filename
+  retention, source-neutral ordering, fixed tile metrics, and thumbnail
+  orientation.
+- Strengthened architecture enforcement so the two obsolete gallery renderers
+  cannot silently return.
 
 ## Test and build status
 
@@ -88,6 +101,12 @@ remains untouched.
 - PR #34 merged into `main` as `69154ff`; all required checks were green.
 - Phase 4 inherits that green baseline.
 - Phase 4 architecture boundary gate: passed locally.
+- Unified-folder architecture boundary gate: passed locally.
+- Unified-folder release-hygiene gate: passed locally.
+- TestFlight build-number guard self-test: passed locally.
+- Unified-folder whitespace audit: passed locally.
+- Remote Mac compilation, complete tests, launch tests, and CodeQL: pending the
+  isolated draft review.
 - Phase 4 release-hygiene gate: passed locally.
 - Phase 4 whitespace audit: passed locally.
 - Thumbnail-composition architecture and release-hygiene gates: passed locally.
@@ -255,16 +274,17 @@ remains untouched.
 
 ## Blockers
 
-- No engineering blocker prevents the isolated gallery correction.
+- No known engineering blocker prevents remote validation of the isolated
+  gallery correction.
 - Build 32 must not be promoted to `Family`; its folder presentation has not
   passed the corrected visual/device gate.
 
 ## Next action
 
-Publish this isolated starting checkpoint, define the source-neutral gallery
-presentation contract and regression tests, then replace the separate photo and
-general-file tile layouts with one fixed media viewport, fixed metadata footer,
-and fixed selection overlay. Run local gates before publishing each milestone.
+Commit and publish the completed correction checkpoint, open its isolated draft
+review, and run the Mac build, complete regression and launch suites, packaging
+checks, and CodeQL. If every automated gate is green, prepare an Internal-only
+TestFlight build for Frank's device verification before any `Family` rollout.
 
 ## Frank's decision required
 

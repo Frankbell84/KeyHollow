@@ -1,6 +1,4 @@
 import Foundation
-import SwiftUI
-import UIKit
 import UniformTypeIdentifiers
 import KeyHollowGeneralFileSupportAddOn
 
@@ -52,79 +50,5 @@ enum GeneralFileImportPresentation {
             return "Encrypted \(result.importedCount) \(noun) into this vault. The originals were kept."
         }
         return "No files were imported. Choose regular files up to 100 MB; vault backups, folders, apps, and executable files are excluded."
-    }
-}
-
-struct VaultGeneralFileTileView: View {
-    let record: VaultGeneralFileRecord
-    let thumbnail: UIImage?
-    let selectionState: Bool?
-    let openFileManager: () -> Void
-    let toggleSelection: () -> Void
-
-    private var formattedSize: String {
-        ByteCountFormatter.string(
-            fromByteCount: Int64(record.originalByteCount),
-            countStyle: .file
-        )
-    }
-
-    var body: some View {
-        Button {
-            if selectionState == nil {
-                openFileManager()
-            } else {
-                toggleSelection()
-            }
-        } label: {
-            GeometryReader { proxy in
-                VaultGalleryTileSurface(
-                    title: record.displayName,
-                    detail: formattedSize
-                ) {
-                    ZStack(alignment: .topTrailing) {
-                        if let thumbnail {
-                            Image(uiImage: thumbnail)
-                                .resizable()
-                                .scaledToFill()
-                        } else {
-                            Image(systemName: GeneralFilePresentation.iconName(
-                                for: record.contentTypeIdentifier
-                            ))
-                            .font(.system(size: 38, weight: .regular))
-                            .foregroundStyle(.tint)
-                        }
-
-                        if let isSelected = selectionState {
-                            Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                                .font(.title2)
-                                .foregroundStyle(
-                                    isSelected ? Color.accentColor : Color.white,
-                                    Color.white
-                                )
-                                .padding(8)
-                                .shadow(radius: 2)
-                        }
-                    }
-                }
-                .frame(width: proxy.size.width, height: proxy.size.height)
-            }
-            .aspectRatio(1, contentMode: .fit)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(record.displayName)
-        .accessibilityValue(accessibilityValue)
-        .accessibilityHint(
-            selectionState == nil
-                ? "Opens encrypted vault files"
-                : "Toggles selection for this file"
-        )
-    }
-
-    private var accessibilityValue: String {
-        let metadata = "Encrypted file, \(formattedSize)"
-        guard let isSelected = selectionState else { return metadata }
-        return "\(isSelected ? "Selected" : "Not selected"), \(metadata)"
     }
 }

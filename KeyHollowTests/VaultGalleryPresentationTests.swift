@@ -3,6 +3,7 @@ import Foundation
 import UIKit
 import XCTest
 @testable import KeyHollow
+@testable import KeyHollowGeneralFileSupportAddOn
 @testable import KeyHollowPhotoCore
 
 final class VaultGalleryPresentationTests: XCTestCase {
@@ -67,8 +68,9 @@ final class VaultGalleryPresentationTests: XCTestCase {
 
         XCTAssertNil(decoded.displayName)
         XCTAssertNil(decoded.originalByteCount)
-        XCTAssertEqual(VaultPhotoPresentationMetadata.title(for: decoded), "Photo")
-        XCTAssertFalse(VaultPhotoPresentationMetadata.detail(for: decoded).isEmpty)
+        let item = VaultGalleryPresentationItem.photo(decoded)
+        XCTAssertEqual(item.title, "Photo")
+        XCTAssertFalse(item.detail.isEmpty)
     }
 
     func testPhotoStorePersistsSanitizedPresentationMetadata() async throws {
@@ -92,8 +94,84 @@ final class VaultGalleryPresentationTests: XCTestCase {
 
         XCTAssertEqual(record.displayName, "IMG_2735.HEIC")
         XCTAssertEqual(record.originalByteCount, UInt64(original.count))
-        XCTAssertEqual(VaultPhotoPresentationMetadata.title(for: record), "IMG_2735.HEIC")
-        XCTAssertEqual(VaultPhotoPresentationMetadata.detail(for: record), "2 KB")
+        let item = VaultGalleryPresentationItem.photo(record)
+        XCTAssertEqual(item.title, "IMG_2735")
+        XCTAssertEqual(item.detail, "2 KB")
+    }
+
+    func testImageDisplayNamesMatchAcrossPhotosAndFiles() {
+        let importedAt = Date(timeIntervalSinceReferenceDate: 200)
+        let photo = VaultPhotoRecord(
+            id: UUID(),
+            importedAt: importedAt,
+            blobName: "photo.khp",
+            thumbnailName: "photo.kht",
+            displayName: "IMG_4130.HEIC",
+            originalByteCount: 710_000
+        )
+        let file = VaultGeneralFileRecord(
+            id: UUID(),
+            importedAt: importedAt,
+            displayName: "IMG_4130.HEIC",
+            contentTypeIdentifier: "public.heic",
+            originalByteCount: 710_000,
+            blobName: "file.khg"
+        )
+
+        let photoItem = VaultGalleryPresentationItem.photo(photo)
+        let fileItem = VaultGalleryPresentationItem.generalFile(file)
+
+        XCTAssertEqual(photoItem.title, "IMG_4130")
+        XCTAssertEqual(fileItem.title, photoItem.title)
+        XCTAssertEqual(fileItem.detail, photoItem.detail)
+        XCTAssertTrue(fileItem.isImage)
+    }
+
+    func testNonImageFileKeepsExtension() {
+        let record = VaultGeneralFileRecord(
+            id: UUID(),
+            importedAt: Date(timeIntervalSinceReferenceDate: 300),
+            displayName: "Proposal.pdf",
+            contentTypeIdentifier: "com.adobe.pdf",
+            originalByteCount: 4_096,
+            blobName: "file.khg"
+        )
+
+        XCTAssertEqual(
+            VaultGalleryPresentationItem.generalFile(record).title,
+            "Proposal.pdf"
+        )
+    }
+
+    func testSourceNeutralOrderUsesImportTimeInsteadOfStoreKind() {
+        let olderPhoto = VaultPhotoRecord(
+            id: UUID(),
+            importedAt: Date(timeIntervalSinceReferenceDate: 100),
+            blobName: "photo.khp",
+            thumbnailName: "photo.kht",
+            displayName: "Older.JPG",
+            originalByteCount: 100
+        )
+        let newerFile = VaultGeneralFileRecord(
+            id: UUID(),
+            importedAt: Date(timeIntervalSinceReferenceDate: 200),
+            displayName: "Newer.png",
+            contentTypeIdentifier: "public.png",
+            originalByteCount: 200,
+            blobName: "file.khg"
+        )
+        let items = [
+            VaultGalleryPresentationItem.photo(olderPhoto),
+            VaultGalleryPresentationItem.generalFile(newerFile)
+        ].sorted(by: VaultGalleryPresentationItem.sourceNeutralOrder)
+
+        XCTAssertEqual(items.map(\.title), ["Newer", "Older"])
+    }
+
+    func testSharedTileGeometryIsFixedForEveryItemKind() {
+        XCTAssertEqual(VaultGalleryTileMetrics.mediaAspectRatio, 1)
+        XCTAssertEqual(VaultGalleryTileMetrics.footerHeight, 56)
+        XCTAssertEqual(VaultGalleryTileMetrics.selectionInset, 8)
     }
 
     @MainActor
