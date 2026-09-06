@@ -6,15 +6,11 @@ Parent release source: `2eaf852` (Build 32)
 
 ## Current task
 
-The isolated unified-folder correction is implemented and remotely validated
-on `fix/unified-folder-gallery`. Frank approved the next Internal-only
-TestFlight delivery. App Store Connect confirms Build 32 is the newest upload,
-so Build 33 is reserved for this correction. The app and embedded thumbnail
-extension are both set to Build 33, and production upload permission is limited
-to `main` or the exact `delivery/unified-folder-gallery` branch. The release
-source must pass the full Mac and CodeQL gates before that delivery branch is
-created and the upload is dispatched. `Family` remains on Build 30 and App
-Store review remains untouched.
+The isolated unified-folder correction is implemented, remotely validated, and
+uploaded from exact immutable source `7503a68` as Build 33. GitHub's complete
+signed-delivery workflow passed; Apple is now processing the upload. Build 33
+must be assigned only to `KeyHollow Internal` after processing. `Family`
+remains on Build 30, and production merge and App Store review remain untouched.
 
 ## Completed work
 
@@ -88,9 +84,30 @@ Store review remains untouched.
   [#36](https://github.com/Frankbell84/KeyHollow/pull/36) against `main` so the
   complete Phase 4 history and unified-gallery correction receive the same
   mandatory validation gates.
+- Created and published immutable delivery branch
+  `delivery/unified-folder-gallery` at exact validated source `7503a68`.
+- Dispatched the explicitly approved Build 33 upload from that exact branch;
+  no refactor work or later branch commit entered the delivery.
 
 ## Test and build status
 
+- Final Build 33 release-source validation run
+  [#245](https://github.com/Frankbell84/KeyHollow/actions/runs/34036637111)
+  at exact commit `7503a68`: passed in 18m18s.
+- Mac simulator build and complete regression/security suite: passed in 10m23s.
+- Swift CodeQL: passed in 18m11s with no failed security gate.
+- Simulator artifact `9990518475` was recorded with SHA-256 digest
+  `21c2c2208e44ef8a425207bb0979aa6aaf5692c6dcba9a69c3e17d8f200f987c`.
+- Security-test artifact `9990520799` was recorded with SHA-256 digest
+  `995abcc419904a207d9262ab5343a461121bb4f7c15ed1cd67aa5dd720fce052`.
+- Guarded TestFlight upload run
+  [#43](https://github.com/Frankbell84/KeyHollow/actions/runs/34038901100)
+  completed successfully in 3m13s from exact source `7503a68`.
+- Release hygiene, production identity, unused Build 33 verification, project
+  generation, cloud signing, archive/module hygiene, signed IPA export, Apple
+  upload, artifact retention, and signing-material cleanup all passed.
+- Signed IPA artifact `9991092156` was retained with SHA-256 digest
+  `7b63698317436d02657eefc30853fc0ebcc0363ce6d675159427bc084cc98389`.
 - Architecture boundary gate: passed locally.
 - Release-hygiene gate: passed locally.
 - TestFlight build-number guard self-test: passed locally.
@@ -296,17 +313,14 @@ Store review remains untouched.
 
 ## Blockers
 
-- No known engineering or automated-validation blocker remains for the isolated
-  gallery correction.
-- Build 32 must not be promoted to `Family`; its folder presentation has not
-  passed the corrected visual/device gate.
+- No engineering, validation, signing, or upload blocker remains.
+- Apple processing and Internal-group availability are pending external state.
 
 ## Next action
 
-Commit and publish the guarded Build 33 release-source checkpoint, wait for its
-Mac build/test and CodeQL gates, then create the exact immutable delivery branch
-and dispatch the approved signed upload. Keep Build 33 Internal-only for
-physical-device verification before any `Family` rollout or merge.
+Monitor App Store Connect until Build 33 finishes processing, then confirm it is
+assigned only to `KeyHollow Internal`. Keep `Family`, merge, and App Store review
+untouched pending separate approval and device feedback.
 
 ## Frank's decision required
 
@@ -322,6 +336,8 @@ physical-device verification before any `Family` rollout or merge.
 - Frank approved beginning the unified folder-gallery correction.
 - Frank explicitly approved the next Internal-only TestFlight upload; Build 33
   is the verified next unused number.
+- Build 33 was uploaded successfully from exact approved source `7503a68`; no
+  further upload decision is pending while Apple processes it.
 - Any TestFlight upload after Build 33, `Family` rollout, merge, or App Store
   review change still requires its own decision after corrected visual and
   automated evidence.
