@@ -81,6 +81,8 @@ untouched.
   orientation.
 - Strengthened architecture enforcement so the two obsolete gallery renderers
   cannot silently return.
+- Committed the complete correction as `c88fbf7` and published it to the
+  isolated `fix/unified-folder-gallery` branch.
 
 ## Test and build status
 
@@ -281,10 +283,10 @@ untouched.
 
 ## Next action
 
-Commit and publish the completed correction checkpoint, open its isolated draft
-review, and run the Mac build, complete regression and launch suites, packaging
-checks, and CodeQL. If every automated gate is green, prepare an Internal-only
-TestFlight build for Frank's device verification before any `Family` rollout.
+Open the isolated draft review for published commit `c88fbf7`, then run the Mac
+build, complete regression and launch suites, packaging checks, and CodeQL. If
+every automated gate is green, prepare an Internal-only TestFlight build for
+Frank's device verification before any `Family` rollout.
 
 ## Frank's decision required
 
