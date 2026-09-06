@@ -1,24 +1,21 @@
 # KeyHollow Work Status
 
 Updated: 2026-09-06
-Branch: `feature/folder-presentation-addon`
-Pull request: [#35](https://github.com/Frankbell84/KeyHollow/pull/35) (draft)
+Branch: `fix/unified-folder-gallery`
+Parent release source: `2eaf852` (Build 32)
 
 ## Current task
 
-Build 31 was signed, processed, and delivered to `KeyHollow Internal` from exact
-validated release commit `bc045e4`. Frank's device test confirms that image
-distortion is fixed and every visible item now has a filename-and-size footer.
-The same test exposed one integration defect: gallery selection still counts
-and selects photo-store records only, leaving general-file tiles disabled and
-excluded from `Select All`. The isolated feature branch now contains a unified
-mixed-content selection correction and focused regression tests. The exact
-implementation checkpoint `1fd4338` passed the complete remote Mac, regression,
-architecture, release-hygiene, and Swift security gates. Frank approved a
-guarded Build 32 TestFlight upload. The app and thumbnail extension now share
-Build 32 and the upload workflow is restricted to the exact new delivery branch.
-The `Family` rollout remains held. Build 30 remains unchanged and testing in
-both existing groups. App Store review remains untouched.
+Build 32 is fully processed and available only to `KeyHollow Internal`. Its
+mixed photo/general-file selection behavior works, but Frank's device test
+confirmed that the gallery still has two visibly different presentation lanes:
+file-imported images can stretch, metadata footers and image-extension display
+are inconsistent, grid rows become irregular, and selection circles move with
+the tile geometry. The corrective phase will replace those parallel UI paths
+with one source-neutral folder-item model and one fixed-geometry tile. Secure
+storage, cryptography, import/export formats, folder membership, and protected
+content operations are frozen. `Family` remains on Build 30 and App Store review
+remains untouched.
 
 ## Completed work
 
@@ -258,18 +255,16 @@ both existing groups. App Store review remains untouched.
 
 ## Blockers
 
-- No engineering or validation blocker remains for the mixed-selection
-  correction.
-- Build 31 must not be promoted to `Family`; it does not contain this correction.
-- The exact Build 32 release-source gates and guarded Apple upload remain.
+- No engineering blocker prevents the isolated gallery correction.
+- Build 32 must not be promoted to `Family`; its folder presentation has not
+  passed the corrected visual/device gate.
 
 ## Next action
 
-Commit the exact Build 32 release source, create the immutable
-`delivery/mixed-gallery-selection` branch at that commit, rerun the complete
-release-source gates, and dispatch the approved guarded Apple upload. Verify
-processing and `KeyHollow Internal` availability. Do not promote it to `Family`
-until the corrected selection behavior passes on-device.
+Publish this isolated starting checkpoint, define the source-neutral gallery
+presentation contract and regression tests, then replace the separate photo and
+general-file tile layouts with one fixed media viewport, fixed metadata footer,
+and fixed selection overlay. Run local gates before publishing each milestone.
 
 ## Frank's decision required
 
@@ -282,6 +277,8 @@ until the corrected selection behavior passes on-device.
   device feedback requires a selection correction before any `Family` rollout.
 - Frank explicitly approved the guarded Build 32 TestFlight upload for device
   verification.
-- The later merge decision remains pending corrected device evidence.
+- Frank approved beginning the unified folder-gallery correction.
+- A later TestFlight upload, `Family` rollout, merge, or App Store review change
+  still requires its own decision after corrected visual and automated evidence.
 - Any App Store review change remains out of scope without separate explicit
   approval.
