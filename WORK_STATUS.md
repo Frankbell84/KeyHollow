@@ -6,11 +6,11 @@ Parent release source: `ec25031` (merged and physically accepted Build 34 source
 
 ## Current task
 
-Build 35 passed release-source validation, guarded upload, Apple processing,
-Frank's physical-device acceptance, and the approved `Family` rollout. The
-remaining active task is to require the exact delivery head to pass every CI
-gate, merge release PR #41, and harden the resulting `main` baseline. App Store
-review state remains out of scope.
+Build 35 is physically accepted and is `Testing` in both approved TestFlight
+groups. Release PR #41 is merged, the exact merge commit passed every post-merge
+CI and security gate, and the hardened rollback checkpoint is published. The
+approved Build 35 rollout, merge, and hardening task is complete. App Store
+review state was not changed.
 
 ## Completed work
 
@@ -103,9 +103,9 @@ review state remains out of scope.
 - Apple finished processing Build 35. Its upload status is `Complete`, its
   TestFlight status is `Ready to Submit`, and the upload date is September 6,
   2026 at 4:46 PM EDT.
-- App Store Connect automatically lists `KeyHollow Internal` for Build 35.
-  `Family` is not attached, and no tester-group action was taken during this
-  verification.
+- During initial processing verification, App Store Connect automatically
+  listed `KeyHollow Internal` for Build 35; no tester-group action was taken at
+  that earlier checkpoint.
 - Frank physically tested Internal Build 35 and confirmed the general-file
   export behavior works.
 - Frank explicitly approved Build 35 `Family` rollout, PR #41 merge, and
@@ -115,6 +115,24 @@ review state remains out of scope.
   mixed-content opening and selection, encrypted vault transfer, metadata, and
   layout regressions. App Store Connect now reports Build 35 as `Testing` in
   both `KeyHollow Internal` and `Family`.
+- Final exact-head CI run
+  [#265](https://github.com/Frankbell84/KeyHollow/actions/runs/34059670280)
+  passed every build, test, packaging, architecture, and Swift CodeQL gate at
+  delivery head `07e6ca5` after the `Family` rollout was recorded.
+- Marked release PR #41 ready only after its final checks passed and GitHub
+  confirmed no conflict with `main`; merged its 12 commits as `3dc0f4a` without
+  deleting the delivery branch.
+- Post-merge hardening run
+  [#266](https://github.com/Frankbell84/KeyHollow/actions/runs/34061295593)
+  passed on exact `main` commit `3dc0f4a` in 19m40s. The complete Mac build and
+  test job passed in 5m38s; Swift CodeQL passed in 19m31s.
+- Post-merge security-test artifact `9997632888` recorded SHA-256 digest
+  `a4940c4a1e8899f2b46a1082e733801d4ba6fe7ab93e3c6f8128f1f25626eaf6`.
+- Post-merge simulator artifact `9997631768` recorded SHA-256 digest
+  `f76ed2e19cb3c202bddc17a7dfd4a0308522f1e67665ea21173de84840d29ac9`.
+- Published annotated rollback checkpoint
+  `checkpoint/post-build-35-export-parity` at exact hardened `main` commit
+  `3dc0f4a`.
 - Created `feature/secure-unified-file-preview` directly from hardened checkpoint
   `0d86997`; the validated gallery and release branches remain untouched.
 - Mapped the existing routing seam: Photos-origin images use the full-screen
@@ -565,26 +583,28 @@ review state remains out of scope.
 
 ## Blockers
 
-- No known engineering blocker. Family rollout is complete; final branch
-  validation, merge, and post-merge hardening are approved and in progress.
+- No blocker. The approved Build 35 rollout, merge, and post-merge hardening are
+  complete.
 
 ## Next action
 
-Require this exact delivery head to pass all mandatory checks, merge PR #41,
-then validate and checkpoint the resulting `main` commit. Do not alter App Store
-review state.
+Collect `Family` feedback against Build 35. Begin the next modular add-on only
+after Frank selects that phase; preserve hardened checkpoint
+`checkpoint/post-build-35-export-parity` as its clean starting baseline. Do not
+alter App Store review state without separate explicit approval.
 
 ## Frank's decision required
 
-- Frank explicitly approved creating draft Build 35 release PR #41. That review
-  is open and its exact release-source CI is green.
+- No decision is required for the completed Build 35 rollout, merge, or
+  hardening scope. Frank's next decision is which modular add-on phase to begin.
+- Frank explicitly approved creating Build 35 release PR #41; that review is
+  now merged and closed after its exact-head checks passed.
 - Frank explicitly approved the guarded Build 35 TestFlight upload after exact
   release-source and documentation-head CI passed.
-- Build 35 upload approval is complete. `Family` rollout, merge, and any App
-  Store review change still require separate explicit approval.
-- Build 35's upload and processing are complete. App Store Connect automatically
-  lists `KeyHollow Internal`; `Family` is not yet attached. Family rollout and
-  merge were separate gates and are now explicitly approved after acceptance.
+- Build 35 upload, `Family` rollout, merge, and hardening approvals are complete.
+  Any App Store review change still requires separate explicit approval.
+- Build 35's upload, processing, physical acceptance, approved tester-group
+  rollout, merge, and post-merge hardening are complete.
 - Frank completed physical acceptance and explicitly approved both Build 35
   `Family` rollout and PR #41 merge, plus hardening of the merged baseline.
 - Build 35 is now `Testing` in both `KeyHollow Internal` and `Family`; the
@@ -615,7 +635,8 @@ review state.
 - Any TestFlight upload after Build 34, `Family` rollout, merge, or App Store
   review change still requires its own decision after corrected visual and
   automated evidence.
-- Build 35 draft release review creation is complete; TestFlight upload, tester
-  assignment, merge, and App Store submission remain separate later decisions.
+- Build 35 release review, TestFlight upload, tester assignment, merge, and
+  hardening are complete. App Store submission remains a separate later
+  decision.
 - Any App Store review change remains out of scope without separate explicit
   approval.
