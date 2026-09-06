@@ -6,12 +6,11 @@ Parent release source: `ec25031` (merged and physically accepted Build 34 source
 
 ## Current task
 
-Build 35 release-source validation is complete on the isolated delivery branch.
-Frank has explicitly approved the guarded TestFlight upload. Draft release PR
-#41 and exact runs #259 and #260 prove the synchronized app/extension build
-number, modular boundaries, Mac build, complete tests, packaging, and Swift
-CodeQL. Nothing has been merged, assigned to testers, or submitted for App Store
-review; the signed upload is the active task.
+Build 35 passed release-source validation and the guarded signed upload completed
+successfully from the isolated delivery branch. Draft release PR #41 remains
+open and unmerged. Apple accepted the upload; App Store Connect processing still
+needs to be observed after its web session is restored. No tester group or App
+Store review state was changed.
 
 ## Completed work
 
@@ -91,6 +90,16 @@ review; the signed upload is the active task.
   in 27m43s.
 - Frank explicitly approved dispatching the guarded signed Build 35 TestFlight
   upload after the full release-source and reproducibility evidence passed.
+- Guarded TestFlight upload run
+  [#45](https://github.com/Frankbell84/KeyHollow/actions/runs/34058831705)
+  completed successfully in 2m46s from exact branch head `d5b816b`.
+- The upload workflow independently confirmed Build 35 was unused in App Store
+  Connect before installing signing material. Release hygiene, production
+  identity, project generation, cloud signing, archive/module hygiene, signed
+  IPA export, Apple upload, artifact retention, and signing-material cleanup all
+  passed.
+- Signed Build 35 IPA artifact `9996841104` recorded SHA-256 digest
+  `3db8cf453f9f2c6ea0a51c5eece3b3f1a62de18382b8ec0974e59982f4f87fbe`.
 - Created `feature/secure-unified-file-preview` directly from hardened checkpoint
   `0d86997`; the validated gallery and release branches remain untouched.
 - Mapped the existing routing seam: Photos-origin images use the full-screen
@@ -279,6 +288,10 @@ review; the signed upload is the active task.
   architecture and release gates: passed in 6m06s.
 - Swift CodeQL build and vulnerability analysis: passed in 31m18s with no
   failed security gate or annotation.
+- Guarded Build 35 TestFlight upload run
+  [#45](https://github.com/Frankbell84/KeyHollow/actions/runs/34058831705):
+  passed every release, signing, archive, Apple-upload, retention, and cleanup
+  step in 2m46s.
 - Secure-preview architecture, release-hygiene, build-number, and diff-integrity
   gates: passed locally.
 - Secure-preview validation run
@@ -537,14 +550,17 @@ review; the signed upload is the active task.
 
 ## Blockers
 
-- No known engineering blocker. Build 35 upload approval is recorded; merge and
-  tester rollout remain later independent decisions.
+- No known engineering blocker. The App Store Connect web session expired while
+  checking post-upload processing, so confirming Build 35's processed state
+  requires Frank to sign back in. Merge and tester rollout remain independent
+  later decisions.
 
 ## Next action
 
-Dispatch and supervise the guarded Build 35 TestFlight upload from the validated
-delivery branch. Do not merge, assign tester groups, or alter App Store review
-state as part of the upload.
+After App Store Connect access is restored, verify Build 35 finishes processing
+and record its exact status without assigning a tester group. Physical-device
+acceptance, Internal/Family distribution, merge, and App Store review changes
+remain later gates.
 
 ## Frank's decision required
 
@@ -554,6 +570,8 @@ state as part of the upload.
   release-source and documentation-head CI passed.
 - Build 35 upload approval is complete. `Family` rollout, merge, and any App
   Store review change still require separate explicit approval.
+- Build 35's upload is complete; no tester group was assigned. Internal or
+  `Family` distribution requires a separate explicit decision after processing.
 - Frank explicitly approved this Phase 4 TestFlight delivery and requested the
   `Family` group receive Build 30.
 - Build 30 is now `Testing` in both `KeyHollow Internal` and `Family`, with
