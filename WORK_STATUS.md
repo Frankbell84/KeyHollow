@@ -7,10 +7,10 @@ Parent release source: `2eaf852` (Build 32)
 ## Current task
 
 The isolated unified-folder correction is implemented, remotely validated, and
-uploaded from exact immutable source `7503a68` as Build 33. GitHub's complete
-signed-delivery workflow passed; Apple is now processing the upload. Build 33
-must be assigned only to `KeyHollow Internal` after processing. `Family`
-remains on Build 30, and production merge and App Store review remain untouched.
+available in TestFlight as Build 33 from exact immutable source `7503a68`.
+Apple completed processing, and Build 33 is `Ready to Submit` and assigned only
+to `KeyHollow Internal`. `Family` remains on Build 30, and production merge and
+App Store review remain untouched.
 
 ## Completed work
 
@@ -108,6 +108,9 @@ remains on Build 30, and production merge and App Store review remain untouched.
   upload, artifact retention, and signing-material cleanup all passed.
 - Signed IPA artifact `9991092156` was retained with SHA-256 digest
   `7b63698317436d02657eefc30853fc0ebcc0363ce6d675159427bc084cc98389`.
+- Apple completed Build 33 processing. App Store Connect shows `Complete` for
+  the upload, `Ready to Submit` for the build, and only `KeyHollow Internal` in
+  its group assignment; `Family` was not changed.
 - Architecture boundary gate: passed locally.
 - Release-hygiene gate: passed locally.
 - TestFlight build-number guard self-test: passed locally.
@@ -313,14 +316,14 @@ remains on Build 30, and production merge and App Store review remain untouched.
 
 ## Blockers
 
-- No engineering, validation, signing, or upload blocker remains.
-- Apple processing and Internal-group availability are pending external state.
+- No engineering, validation, signing, upload, processing, or Internal-group
+  availability blocker remains.
 
 ## Next action
 
-Monitor App Store Connect until Build 33 finishes processing, then confirm it is
-assigned only to `KeyHollow Internal`. Keep `Family`, merge, and App Store review
-untouched pending separate approval and device feedback.
+Frank can install and test Build 33 from `KeyHollow Internal`. Keep `Family`,
+merge, and App Store review untouched pending separate approval and physical-
+device feedback.
 
 ## Frank's decision required
 
@@ -337,7 +340,9 @@ untouched pending separate approval and device feedback.
 - Frank explicitly approved the next Internal-only TestFlight upload; Build 33
   is the verified next unused number.
 - Build 33 was uploaded successfully from exact approved source `7503a68`; no
-  further upload decision is pending while Apple processes it.
+  further upload decision is pending.
+- Build 33 is now available to `KeyHollow Internal`; physical-device acceptance
+  remains Frank's next decision before any merge or broader rollout.
 - Any TestFlight upload after Build 33, `Family` rollout, merge, or App Store
   review change still requires its own decision after corrected visual and
   automated evidence.
