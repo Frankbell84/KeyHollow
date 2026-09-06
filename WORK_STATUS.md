@@ -7,11 +7,13 @@ Pull request: [#35](https://github.com/Frankbell84/KeyHollow/pull/35) (draft)
 ## Current task
 
 Production Build 30 was signed and uploaded from the exact reviewed commit.
-Frank's device feedback found a Phase 4 presentation inconsistency: photo tiles
-can appear visually distorted and do not carry the filename-and-size footer used
-by general-file tiles. The isolated correction is implemented locally and is
-under remote Mac validation. Build 30 is fully processed and now testing in
-both `KeyHollow Internal` and `Family`. App Store review remains untouched.
+Frank's device feedback confirmed that Build 30 still contains two Phase 4
+presentation defects: image files can appear visually distorted and photos
+imported through Photos do not carry the filename-and-size footer used by
+general-file tiles. The isolated Build 31 source candidate corrects both paths
+and has passed the complete remote Mac and Swift security gates. Build 30
+remains unchanged and is testing in both `KeyHollow Internal` and `Family`.
+App Store review remains untouched.
 
 ## Completed work
 
@@ -187,17 +189,31 @@ both `KeyHollow Internal` and `Family`. App Store review remains untouched.
 - The test fixture now fixes its renderer to an explicit 1x scale so it measures
   orientation behavior deterministically across simulator devices. The
   production thumbnail implementation was not weakened or changed.
+- Corrected gallery-parity CI run
+  [#231](https://github.com/Frankbell84/KeyHollow/actions/runs/34000437184)
+  at `1d4fb12`: passed.
+- Mac simulator build, all 106 unit tests, launch tests, release hygiene,
+  architecture enforcement, build-number guard, and packaged-thumbnail checks:
+  passed in 8m16s.
+- Swift CodeQL: passed in 17m26s with no failed security gate.
+- Security-test artifact `9979413820` was recorded with SHA-256 digest
+  `d67efc8fb12bf710184edcf98994a828d3bdc45a11bbd48c1701435043fbc954`.
+- The exact validated correction commit is `1d4fb12`; it has not been uploaded
+  to TestFlight and is not present in Build 30.
 
 ## Blockers
 
-- Full iOS compilation and unit tests require the remote Mac CI gate.
+- No engineering blocker remains. Device verification of the correction
+  requires a new TestFlight Build 31, and that guarded upload requires Frank's
+  explicit approval.
 
 ## Next action
 
-Commit and push the deterministic test-fixture correction, then require the
-complete Phase 4 Mac simulator and Swift security gates. Build 30 is already
-testing with both intended groups. Any corrected follow-up build must receive a
-separate guarded delivery checkpoint.
+After Frank explicitly approves a new TestFlight delivery, prepare a separate
+guarded Build 31 checkpoint from validated commit `1d4fb12`, rerun the exact
+release-source gates, upload it, and verify Apple processing before assigning it
+to the intended test groups. Build 30 must not be used as evidence for the
+gallery correction.
 
 ## Frank's decision required
 
@@ -205,8 +221,9 @@ separate guarded delivery checkpoint.
   `Family` group receive Build 30.
 - Build 30 is now `Testing` in both `KeyHollow Internal` and `Family`, with
   automatic tester notification enabled.
-- No decision is required for the gallery parity correction; Frank explicitly
-  requested proportional thumbnails and matching image metadata footers.
-- Device feedback and the later merge decision remain pending.
+- The gallery correction is fully validated in source. Frank must explicitly
+  approve a separate Build 31 TestFlight upload before device verification can
+  begin.
+- Device feedback on Build 31 and the later merge decision remain pending.
 - Any App Store review change remains out of scope without separate explicit
   approval.
