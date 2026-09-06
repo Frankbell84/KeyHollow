@@ -11,10 +11,11 @@ Frank's device feedback confirmed that Build 30 still contains two Phase 4
 presentation defects: image files can appear visually distorted and photos
 imported through Photos do not carry the filename-and-size footer used by
 general-file tiles. Frank explicitly approved a Build 31 TestFlight delivery.
-The isolated source candidate corrects both paths, has passed the complete
-remote Mac and Swift security gates, and is now being prepared as a separately
-guarded release checkpoint. Build 30 remains unchanged and is testing in both
-`KeyHollow Internal` and `Family`. App Store review remains untouched.
+The isolated source candidate corrects both paths and the exact guarded Build
+31 release checkpoint `bc045e4` has passed the complete remote Mac and Swift
+security gates. Its immutable delivery branch and approved Apple upload are now
+the active steps. Build 30 remains unchanged and is testing in both `KeyHollow
+Internal` and `Family`. App Store review remains untouched.
 
 ## Completed work
 
@@ -206,18 +207,29 @@ guarded release checkpoint. Build 30 remains unchanged and is testing in both
 - Updated the app and embedded thumbnail extension together to Build 31 and
   limited the production upload workflow to the new exact delivery branch,
   `delivery/gallery-parity-correction`.
+- Exact Build 31 release-source run
+  [#233](https://github.com/Frankbell84/KeyHollow/actions/runs/34001565564)
+  at `bc045e4`: passed.
+- Mac simulator build, all 106 unit tests, launch tests, release hygiene,
+  architecture enforcement, build-number guard, and packaged-thumbnail checks:
+  passed in 9m28s.
+- Swift CodeQL: passed with no failed security gate.
+- Simulator artifact `9979760402` was recorded with SHA-256 digest
+  `2a382575cdc4bca6fe7031373a2fdcab9e616e478bffa84034accff83bc31d38`.
+- Security-test artifact `9979762432` was recorded with SHA-256 digest
+  `417493a49b58c9cd767e770327c6228ecf340ea7faef8f1043d5dd77bc63aab6`.
 
 ## Blockers
 
-- The Build 31 release-source gate and guarded Apple upload remain to run on the
-  remote Mac. No code or credential blocker is known.
+- No engineering blocker remains. The guarded Apple upload and subsequent Apple
+  processing are the remaining delivery steps.
 
 ## Next action
 
-Commit and push the separate guarded Build 31 checkpoint from validated commit
-`1d4fb12`, create its exact delivery branch, rerun the release-source gates,
-then upload and verify Apple processing before assigning it to the intended test
-groups. Build 30 must not be used as evidence for the gallery correction.
+Create and push `delivery/gallery-parity-correction` at exact validated release
+commit `bc045e4`, dispatch the approved Build 31 upload, verify Apple processing,
+then assign it to the intended test groups. Build 30 must not be used as
+evidence for the gallery correction.
 
 ## Frank's decision required
 
