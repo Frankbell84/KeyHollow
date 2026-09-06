@@ -24,8 +24,9 @@ The immutable Build 32 release source is now fully validated at exact commit
 `2eaf852`. The complete Mac build/regression job and Swift CodeQL gate passed,
 and both evidence artifacts have recorded SHA-256 digests. Guarded upload run
 #42 then signed and uploaded Build 32 successfully from that exact commit. Apple
-processing and Internal-group availability remain to be verified; the App Store
-Connect browser session expired when the build list was reopened.
+has completed processing: Build 32 is `Ready to Submit` and assigned only to
+`KeyHollow Internal`. The corrected mixed-selection behavior is ready for
+Frank's physical-device confirmation.
 
 ## Completed work
 
@@ -285,21 +286,25 @@ Connect browser session expired when the build list was reopened.
   retention, and signing-material cleanup all passed.
 - Signed IPA artifact `9988636290` was recorded with SHA-256 digest
   `fda6e071566b5fd42386b36d4b6df206bd6335d830f8f06d727daebb582fb931`.
+- App Store Connect verified Build 32 `Complete` in Build Uploads and
+  `Ready to Submit` in Version 1.0, uploaded Sep 6, 2026 at 7:46 AM.
+- Build 32 is assigned only to `KeyHollow Internal`. `Family` remains on Build
+  30 and no App Store review state was changed.
 
 ## Blockers
 
 - No engineering or validation blocker remains for the mixed-selection
   correction.
 - Build 31 must not be promoted to `Family`; it does not contain this correction.
-- Apple processing and `KeyHollow Internal` availability verification remain.
-- The App Store Connect browser session expired and requires Frank to sign in;
-  no credential is requested or stored by the project.
+- No engineering, validation, upload, processing, or group-assignment blocker
+  remains for the Build 32 Internal device test.
 
 ## Next action
 
-After Frank signs back in to App Store Connect, verify Build 32 processing and
-`KeyHollow Internal` availability. Do not promote it to `Family` until the
-corrected selection behavior passes on-device.
+Install Build 32 from `KeyHollow Internal` and verify individual general-file
+selection, mixed `Select All` count, `Deselect All`, and deletion using only
+disposable test items. Do not promote it to `Family` until that corrected
+selection behavior passes on-device.
 
 ## Frank's decision required
 
