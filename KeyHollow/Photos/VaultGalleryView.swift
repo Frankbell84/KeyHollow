@@ -6,6 +6,7 @@ import KeyHollowGalleryUI
 import KeyHollowGeneralFileSupportAddOn
 import KeyHollowPhotoCore
 import KeyHollowPhotosAdapter
+import KeyHollowSecurePreviewAddOn
 
 private enum VaultImportMode {
     case copy
@@ -20,13 +21,6 @@ private struct VaultImportProgress {
     var identifiersToDelete: [String] = []
 }
 
-private struct DecryptedPhoto: Identifiable {
-    let id: UUID
-    let record: VaultPhotoRecord
-    let originalData: Data
-    let image: UIImage
-}
-
 /// App-owned routing record. Storage models stop here and are translated into
 /// immutable, source-neutral values before crossing into `KeyHollowGalleryUI`.
 enum VaultGalleryContentItem: Identifiable, Equatable {
@@ -39,6 +33,15 @@ enum VaultGalleryContentItem: Identifiable, Equatable {
             .photo(record.id)
         case .generalFile(let record):
             .generalFile(record.id)
+        }
+    }
+
+    var sourceID: UUID {
+        switch self {
+        case .photo(let record):
+            record.id
+        case .generalFile(let record):
+            record.id
         }
     }
 
@@ -82,15 +85,42 @@ enum VaultGalleryContentItem: Identifiable, Equatable {
         )
     }
 
-    private static func isImage(_ record: VaultGeneralFileRecord) -> Bool {
-        if let contentTypeIdentifier = record.contentTypeIdentifier,
-           UTType(contentTypeIdentifier)?.conforms(to: .image) == true {
-            return true
+    var openRoute: VaultGalleryOpenRoute {
+        switch self {
+        case .photo:
+            return .imagePreview
+        case .generalFile(let record):
+            return VaultSecurePreviewPolicy.kind(
+                for: VaultSecurePreviewDescriptor(
+                    displayName: record.displayName,
+                    contentTypeIdentifier: record.contentTypeIdentifier,
+                    originalByteCount: record.originalByteCount
+                )
+            ) == .image ? .imagePreview : .fileManagement
         }
-        let pathExtension = (record.displayName as NSString).pathExtension
-        return !pathExtension.isEmpty
-            && UTType(filenameExtension: pathExtension)?.conforms(to: .image) == true
     }
+
+    private static func isImage(_ record: VaultGeneralFileRecord) -> Bool {
+        VaultSecurePreviewPolicy.kind(
+            for: VaultSecurePreviewDescriptor(
+                displayName: record.displayName,
+                contentTypeIdentifier: record.contentTypeIdentifier,
+                originalByteCount: record.originalByteCount
+            )
+        ) == .image
+    }
+}
+
+enum VaultGalleryOpenRoute: Equatable {
+    case imagePreview
+    case fileManagement
+}
+
+private struct ActiveVaultImagePreview: Identifiable {
+    let source: VaultGalleryContentItem
+    let preview: VaultSecureImagePreview
+
+    var id: UUID { preview.id }
 }
 
 /// Application composition coordinator. Visible folder/gallery layout,
@@ -111,7 +141,9 @@ struct VaultGalleryView: View {
     @State private var contentStoresLoaded = false
     @State private var thumbnails: [UUID: UIImage] = [:]
     @State private var generalFileThumbnails: [UUID: UIImage] = [:]
-    @State private var decryptedPhoto: DecryptedPhoto?
+    @State private var activeImagePreview: ActiveVaultImagePreview?
+    @State private var isSavingPreview = false
+    @State private var previewMessage: String?
     @State private var showingImportOptions = false
     @State private var showingPicker = false
     @State private var showingFilePicker = false
@@ -218,10 +250,15 @@ struct VaultGalleryView: View {
             VaultGeneralFilesView()
                 .environmentObject(session)
         }
-        .sheet(item: $decryptedPhoto) { photo in
-            DecryptedPhotoView(photo: photo) {
-                delete(photo.record)
-            }
+        .sheet(item: $activeImagePreview, onDismiss: clearActiveImagePreview) { active in
+            VaultSecureImagePreviewView(
+                preview: active.preview,
+                isSaving: isSavingPreview,
+                message: $previewMessage,
+                onDismiss: clearActiveImagePreview,
+                onSave: { savePreviewToPhotos(active.preview) },
+                onDelete: { deletePreviewSource(active.source) }
+            )
         }
         .confirmationDialog(
             "Delete Selected Items?",
@@ -287,7 +324,7 @@ struct VaultGalleryView: View {
             contentStoresLoaded = false
             thumbnails = [:]
             generalFileThumbnails = [:]
-            decryptedPhoto = nil
+            clearActiveImagePreview()
             leaveSelectionMode()
             await initializeStores()
             contentStoresLoaded = true
@@ -609,10 +646,10 @@ struct VaultGalleryView: View {
             return
         }
 
-        switch item {
-        case .photo(let record):
-            open(record)
-        case .generalFile:
+        switch item.openRoute {
+        case .imagePreview:
+            openImage(item)
+        case .fileManagement:
             showingVaultFiles = true
         }
     }
@@ -1004,8 +1041,13 @@ struct VaultGalleryView: View {
               let generalFileStore,
               let presentationStore,
               session.isUnlocked,
-              let contentTypeIdentifier = record.contentTypeIdentifier,
-              UTType(contentTypeIdentifier)?.conforms(to: .image) == true else {
+              VaultSecurePreviewPolicy.kind(
+                  for: VaultSecurePreviewDescriptor(
+                      displayName: record.displayName,
+                      contentTypeIdentifier: record.contentTypeIdentifier,
+                      originalByteCount: record.originalByteCount
+                  )
+              ) == .image else {
             return
         }
 
@@ -1061,36 +1103,52 @@ struct VaultGalleryView: View {
         return "No photos were imported. \(count) selected \(noun) could not be read."
     }
 
-    private func open(_ record: VaultPhotoRecord) {
-        guard let store, !isWorking else { return }
+    private func openImage(_ item: VaultGalleryContentItem) {
+        guard item.openRoute == .imagePreview, !isWorking else { return }
         isWorking = true
 
-        session.startSensitiveTask { _ in
+        let taskID = session.startSensitiveTask { _ in
             defer { isWorking = false }
             do {
-                let data = try await store.loadPhoto(record)
-                guard !Task.isCancelled else { return }
-                guard let image = UIImage(data: data) else {
-                    message = "The decrypted photo data could not be displayed."
-                    return
+                let data: Data
+                switch item {
+                case .photo(let record):
+                    guard let store else {
+                        message = "The encrypted photo store is unavailable."
+                        return
+                    }
+                    data = try await store.loadPhoto(record)
+                case .generalFile(let record):
+                    guard let generalFileStore else {
+                        message = "The encrypted file store is unavailable."
+                        return
+                    }
+                    data = try await generalFileStore.loadFile(record)
                 }
-                decryptedPhoto = DecryptedPhoto(
-                    id: record.id,
-                    record: record,
-                    originalData: data,
-                    image: image
+                guard !Task.isCancelled else { return }
+                let preview = try VaultSecureImagePreview(
+                    id: item.sourceID,
+                    displayName: item.presentationItem.title,
+                    originalData: data
+                )
+                guard !Task.isCancelled else { return }
+                previewMessage = nil
+                activeImagePreview = ActiveVaultImagePreview(
+                    source: item,
+                    preview: preview
                 )
             } catch is CancellationError {
                 return
             } catch {
-                message = "The photo could not be authenticated and decrypted."
+                message = "The image could not be authenticated, validated, and opened."
             }
         }
+        if taskID == nil { isWorking = false }
     }
 
     private func delete(_ record: VaultPhotoRecord) {
         guard let store, !isWorking else { return }
-        decryptedPhoto = nil
+        clearActiveImagePreview()
         isWorking = true
 
         session.startSensitiveTask { _ in
@@ -1104,6 +1162,66 @@ struct VaultGalleryView: View {
                 message = "The photo could not be deleted from the vault."
             }
         }
+    }
+
+    private func delete(_ record: VaultGeneralFileRecord) {
+        guard let generalFileStore, !isWorking else { return }
+        clearActiveImagePreview()
+        isWorking = true
+
+        session.startSensitiveTask { _ in
+            defer { isWorking = false }
+            do {
+                try await generalFileStore.delete([record])
+                generalFileRecords = try await generalFileStore.loadManifest().files
+                generalFileThumbnails.removeValue(forKey: record.id)
+                await reconcilePresentationStore()
+            } catch is CancellationError {
+                return
+            } catch {
+                message = "The file could not be deleted from the vault."
+            }
+        }
+    }
+
+    private func savePreviewToPhotos(_ preview: VaultSecureImagePreview) {
+        guard !isSavingPreview else { return }
+        isSavingPreview = true
+
+        let taskID = session.startSensitiveTask { _ in
+            session.beginSystemPhotoOperation()
+            defer {
+                session.endSystemPhotoOperation()
+                isSavingPreview = false
+            }
+            let result = await PhotoLibrarySaveService.savePhoto(preview.originalData)
+            guard !Task.isCancelled else { return }
+            switch result {
+            case .saved:
+                previewMessage = "Saved to Photos. The encrypted vault copy was kept."
+            case .permissionDenied:
+                previewMessage = "Allow KeyHollow to add photos in iPhone Settings, then try again."
+            case .failed:
+                previewMessage = "This image could not be saved to Photos."
+            }
+        }
+        if taskID == nil { isSavingPreview = false }
+    }
+
+    private func deletePreviewSource(_ source: VaultGalleryContentItem) {
+        clearActiveImagePreview()
+        switch source {
+        case .photo(let record):
+            delete(record)
+        case .generalFile(let record):
+            delete(record)
+        }
+    }
+
+    private func clearActiveImagePreview() {
+        activeImagePreview = nil
+        previewMessage = nil
+        if !session.isUnlocked { isSavingPreview = false }
     }
 
     private var selectedPhotoRecords: [VaultPhotoRecord] {
@@ -1273,87 +1391,6 @@ struct VaultGalleryView: View {
 
     private func reconcileSelection() {
         selection.reconcile(validItems: allValidSelectableItems)
-    }
-}
-
-private struct DecryptedPhotoView: View {
-    let photo: DecryptedPhoto
-    let onDelete: () -> Void
-
-    @EnvironmentObject private var session: VaultSession
-    @Environment(\.dismiss) private var dismiss
-    @State private var isSaving = false
-    @State private var message: String?
-
-    var body: some View {
-        ZStack {
-            Color.black.ignoresSafeArea()
-
-            Image(uiImage: photo.image)
-                .resizable()
-                .scaledToFit()
-
-            VStack {
-                HStack {
-                    Button("Done") { dismiss() }
-
-                    Spacer()
-
-                    if isSaving {
-                        ProgressView()
-                    } else {
-                        Button {
-                            saveToPhotos()
-                        } label: {
-                            Image(systemName: "square.and.arrow.down")
-                        }
-                        .accessibilityLabel("Save to Photos")
-                    }
-
-                    Button(role: .destructive) {
-                        dismiss()
-                        onDelete()
-                    } label: {
-                        Image(systemName: "trash")
-                    }
-                }
-                .padding()
-                .background(.ultraThinMaterial)
-
-                Spacer()
-            }
-        }
-        .alert("KeyHollow", isPresented: Binding(
-            get: { message != nil },
-            set: { if !$0 { message = nil } }
-        )) {
-            Button("OK") { message = nil }
-        } message: {
-            Text(message ?? "")
-        }
-    }
-
-    private func saveToPhotos() {
-        guard !isSaving else { return }
-        isSaving = true
-
-        session.startSensitiveTask { _ in
-            session.beginSystemPhotoOperation()
-            defer {
-                session.endSystemPhotoOperation()
-                isSaving = false
-            }
-            let result = await PhotoLibrarySaveService.savePhoto(photo.originalData)
-            guard !Task.isCancelled else { return }
-            switch result {
-            case .saved:
-                message = "Saved to Photos. The encrypted vault copy was kept."
-            case .permissionDenied:
-                message = "Allow KeyHollow to add photos in iPhone Settings, then try again."
-            case .failed:
-                message = "This photo could not be saved to Photos."
-            }
-        }
     }
 }
 

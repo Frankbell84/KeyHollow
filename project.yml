@@ -149,6 +149,20 @@ targets:
         DEFINES_MODULE: YES
         SKIP_INSTALL: YES
 
+  KeyHollowSecurePreviewAddOn:
+    type: library.static
+    platform: iOS
+    sources:
+      - path: KeyHollow/AddOns/SecurePreview
+    settings:
+      base:
+        PRODUCT_NAME: KeyHollowSecurePreviewAddOn
+        SWIFT_VERSION: 5.0
+        SWIFT_STRICT_CONCURRENCY: complete
+        SWIFT_TREAT_WARNINGS_AS_ERRORS: YES
+        DEFINES_MODULE: YES
+        SKIP_INSTALL: YES
+
   KeyHollowVaultThumbnailExtension:
     type: app-extension
     platform: iOS
@@ -192,6 +206,7 @@ targets:
           - AddOns/FileRecognition
           - AddOns/GeneralFileSupport
           - AddOns/FolderPresentation
+          - AddOns/SecurePreview
           - UI/VaultGalleryGridView.swift
           - UI/VaultGalleryTilePresentation.swift
           - UI/VaultFolderPresentationViews.swift
@@ -219,6 +234,7 @@ targets:
       - target: KeyHollowGeneralFileSupportAddOn
       - target: KeyHollowFolderPresentationAddOn
       - target: KeyHollowGalleryUI
+      - target: KeyHollowSecurePreviewAddOn
       - target: KeyHollowCryptoCore
       - target: KeyHollowPhotoCore
       - target: KeyHollowPhotosAdapter
@@ -282,6 +298,8 @@ targets:
         link: false
       - target: KeyHollowGalleryUI
         link: false
+      - target: KeyHollowSecurePreviewAddOn
+        link: false
       - target: KeyHollowCryptoCore
         link: false
       - target: KeyHollowPhotoCore
@@ -319,6 +337,7 @@ schemes:
         KeyHollowGeneralFileSupportAddOn: all
         KeyHollowFolderPresentationAddOn: all
         KeyHollowGalleryUI: all
+        KeyHollowSecurePreviewAddOn: all
         KeyHollowCryptoCore: all
         KeyHollowPhotoCore: all
         KeyHollowPhotosAdapter: all
