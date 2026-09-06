@@ -17,7 +17,7 @@ jobs:
     # correction branch after its review gates pass. No feature branch can upload.
     if: >-
       github.ref == 'refs/heads/main' ||
-      github.ref == 'refs/heads/delivery/gallery-parity-correction'
+      github.ref == 'refs/heads/delivery/mixed-gallery-selection'
     runs-on: macos-26
     timeout-minutes: 30
     env:

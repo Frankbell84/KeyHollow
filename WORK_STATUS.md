@@ -1,6 +1,6 @@
 # KeyHollow Work Status
 
-Updated: 2026-09-05
+Updated: 2026-09-06
 Branch: `feature/folder-presentation-addon`
 Pull request: [#35](https://github.com/Frankbell84/KeyHollow/pull/35) (draft)
 
@@ -14,10 +14,11 @@ and selects photo-store records only, leaving general-file tiles disabled and
 excluded from `Select All`. The isolated feature branch now contains a unified
 mixed-content selection correction and focused regression tests. The exact
 implementation checkpoint `1fd4338` passed the complete remote Mac, regression,
-architecture, release-hygiene, and Swift security gates. The `Family` rollout
-remains held and no replacement build has been uploaded. Build 30 remains
-unchanged and testing in both existing groups. App Store review remains
-untouched.
+architecture, release-hygiene, and Swift security gates. Frank approved a
+guarded Build 32 TestFlight upload. The app and thumbnail extension now share
+Build 32 and the upload workflow is restricted to the exact new delivery branch.
+The `Family` rollout remains held. Build 30 remains unchanged and testing in
+both existing groups. App Store review remains untouched.
 
 ## Completed work
 
@@ -250,20 +251,25 @@ untouched.
   `3401edb24ad7a332bdb1011581f4dbaa81fdf02f5f4282789b85f520f066e7ef`.
 - Security-test artifact `9980261496` was recorded with SHA-256 digest
   `dcd9c205ed94a952149615a0fb8e8c16d3715b8fa5de152bc80b61cbcb544dab`.
+- Frank explicitly approved the next guarded TestFlight delivery as Build 32.
+- Updated the app and embedded thumbnail extension together to Build 32 and
+  limited production upload permission to the exact immutable branch
+  `delivery/mixed-gallery-selection`.
 
 ## Blockers
 
 - No engineering or validation blocker remains for the mixed-selection
   correction.
 - Build 31 must not be promoted to `Family`; it does not contain this correction.
-- A fresh guarded TestFlight build requires Frank's explicit approval.
+- The exact Build 32 release-source gates and guarded Apple upload remain.
 
 ## Next action
 
-After Frank's explicit approval, allocate the next unused build number, create
-an exact immutable delivery checkpoint, rerun the release-source gates, and
-upload the correction to `KeyHollow Internal` for device verification. Do not
-promote it to `Family` until the corrected selection behavior passes on-device.
+Commit the exact Build 32 release source, create the immutable
+`delivery/mixed-gallery-selection` branch at that commit, rerun the complete
+release-source gates, and dispatch the approved guarded Apple upload. Verify
+processing and `KeyHollow Internal` availability. Do not promote it to `Family`
+until the corrected selection behavior passes on-device.
 
 ## Frank's decision required
 
@@ -274,8 +280,8 @@ promote it to `Family` until the corrected selection behavior passes on-device.
 - Frank explicitly approved the separate Build 31 TestFlight upload.
 - Build 31 is processed and assigned only to `KeyHollow Internal`; Frank's
   device feedback requires a selection correction before any `Family` rollout.
-- The source correction is fully green; Frank must decide whether to authorize
-  the next guarded TestFlight upload for device verification.
+- Frank explicitly approved the guarded Build 32 TestFlight upload for device
+  verification.
 - The later merge decision remains pending corrected device evidence.
 - Any App Store review change remains out of scope without separate explicit
   approval.
