@@ -1,8 +1,12 @@
 import SwiftUI
 import UIKit
+import UniformTypeIdentifiers
+import KeyHollowFolderPresentationAddOn
+import KeyHollowGalleryUI
 import KeyHollowGeneralFileSupportAddOn
 import KeyHollowPhotoCore
 import KeyHollowPhotosAdapter
+import KeyHollowSecurePreviewAddOn
 
 private enum VaultImportMode {
     case copy
@@ -17,13 +21,111 @@ private struct VaultImportProgress {
     var identifiersToDelete: [String] = []
 }
 
-private struct DecryptedPhoto: Identifiable {
-    let id: UUID
-    let record: VaultPhotoRecord
-    let originalData: Data
-    let image: UIImage
+/// App-owned routing record. Storage models stop here and are translated into
+/// immutable, source-neutral values before crossing into `KeyHollowGalleryUI`.
+enum VaultGalleryContentItem: Identifiable, Equatable {
+    case photo(VaultPhotoRecord)
+    case generalFile(VaultGeneralFileRecord)
+
+    var id: VaultGallerySelection.Item {
+        switch self {
+        case .photo(let record):
+            .photo(record.id)
+        case .generalFile(let record):
+            .generalFile(record.id)
+        }
+    }
+
+    var sourceID: UUID {
+        switch self {
+        case .photo(let record):
+            record.id
+        case .generalFile(let record):
+            record.id
+        }
+    }
+
+    var presentationItem: VaultGalleryPresentationItem {
+        switch self {
+        case .photo(let record):
+            return VaultGalleryPresentationItem(
+                id: id,
+                importedAt: record.importedAt,
+                displayName: record.displayName,
+                originalByteCount: record.originalByteCount,
+                isImage: true,
+                fallbackTitle: "Photo",
+                iconName: "photo",
+                accessibilityKind: "Encrypted photo"
+            )
+        case .generalFile(let record):
+            let image = Self.isImage(record)
+            return VaultGalleryPresentationItem(
+                id: id,
+                importedAt: record.importedAt,
+                displayName: record.displayName,
+                originalByteCount: record.originalByteCount,
+                isImage: image,
+                fallbackTitle: "File",
+                iconName: GeneralFilePresentation.iconName(
+                    for: record.contentTypeIdentifier
+                ),
+                accessibilityKind: "Encrypted file"
+            )
+        }
+    }
+
+    static func sourceNeutralOrder(
+        _ first: Self,
+        _ second: Self
+    ) -> Bool {
+        VaultGalleryPresentationItem.sourceNeutralOrder(
+            first.presentationItem,
+            second.presentationItem
+        )
+    }
+
+    var openRoute: VaultGalleryOpenRoute {
+        switch self {
+        case .photo:
+            return .imagePreview
+        case .generalFile(let record):
+            return VaultSecurePreviewPolicy.kind(
+                for: VaultSecurePreviewDescriptor(
+                    displayName: record.displayName,
+                    contentTypeIdentifier: record.contentTypeIdentifier,
+                    originalByteCount: record.originalByteCount
+                )
+            ) == .image ? .imagePreview : .fileManagement
+        }
+    }
+
+    private static func isImage(_ record: VaultGeneralFileRecord) -> Bool {
+        VaultSecurePreviewPolicy.kind(
+            for: VaultSecurePreviewDescriptor(
+                displayName: record.displayName,
+                contentTypeIdentifier: record.contentTypeIdentifier,
+                originalByteCount: record.originalByteCount
+            )
+        ) == .image
+    }
 }
 
+enum VaultGalleryOpenRoute: Equatable {
+    case imagePreview
+    case fileManagement
+}
+
+private struct ActiveVaultImagePreview: Identifiable {
+    let source: VaultGalleryContentItem
+    let preview: VaultSecureImagePreview
+
+    var id: UUID { preview.id }
+}
+
+/// Application composition coordinator. Visible folder/gallery layout,
+/// tiles, and selection state are compiled in `KeyHollowGalleryUI`.
+/// This shell alone translates UI actions into authenticated store operations.
 struct VaultGalleryView: View {
     @EnvironmentObject private var session: VaultSession
 
@@ -33,9 +135,15 @@ struct VaultGalleryView: View {
     @State private var records: [VaultPhotoRecord] = []
     @State private var generalFileStore: VaultGeneralFileStore?
     @State private var generalFileRecords: [VaultGeneralFileRecord] = []
+    @State private var presentationStore: VaultFolderPresentationStore?
+    @State private var folderManifest = VaultFolderPresentationManifest.empty
+    @State private var activeFolderID: UUID?
     @State private var contentStoresLoaded = false
     @State private var thumbnails: [UUID: UIImage] = [:]
-    @State private var decryptedPhoto: DecryptedPhoto?
+    @State private var generalFileThumbnails: [UUID: UIImage] = [:]
+    @State private var activeImagePreview: ActiveVaultImagePreview?
+    @State private var isSavingPreview = false
+    @State private var previewMessage: String?
     @State private var showingImportOptions = false
     @State private var showingPicker = false
     @State private var showingFilePicker = false
@@ -45,63 +153,44 @@ struct VaultGalleryView: View {
     @State private var showingEncryptedExport = false
     @State private var showingVaultFiles = false
     @State private var showingDeleteSelectionConfirmation = false
+    @State private var showingFolderEditor = false
+    @State private var folderBeingRenamed: VaultFolderRecord?
+    @State private var folderNameDraft = ""
+    @State private var folderPendingDeletion: VaultFolderRecord?
     @State private var importMode: VaultImportMode = .copy
     @State private var isSelecting = false
-    @State private var selectedPhotoIDs: Set<UUID> = []
+    @State private var selection = VaultGallerySelection()
     @State private var isWorking = false
     @State private var message: String?
     @State private var importProgress: VaultImportProgress?
 
     private let maximumCachedThumbnails = 48
 
-    private let columns = Array(
-        repeating: GridItem(.flexible(), spacing: 3),
-        count: 3
-    )
-
     var body: some View {
         VStack(spacing: 0) {
             galleryHeader
             Divider()
 
-            Group {
-                if !contentStoresLoaded {
-                    ProgressView("Opening vault…")
-                } else if VaultContentAvailability.isEmpty(
-                    photoCount: records.count,
-                    generalFileCount: generalFileRecords.count
-                ) && !isWorking {
-                    ContentUnavailableView(
-                        "Empty Vault",
-                        systemImage: "photo.on.rectangle.angled",
-                        description: Text("Import photos or files to store encrypted copies inside this vault.")
-                    )
-                } else {
-                    ScrollView {
-                        LazyVGrid(columns: columns, spacing: 3) {
-                            ForEach(generalFileRecords) { record in
-                                VaultGeneralFileTileView(
-                                    record: record,
-                                    isEnabled: !isSelecting,
-                                    openFileManager: { showingVaultFiles = true }
-                                )
-                            }
-
-                            ForEach(records) { record in
-                                thumbnailCell(record)
-                            }
-                        }
-                        .padding(.horizontal, 3)
-                        .padding(.vertical, 3)
-                    }
-                }
-            }
-            .overlay {
-                if isWorking {
-                    ProgressView()
-                        .padding()
-                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
-                }
+            VaultGalleryGridView(
+                isContentLoaded: contentStoresLoaded,
+                isWorking: isWorking,
+                emptyTitle: activeFolderID == nil ? "Empty Vault" : "Empty Folder",
+                emptyDescription: emptyGalleryDescription,
+                emptySystemImage: activeFolderID == nil
+                    ? "photo.on.rectangle.angled"
+                    : "folder",
+                folders: visibleGalleryFolders,
+                items: visibleGalleryItems
+            ) { folder in
+                VaultFolderTileView(
+                    folder: folder,
+                    isEnabled: !isSelecting,
+                    open: { openFolder(id: folder.id) },
+                    rename: { requestFolderRename(id: folder.id) },
+                    delete: { requestFolderDeletion(id: folder.id) }
+                )
+            } itemContent: { item in
+                galleryItemCell(item)
             }
 
             if isSelecting {
@@ -161,22 +250,60 @@ struct VaultGalleryView: View {
             VaultGeneralFilesView()
                 .environmentObject(session)
         }
-        .sheet(item: $decryptedPhoto) { photo in
-            DecryptedPhotoView(photo: photo) {
-                delete(photo.record)
-            }
+        .sheet(item: $activeImagePreview, onDismiss: clearActiveImagePreview) { active in
+            VaultSecureImagePreviewView(
+                preview: active.preview,
+                isSaving: isSavingPreview,
+                message: $previewMessage,
+                onDismiss: clearActiveImagePreview,
+                onSave: { savePreviewToPhotos(active.preview) },
+                onDelete: { deletePreviewSource(active.source) }
+            )
         }
         .confirmationDialog(
-            "Delete Selected Photos?",
+            "Delete Selected Items?",
             isPresented: $showingDeleteSelectionConfirmation,
             titleVisibility: .visible
         ) {
             Button(deleteSelectionButtonTitle, role: .destructive) {
-                deleteSelectedPhotos()
+                deleteSelectedItems()
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("This permanently removes the selected encrypted copies from this vault. Photos outside KeyHollow are not affected.")
+            Text("This permanently removes the selected encrypted copies from this vault. Originals outside KeyHollow are not affected.")
+        }
+        .alert(folderEditorTitle, isPresented: $showingFolderEditor) {
+            TextField("Folder name", text: $folderNameDraft)
+            Button(folderEditorActionTitle) {
+                saveFolderName()
+            }
+            .disabled(normalizedFolderNameDraft.isEmpty)
+            Button("Cancel", role: .cancel) {
+                folderBeingRenamed = nil
+                folderNameDraft = ""
+            }
+        } message: {
+            Text("Folders organize encrypted items without changing or duplicating their protected contents.")
+        }
+        .confirmationDialog(
+            "Delete Folder?",
+            isPresented: Binding(
+                get: { folderPendingDeletion != nil },
+                set: { if !$0 { folderPendingDeletion = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("Delete Folder", role: .destructive) {
+                if let folder = folderPendingDeletion {
+                    deleteFolder(folder)
+                }
+                folderPendingDeletion = nil
+            }
+            Button("Cancel", role: .cancel) {
+                folderPendingDeletion = nil
+            }
+        } message: {
+            Text("The folder will be removed. Its photos and files will return to the vault root and will not be deleted.")
         }
         .alert("KeyHollow", isPresented: Binding(
             get: { message != nil },
@@ -191,9 +318,13 @@ struct VaultGalleryView: View {
             records = []
             generalFileStore = nil
             generalFileRecords = []
+            presentationStore = nil
+            folderManifest = .empty
+            activeFolderID = nil
             contentStoresLoaded = false
             thumbnails = [:]
-            decryptedPhoto = nil
+            generalFileThumbnails = [:]
+            clearActiveImagePreview()
             leaveSelectionMode()
             await initializeStores()
             contentStoresLoaded = true
@@ -207,29 +338,48 @@ struct VaultGalleryView: View {
 
                 Spacer()
 
-                Button(allPhotosSelected ? "Deselect All" : "Select All") {
+                Button(allVisibleItemsSelected ? "Deselect All" : "Select All") {
                     toggleSelectAll()
                 }
-                .disabled(records.isEmpty || isWorking)
+                .disabled(visibleSelectableItems.isEmpty || isWorking)
             } else {
-                Button("Lock") { session.lock() }
+                if activeFolderID == nil {
+                    Button("Lock") { session.lock() }
+                } else {
+                    Button {
+                        leaveSelectionMode()
+                        activeFolderID = nil
+                    } label: {
+                        Label("Vault", systemImage: "chevron.left")
+                    }
+                }
 
                 Spacer()
 
                 Button("Select") {
                     isSelecting = true
                 }
-                .disabled(records.isEmpty || isWorking)
+                .disabled(visibleSelectableItems.isEmpty || isWorking)
 
-                Button {
-                    showingImportOptions = true
-                } label: {
-                    Image(systemName: "plus")
+                if activeFolderID == nil {
+                    Button {
+                        showingImportOptions = true
+                    } label: {
+                        Image(systemName: "plus")
+                    }
+                    .disabled(isWorking)
+                    .accessibilityLabel("Import to vault")
                 }
-                .disabled(isWorking)
-                .accessibilityLabel("Import to vault")
 
                 Menu {
+                    if activeFolderID == nil {
+                        Button {
+                            requestNewFolder()
+                        } label: {
+                            Label("New Folder", systemImage: "folder.badge.plus")
+                        }
+                    }
+
                     Button {
                         showingNewVault = true
                     } label: {
@@ -273,8 +423,10 @@ struct VaultGalleryView: View {
             }
         }
         .overlay {
-            Text(isSelecting ? "\(selectedPhotoIDs.count) Selected" : "Vault")
+            Text(isSelecting ? "\(selection.count) Selected" : galleryTitle)
                 .font(.headline)
+                .lineLimit(1)
+                .padding(.horizontal, 120)
                 .allowsHitTesting(false)
         }
         .padding(.horizontal)
@@ -288,7 +440,7 @@ struct VaultGalleryView: View {
             } label: {
                 Label("Save to Photos", systemImage: "square.and.arrow.down")
             }
-            .disabled(selectedPhotoIDs.isEmpty || isWorking)
+            .disabled(selectedPhotoRecords.isEmpty || isWorking)
 
             Spacer()
 
@@ -297,60 +449,160 @@ struct VaultGalleryView: View {
             } label: {
                 Label("Delete", systemImage: "trash")
             }
-            .disabled(selectedPhotoIDs.isEmpty || isWorking)
+            .disabled(selection.isEmpty || isWorking)
         }
         .padding(.horizontal)
         .padding(.vertical, 12)
         .background(.bar)
     }
 
+    private var sortedFolders: [VaultFolderRecord] {
+        folderManifest.folders.sorted {
+            $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
+        }
+    }
+
+    private var visibleFolders: [VaultFolderRecord] {
+        activeFolderID == nil ? sortedFolders : []
+    }
+
+    private var visibleGalleryFolders: [VaultGalleryFolder] {
+        visibleFolders.map {
+            VaultGalleryFolder(
+                id: $0.id,
+                name: $0.name,
+                itemCount: itemCount(in: $0.id)
+            )
+        }
+    }
+
+    private var visiblePhotoRecords: [VaultPhotoRecord] {
+        records.filter {
+            assignedFolderID(
+                for: VaultPresentedContentReference(kind: .photo, id: $0.id)
+            ) == activeFolderID
+        }
+    }
+
+    private var visibleGeneralFileRecords: [VaultGeneralFileRecord] {
+        generalFileRecords.filter {
+            assignedFolderID(
+                for: VaultPresentedContentReference(kind: .generalFile, id: $0.id)
+            ) == activeFolderID
+        }
+    }
+
+    private var visibleGalleryContentItems: [VaultGalleryContentItem] {
+        let photos = visiblePhotoRecords.map { VaultGalleryContentItem.photo($0) }
+        let files = visibleGeneralFileRecords.map {
+            VaultGalleryContentItem.generalFile($0)
+        }
+        return (photos + files).sorted(by: VaultGalleryContentItem.sourceNeutralOrder)
+    }
+
+    private var visibleGalleryItems: [VaultGalleryPresentationItem] {
+        visibleGalleryContentItems.map(\.presentationItem)
+    }
+
+    private var activeFolder: VaultFolderRecord? {
+        guard let activeFolderID else { return nil }
+        return folderManifest.folders.first { $0.id == activeFolderID }
+    }
+
+    private var galleryTitle: String {
+        activeFolder?.name ?? "Vault"
+    }
+
+    private var emptyGalleryDescription: String {
+        if activeFolderID == nil {
+            return "Import photos or files to store encrypted copies inside this vault."
+        }
+        return "Move photos or files here from an item's menu."
+    }
+
+    private var folderEditorTitle: String {
+        folderBeingRenamed == nil ? "New Folder" : "Rename Folder"
+    }
+
+    private var folderEditorActionTitle: String {
+        folderBeingRenamed == nil ? "Create" : "Save"
+    }
+
+    private var normalizedFolderNameDraft: String {
+        folderNameDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func assignedFolderID(
+        for item: VaultPresentedContentReference
+    ) -> UUID? {
+        folderManifest.memberships.first { $0.item == item }?.folderID
+    }
+
+    private func itemCount(in folderID: UUID) -> Int {
+        folderManifest.memberships.filter { $0.folderID == folderID }.count
+    }
+
     @ViewBuilder
-    private func thumbnailCell(_ record: VaultPhotoRecord) -> some View {
-        Button {
-            if isSelecting {
-                toggleSelection(record.id)
-            } else {
-                open(record)
-            }
-        } label: {
-            GeometryReader { proxy in
-                ZStack(alignment: .topTrailing) {
-                    Rectangle()
-                        .fill(.secondary.opacity(0.12))
+    private func moveDestinationMenu(
+        for item: VaultPresentedContentReference
+    ) -> some View {
+        let currentFolderID = assignedFolderID(for: item)
+        let hasDestination = currentFolderID != nil
+            || sortedFolders.contains { $0.id != currentFolderID }
 
-                    if let image = thumbnails[record.id] {
-                        Image(uiImage: image)
-                            .resizable()
-                            .scaledToFill()
-                            .frame(width: proxy.size.width, height: proxy.size.height)
-                            .clipped()
-                    } else {
-                        Image(systemName: "photo")
-                            .foregroundStyle(.secondary)
-                            .frame(width: proxy.size.width, height: proxy.size.height)
-                    }
-
-                    if isSelecting {
-                        Image(systemName: selectedPhotoIDs.contains(record.id) ? "checkmark.circle.fill" : "circle")
-                            .font(.title2)
-                            .foregroundStyle(
-                                selectedPhotoIDs.contains(record.id) ? Color.accentColor : Color.white,
-                                Color.white
-                            )
-                            .padding(8)
-                            .shadow(radius: 2)
+        if hasDestination {
+            Menu {
+                if currentFolderID != nil {
+                    Button {
+                        move(item, to: nil)
+                    } label: {
+                        Label("Vault Root", systemImage: "rectangle.grid.3x2")
                     }
                 }
+
+                ForEach(sortedFolders) { folder in
+                    if folder.id != currentFolderID {
+                        Button {
+                            move(item, to: folder.id)
+                        } label: {
+                            Label(folder.name, systemImage: "folder")
+                        }
+                    }
+                }
+            } label: {
+                Label("Move", systemImage: "folder")
             }
-            .aspectRatio(1, contentMode: .fit)
-            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Vault photo")
-        .accessibilityValue(
-            isSelecting && selectedPhotoIDs.contains(record.id) ? "Selected" : "Not selected"
-        )
-        .contextMenu {
+    }
+
+    @ViewBuilder
+    private func galleryItemCell(
+        _ presentationItem: VaultGalleryPresentationItem
+    ) -> some View {
+        if let item = visibleGalleryContentItems.first(where: {
+            $0.id == presentationItem.id
+        }) {
+            VaultGalleryItemTileView(
+                item: presentationItem,
+                thumbnail: thumbnail(for: item),
+                selectionState: isSelecting ? selection.contains(item.id) : nil,
+                action: { handleGalleryItemTap(item) }
+            )
+            .contextMenu {
+                galleryItemContextMenu(item)
+            }
+            .task(id: item.id) {
+                await loadThumbnailIfNeeded(for: item)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func galleryItemContextMenu(
+        _ item: VaultGalleryContentItem
+    ) -> some View {
+        switch item {
+        case .photo(let record):
             Button {
                 savePhotos([record])
             } label: {
@@ -359,17 +611,78 @@ struct VaultGalleryView: View {
 
             Button {
                 isSelecting = true
-                selectedPhotoIDs = [record.id]
+                selection.selectOnly(item.id)
             } label: {
                 Label("Select", systemImage: "checkmark.circle")
             }
 
+            moveDestinationMenu(for: presentedReference(for: item))
+
             Button("Delete from Vault", role: .destructive) {
                 delete(record)
             }
+
+        case .generalFile:
+            Button {
+                isSelecting = true
+                selection.selectOnly(item.id)
+            } label: {
+                Label("Select", systemImage: "checkmark.circle")
+            }
+
+            moveDestinationMenu(for: presentedReference(for: item))
+
+            Button {
+                showingVaultFiles = true
+            } label: {
+                Label("Manage File", systemImage: "doc")
+            }
         }
-        .task(id: record.id) {
+    }
+
+    private func handleGalleryItemTap(_ item: VaultGalleryContentItem) {
+        if isSelecting {
+            selection.toggle(item.id)
+            return
+        }
+
+        switch item.openRoute {
+        case .imagePreview:
+            openImage(item)
+        case .fileManagement:
+            showingVaultFiles = true
+        }
+    }
+
+    private func thumbnail(for item: VaultGalleryContentItem) -> UIImage? {
+        switch item {
+        case .photo(let record):
+            thumbnails[record.id]
+        case .generalFile(let record):
+            generalFileThumbnails[record.id]
+        }
+    }
+
+    @MainActor
+    private func loadThumbnailIfNeeded(
+        for item: VaultGalleryContentItem
+    ) async {
+        switch item {
+        case .photo(let record):
             await loadThumbnailIfNeeded(record)
+        case .generalFile(let record):
+            await loadGeneralFileThumbnailIfNeeded(record)
+        }
+    }
+
+    private func presentedReference(
+        for item: VaultGalleryContentItem
+    ) -> VaultPresentedContentReference {
+        switch item {
+        case .photo(let record):
+            VaultPresentedContentReference(kind: .photo, id: record.id)
+        case .generalFile(let record):
+            VaultPresentedContentReference(kind: .generalFile, id: record.id)
         }
     }
 
@@ -382,7 +695,23 @@ struct VaultGalleryView: View {
                 store = createdStore
                 try await reload(using: createdStore)
             } catch {
+                store = nil
                 message = "The encrypted photo store could not be opened."
+            }
+        }
+
+        if presentationStore == nil {
+            do {
+                let access = SessionFolderPresentationAccess(capability: context.access)
+                let createdStore = try VaultFolderPresentationStore(
+                    vaultID: context.id,
+                    access: access
+                )
+                presentationStore = createdStore
+                folderManifest = try await createdStore.loadManifest()
+            } catch {
+                presentationStore = nil
+                message = "The encrypted presentation store could not be opened."
             }
         }
 
@@ -393,9 +722,12 @@ struct VaultGalleryView: View {
                 generalFileStore = createdStore
                 generalFileRecords = try await createdStore.loadManifest().files
             } catch {
+                generalFileStore = nil
                 message = "The encrypted file store could not be opened."
             }
         }
+
+        await reconcilePresentationStore()
     }
 
     @MainActor
@@ -403,9 +735,152 @@ struct VaultGalleryView: View {
         guard let generalFileStore else { return }
         do {
             generalFileRecords = try await generalFileStore.loadManifest().files
+            let validIDs = Set(generalFileRecords.map(\.id))
+            generalFileThumbnails = generalFileThumbnails.filter { validIDs.contains($0.key) }
+            reconcileSelection()
+            if isSelecting && visibleSelectableItems.isEmpty {
+                leaveSelectionMode()
+            }
+            await reconcilePresentationStore()
         } catch {
             message = "The encrypted file list could not be refreshed."
         }
+    }
+
+    @MainActor
+    private func reconcilePresentationStore() async {
+        guard let presentationStore,
+              store != nil,
+              generalFileStore != nil,
+              session.isUnlocked else { return }
+
+        let photoItems = records.map {
+            VaultPresentedContentReference(kind: .photo, id: $0.id)
+        }
+        let fileItems = generalFileRecords.map {
+            VaultPresentedContentReference(kind: .generalFile, id: $0.id)
+        }
+
+        do {
+            try await presentationStore.reconcile(validItems: Set(photoItems + fileItems))
+            folderManifest = try await presentationStore.loadManifest()
+            if let activeFolderID,
+               !folderManifest.folders.contains(where: { $0.id == activeFolderID }) {
+                self.activeFolderID = nil
+                leaveSelectionMode()
+            }
+        } catch is CancellationError {
+            return
+        } catch {
+            message = "Folder organization could not be refreshed. Protected vault contents were not changed."
+        }
+    }
+
+    private func requestNewFolder() {
+        folderBeingRenamed = nil
+        folderNameDraft = ""
+        showingFolderEditor = true
+    }
+
+    private func requestFolderRename(id: UUID) {
+        guard let folder = folderManifest.folders.first(where: { $0.id == id }) else {
+            return
+        }
+        folderBeingRenamed = folder
+        folderNameDraft = folder.name
+        showingFolderEditor = true
+    }
+
+    private func requestFolderDeletion(id: UUID) {
+        folderPendingDeletion = folderManifest.folders.first { $0.id == id }
+    }
+
+    private func saveFolderName() {
+        let name = normalizedFolderNameDraft
+        guard !name.isEmpty,
+              let presentationStore,
+              !isWorking else { return }
+
+        let folderToRename = folderBeingRenamed
+        showingFolderEditor = false
+        folderBeingRenamed = nil
+        folderNameDraft = ""
+        isWorking = true
+
+        let taskID = session.startSensitiveTask { _ in
+            defer { isWorking = false }
+            do {
+                if let folderToRename {
+                    try await presentationStore.renameFolder(id: folderToRename.id, to: name)
+                } else {
+                    _ = try await presentationStore.createFolder(named: name)
+                }
+                folderManifest = try await presentationStore.loadManifest()
+            } catch VaultFolderPresentationStore.StoreError.duplicateFolderName {
+                message = "A folder with that name already exists."
+            } catch VaultFolderPresentationStore.StoreError.invalidFolderName {
+                message = "Use a folder name between 1 and 80 characters."
+            } catch is CancellationError {
+                return
+            } catch {
+                message = "The encrypted folder could not be saved."
+            }
+        }
+        if taskID == nil { isWorking = false }
+    }
+
+    private func openFolder(id: UUID) {
+        guard folderManifest.folders.contains(where: { $0.id == id }) else { return }
+        guard !isWorking else { return }
+        leaveSelectionMode()
+        activeFolderID = id
+    }
+
+    private func move(
+        _ item: VaultPresentedContentReference,
+        to folderID: UUID?
+    ) {
+        guard let presentationStore, !isWorking else { return }
+        isWorking = true
+
+        let taskID = session.startSensitiveTask { _ in
+            defer { isWorking = false }
+            do {
+                try await presentationStore.move(item, to: folderID)
+                folderManifest = try await presentationStore.loadManifest()
+                selection.remove(selectionItem(for: item))
+                if isSelecting && visibleSelectableItems.isEmpty {
+                    leaveSelectionMode()
+                }
+            } catch is CancellationError {
+                return
+            } catch {
+                message = "The item could not be moved. Protected vault contents were not changed."
+            }
+        }
+        if taskID == nil { isWorking = false }
+    }
+
+    private func deleteFolder(_ folder: VaultFolderRecord) {
+        guard let presentationStore, !isWorking else { return }
+        isWorking = true
+
+        let taskID = session.startSensitiveTask { _ in
+            defer { isWorking = false }
+            do {
+                try await presentationStore.deleteFolder(id: folder.id)
+                folderManifest = try await presentationStore.loadManifest()
+                if activeFolderID == folder.id {
+                    activeFolderID = nil
+                    leaveSelectionMode()
+                }
+            } catch is CancellationError {
+                return
+            } catch {
+                message = "The folder could not be deleted. Protected vault contents were not changed."
+            }
+        }
+        if taskID == nil { isWorking = false }
     }
 
     private func importGeneralFiles(_ result: Result<[URL], Error>) {
@@ -438,11 +913,12 @@ struct VaultGalleryView: View {
         records = manifest.photos
         let validIDs = Set(manifest.photos.map(\.id))
         thumbnails = thumbnails.filter { validIDs.contains($0.key) }
-        selectedPhotoIDs.formIntersection(Set(manifest.photos.map(\.id)))
+        reconcileSelection()
 
-        if records.isEmpty {
+        if visibleSelectableItems.isEmpty {
             leaveSelectionMode()
         }
+        await reconcilePresentationStore()
     }
 
     @MainActor
@@ -461,7 +937,8 @@ struct VaultGalleryView: View {
             do {
                 _ = try await store.importPhoto(
                     originalData: photo.originalData,
-                    thumbnailData: photo.thumbnailData
+                    thumbnailData: photo.thumbnailData,
+                    displayName: photo.displayName
                 )
                 progress.importedCount += 1
                 if progress.mode == .move, let identifier = photo.sourceAssetIdentifier {
@@ -556,6 +1033,62 @@ struct VaultGalleryView: View {
         thumbnails[record.id] = image
     }
 
+    @MainActor
+    private func loadGeneralFileThumbnailIfNeeded(
+        _ record: VaultGeneralFileRecord
+    ) async {
+        guard generalFileThumbnails[record.id] == nil,
+              let generalFileStore,
+              let presentationStore,
+              session.isUnlocked,
+              VaultSecurePreviewPolicy.kind(
+                  for: VaultSecurePreviewDescriptor(
+                      displayName: record.displayName,
+                      contentTypeIdentifier: record.contentTypeIdentifier,
+                      originalByteCount: record.originalByteCount
+                  )
+              ) == .image else {
+            return
+        }
+
+        let reference = VaultPresentedContentReference(kind: .generalFile, id: record.id)
+        do {
+            if let cachedData = try await presentationStore.loadThumbnail(for: reference),
+               !Task.isCancelled,
+               let cachedImage = UIImage(data: cachedData) {
+                cacheGeneralFileThumbnail(cachedImage, id: record.id)
+                return
+            }
+
+            let originalData = try await generalFileStore.loadFile(record)
+            guard !Task.isCancelled,
+                  let originalImage = UIImage(data: originalData),
+                  let thumbnailData = VaultGalleryThumbnailRenderer.jpegData(
+                      from: originalImage
+                  ),
+                  let thumbnailImage = UIImage(data: thumbnailData) else {
+                return
+            }
+            try await presentationStore.storeThumbnail(thumbnailData, for: reference)
+            guard !Task.isCancelled else { return }
+            cacheGeneralFileThumbnail(thumbnailImage, id: record.id)
+        } catch is CancellationError {
+            return
+        } catch {
+            // A presentation preview must never block access to protected content.
+            return
+        }
+    }
+
+    @MainActor
+    private func cacheGeneralFileThumbnail(_ image: UIImage, id: UUID) {
+        if generalFileThumbnails.count >= maximumCachedThumbnails,
+           let eviction = generalFileThumbnails.keys.first(where: { $0 != id }) {
+            generalFileThumbnails.removeValue(forKey: eviction)
+        }
+        generalFileThumbnails[id] = image
+    }
+
     private func importResultMessage(action: String, importedCount: Int, failedCount: Int) -> String {
         let noun = importedCount == 1 ? "photo" : "photos"
         if failedCount > 0 {
@@ -570,36 +1103,52 @@ struct VaultGalleryView: View {
         return "No photos were imported. \(count) selected \(noun) could not be read."
     }
 
-    private func open(_ record: VaultPhotoRecord) {
-        guard let store, !isWorking else { return }
+    private func openImage(_ item: VaultGalleryContentItem) {
+        guard item.openRoute == .imagePreview, !isWorking else { return }
         isWorking = true
 
-        session.startSensitiveTask { _ in
+        let taskID = session.startSensitiveTask { _ in
             defer { isWorking = false }
             do {
-                let data = try await store.loadPhoto(record)
-                guard !Task.isCancelled else { return }
-                guard let image = UIImage(data: data) else {
-                    message = "The decrypted photo data could not be displayed."
-                    return
+                let data: Data
+                switch item {
+                case .photo(let record):
+                    guard let store else {
+                        message = "The encrypted photo store is unavailable."
+                        return
+                    }
+                    data = try await store.loadPhoto(record)
+                case .generalFile(let record):
+                    guard let generalFileStore else {
+                        message = "The encrypted file store is unavailable."
+                        return
+                    }
+                    data = try await generalFileStore.loadFile(record)
                 }
-                decryptedPhoto = DecryptedPhoto(
-                    id: record.id,
-                    record: record,
-                    originalData: data,
-                    image: image
+                guard !Task.isCancelled else { return }
+                let preview = try VaultSecureImagePreview(
+                    id: item.sourceID,
+                    displayName: item.presentationItem.title,
+                    originalData: data
+                )
+                guard !Task.isCancelled else { return }
+                previewMessage = nil
+                activeImagePreview = ActiveVaultImagePreview(
+                    source: item,
+                    preview: preview
                 )
             } catch is CancellationError {
                 return
             } catch {
-                message = "The photo could not be authenticated and decrypted."
+                message = "The image could not be authenticated, validated, and opened."
             }
         }
+        if taskID == nil { isWorking = false }
     }
 
     private func delete(_ record: VaultPhotoRecord) {
         guard let store, !isWorking else { return }
-        decryptedPhoto = nil
+        clearActiveImagePreview()
         isWorking = true
 
         session.startSensitiveTask { _ in
@@ -615,42 +1164,103 @@ struct VaultGalleryView: View {
         }
     }
 
-    private var selectedRecords: [VaultPhotoRecord] {
-        records.filter { selectedPhotoIDs.contains($0.id) }
+    private func delete(_ record: VaultGeneralFileRecord) {
+        guard let generalFileStore, !isWorking else { return }
+        clearActiveImagePreview()
+        isWorking = true
+
+        session.startSensitiveTask { _ in
+            defer { isWorking = false }
+            do {
+                try await generalFileStore.delete([record])
+                generalFileRecords = try await generalFileStore.loadManifest().files
+                generalFileThumbnails.removeValue(forKey: record.id)
+                await reconcilePresentationStore()
+            } catch is CancellationError {
+                return
+            } catch {
+                message = "The file could not be deleted from the vault."
+            }
+        }
     }
 
-    private var allPhotosSelected: Bool {
-        !records.isEmpty && selectedPhotoIDs.count == records.count
+    private func savePreviewToPhotos(_ preview: VaultSecureImagePreview) {
+        guard !isSavingPreview else { return }
+        isSavingPreview = true
+
+        let taskID = session.startSensitiveTask { _ in
+            session.beginSystemPhotoOperation()
+            defer {
+                session.endSystemPhotoOperation()
+                isSavingPreview = false
+            }
+            let result = await PhotoLibrarySaveService.savePhoto(preview.originalData)
+            guard !Task.isCancelled else { return }
+            switch result {
+            case .saved:
+                previewMessage = "Saved to Photos. The encrypted vault copy was kept."
+            case .permissionDenied:
+                previewMessage = "Allow KeyHollow to add photos in iPhone Settings, then try again."
+            case .failed:
+                previewMessage = "This image could not be saved to Photos."
+            }
+        }
+        if taskID == nil { isSavingPreview = false }
+    }
+
+    private func deletePreviewSource(_ source: VaultGalleryContentItem) {
+        clearActiveImagePreview()
+        switch source {
+        case .photo(let record):
+            delete(record)
+        case .generalFile(let record):
+            delete(record)
+        }
+    }
+
+    private func clearActiveImagePreview() {
+        activeImagePreview = nil
+        previewMessage = nil
+        if !session.isUnlocked { isSavingPreview = false }
+    }
+
+    private var selectedPhotoRecords: [VaultPhotoRecord] {
+        visiblePhotoRecords.filter { selection.contains(.photo($0.id)) }
+    }
+
+    private var selectedGeneralFileRecords: [VaultGeneralFileRecord] {
+        visibleGeneralFileRecords.filter { selection.contains(.generalFile($0.id)) }
+    }
+
+    private var visibleSelectableItems: [VaultGallerySelection.Item] {
+        visibleGalleryItems.map(\.id)
+    }
+
+    private var allValidSelectableItems: [VaultGallerySelection.Item] {
+        generalFileRecords.map { .generalFile($0.id) }
+            + records.map { .photo($0.id) }
+    }
+
+    private var allVisibleItemsSelected: Bool {
+        selection.containsAll(visibleSelectableItems)
     }
 
     private var deleteSelectionButtonTitle: String {
-        let noun = selectedPhotoIDs.count == 1 ? "Photo" : "Photos"
-        return "Delete \(selectedPhotoIDs.count) \(noun) from Vault"
-    }
-
-    private func toggleSelection(_ id: UUID) {
-        if selectedPhotoIDs.contains(id) {
-            selectedPhotoIDs.remove(id)
-        } else {
-            selectedPhotoIDs.insert(id)
-        }
+        let noun = selection.count == 1 ? "Item" : "Items"
+        return "Delete \(selection.count) \(noun) from Vault"
     }
 
     private func toggleSelectAll() {
-        if allPhotosSelected {
-            selectedPhotoIDs.removeAll()
-        } else {
-            selectedPhotoIDs = Set(records.map(\.id))
-        }
+        selection.toggleAll(visibleSelectableItems)
     }
 
     private func leaveSelectionMode() {
         isSelecting = false
-        selectedPhotoIDs.removeAll()
+        selection.clear()
     }
 
     private func saveSelectedPhotos() {
-        savePhotos(selectedRecords)
+        savePhotos(selectedPhotoRecords)
     }
 
     private func savePhotos(_ photos: [VaultPhotoRecord]) {
@@ -706,107 +1316,81 @@ struct VaultGalleryView: View {
         }
     }
 
-    private func deleteSelectedPhotos() {
-        guard let store, !selectedRecords.isEmpty, !isWorking else { return }
-        let photos = selectedRecords
+    private func deleteSelectedItems() {
+        let photos = selectedPhotoRecords
+        let files = selectedGeneralFileRecords
+        guard !photos.isEmpty || !files.isEmpty, !isWorking else { return }
         isWorking = true
 
         session.startSensitiveTask { _ in
             defer { isWorking = false }
-            do {
-                try await store.delete(photos)
-                try await reload(using: store)
-                guard !Task.isCancelled else { return }
-                let noun = photos.count == 1 ? "photo" : "photos"
-                message = "Deleted \(photos.count) \(noun) from this vault."
-                leaveSelectionMode()
-            } catch is CancellationError {
-                return
-            } catch {
-                message = "The selected photos could not be deleted from the vault."
-            }
-        }
-    }
-}
+            var deletedCount = 0
+            var failedCount = 0
 
-private struct DecryptedPhotoView: View {
-    let photo: DecryptedPhoto
-    let onDelete: () -> Void
-
-    @EnvironmentObject private var session: VaultSession
-    @Environment(\.dismiss) private var dismiss
-    @State private var isSaving = false
-    @State private var message: String?
-
-    var body: some View {
-        ZStack {
-            Color.black.ignoresSafeArea()
-
-            Image(uiImage: photo.image)
-                .resizable()
-                .scaledToFit()
-
-            VStack {
-                HStack {
-                    Button("Done") { dismiss() }
-
-                    Spacer()
-
-                    if isSaving {
-                        ProgressView()
-                    } else {
-                        Button {
-                            saveToPhotos()
-                        } label: {
-                            Image(systemName: "square.and.arrow.down")
-                        }
-                        .accessibilityLabel("Save to Photos")
+            if !photos.isEmpty {
+                if let store {
+                    do {
+                        try await store.delete(photos)
+                        deletedCount += photos.count
+                    } catch is CancellationError {
+                        return
+                    } catch {
+                        failedCount += photos.count
                     }
-
-                    Button(role: .destructive) {
-                        dismiss()
-                        onDelete()
-                    } label: {
-                        Image(systemName: "trash")
-                    }
+                } else {
+                    failedCount += photos.count
                 }
-                .padding()
-                .background(.ultraThinMaterial)
-
-                Spacer()
             }
-        }
-        .alert("KeyHollow", isPresented: Binding(
-            get: { message != nil },
-            set: { if !$0 { message = nil } }
-        )) {
-            Button("OK") { message = nil }
-        } message: {
-            Text(message ?? "")
+
+            if !files.isEmpty {
+                if let generalFileStore {
+                    do {
+                        try await generalFileStore.delete(files)
+                        deletedCount += files.count
+                    } catch is CancellationError {
+                        return
+                    } catch {
+                        failedCount += files.count
+                    }
+                } else {
+                    failedCount += files.count
+                }
+            }
+
+            if let store {
+                try? await reload(using: store)
+            }
+            if let generalFileStore {
+                generalFileRecords = (try? await generalFileStore.loadManifest().files) ?? generalFileRecords
+            }
+            await reconcilePresentationStore()
+            guard !Task.isCancelled else { return }
+            leaveSelectionMode()
+
+            if deletedCount > 0, failedCount == 0 {
+                let noun = deletedCount == 1 ? "item" : "items"
+                message = "Deleted \(deletedCount) \(noun) from this vault."
+            } else if deletedCount > 0 {
+                message = "Deleted \(deletedCount) selected items. \(failedCount) items could not be removed."
+            } else {
+                message = "The selected items could not be deleted from the vault."
+            }
         }
     }
 
-    private func saveToPhotos() {
-        guard !isSaving else { return }
-        isSaving = true
-
-        session.startSensitiveTask { _ in
-            session.beginSystemPhotoOperation()
-            defer {
-                session.endSystemPhotoOperation()
-                isSaving = false
-            }
-            let result = await PhotoLibrarySaveService.savePhoto(photo.originalData)
-            guard !Task.isCancelled else { return }
-            switch result {
-            case .saved:
-                message = "Saved to Photos. The encrypted vault copy was kept."
-            case .permissionDenied:
-                message = "Allow KeyHollow to add photos in iPhone Settings, then try again."
-            case .failed:
-                message = "This photo could not be saved to Photos."
-            }
+    private func selectionItem(
+        for reference: VaultPresentedContentReference
+    ) -> VaultGallerySelection.Item {
+        switch reference.kind {
+        case .photo:
+            .photo(reference.id)
+        case .generalFile:
+            .generalFile(reference.id)
         }
+    }
+
+    private func reconcileSelection() {
+        selection.reconcile(validItems: allValidSelectableItems)
     }
 }
 

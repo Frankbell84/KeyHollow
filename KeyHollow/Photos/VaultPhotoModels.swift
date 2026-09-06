@@ -6,12 +6,23 @@ public struct VaultPhotoRecord: Codable, Identifiable, Hashable, Sendable {
     public let importedAt: Date
     public let blobName: String
     public let thumbnailName: String
+    public let displayName: String?
+    public let originalByteCount: UInt64?
 
-    public init(id: UUID, importedAt: Date, blobName: String, thumbnailName: String) {
+    public init(
+        id: UUID,
+        importedAt: Date,
+        blobName: String,
+        thumbnailName: String,
+        displayName: String? = nil,
+        originalByteCount: UInt64? = nil
+    ) {
         self.id = id
         self.importedAt = importedAt
         self.blobName = blobName
         self.thumbnailName = thumbnailName
+        self.displayName = displayName
+        self.originalByteCount = originalByteCount
     }
 }
 

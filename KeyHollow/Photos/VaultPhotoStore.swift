@@ -65,7 +65,11 @@ public actor VaultPhotoStore {
         return manifest
     }
 
-    public func importPhoto(originalData: Data, thumbnailData: Data) throws -> VaultPhotoRecord {
+    public func importPhoto(
+        originalData: Data,
+        thumbnailData: Data,
+        displayName: String? = nil
+    ) throws -> VaultPhotoRecord {
         try Task.checkCancellation()
         let id = UUID()
         let blobName = randomName(extension: "khp")
@@ -74,7 +78,9 @@ public actor VaultPhotoStore {
             id: id,
             importedAt: Date(),
             blobName: blobName,
-            thumbnailName: thumbnailName
+            thumbnailName: thumbnailName,
+            displayName: Self.normalizedDisplayName(displayName),
+            originalByteCount: UInt64(originalData.count)
         )
 
         let originalCiphertext = try access.seal(originalData, for: .photo(id))
@@ -191,6 +197,13 @@ public actor VaultPhotoStore {
 
     private func randomName(extension fileExtension: String) -> String {
         "\(UUID().uuidString.lowercased()).\(fileExtension)"
+    }
+
+    private static func normalizedDisplayName(_ displayName: String?) -> String? {
+        guard let displayName else { return nil }
+        let trimmed = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        return String(trimmed.prefix(255))
     }
 
     private static func protectAndExclude(_ url: URL, fileManager: FileManager) throws {
