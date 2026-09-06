@@ -6,11 +6,11 @@ Parent release source: `ec25031` (merged and physically accepted Build 34 source
 
 ## Current task
 
-Restore export parity for non-photo files in the unified vault gallery. Expose
-the existing security-tested general-file export engine through an obvious
-individual-file action and the mixed gallery selection bar, without changing
-the encrypted file format, protected store, or accepted Build 34 data paths.
-Validate exact implementation commit `2a0ce9f` in draft review #40.
+General-file export parity is implemented and fully validated in isolated draft
+review #40. The existing security-tested export engine is now exposed through
+obvious individual-file and mixed-selection actions without changing the
+encrypted file format, protected store, or accepted Build 34 data paths. Exact
+application implementation commit `2a0ce9f` passed every required remote gate.
 
 ## Completed work
 
@@ -36,6 +36,18 @@ Validate exact implementation commit `2a0ce9f` in draft review #40.
   general-file export wiring is removed.
 - Opened draft PR #40 against `main` with an exact implementation checkpoint and
   explicit evidence checklist; the branches report no merge conflict.
+- Remote validation run
+  [#257](https://github.com/Frankbell84/KeyHollow/actions/runs/34050577957)
+  passed every required gate at exact application source commit `2a0ce9f` and
+  evidence head `adb3575` in 25m39s.
+- Mac simulator compilation, packaged-thumbnail verification, the complete
+  unit/launch/security suite, release hygiene, architecture enforcement, and
+  the build-number guard all passed in the 9m43s build-and-test job.
+- Swift CodeQL passed in 23m46s with no failed security gate.
+- Security-test artifact `9994572552` was recorded with SHA-256 digest
+  `7a0bdc712ade36168c041873e2524404e47f083fd559645af8c5428357d2500d`.
+- Simulator artifact `9994570329` was recorded with SHA-256 digest
+  `2c55f7c2699eb199ba2c18fa7d9ace72cb0cd39aaf2863cf7682ede881292623`.
 - Created `feature/secure-unified-file-preview` directly from hardened checkpoint
   `0d86997`; the validated gallery and release branches remain untouched.
 - Mapped the existing routing seam: Photos-origin images use the full-screen
@@ -478,15 +490,17 @@ Validate exact implementation commit `2a0ce9f` in draft review #40.
 
 ## Blockers
 
-- No known engineering blocker. TestFlight delivery remains intentionally
-  unapproved for this new correction until its code and CI evidence are ready.
+- No known engineering blocker. The correction is CI-clean but has not yet been
+  exercised on Frank's physical device. TestFlight delivery remains
+  intentionally unapproved.
 
 ## Next action
 
-Monitor PR #40's full Mac build, unit/launch/security suite, architecture gate,
-and CodeQL. Correct any code-owned failure on the same isolated branch. Do not
-prepare or upload a TestFlight build until those gates pass and Frank gives
-separate release approval.
+Keep draft PR #40 isolated for review. If Frank explicitly approves a device
+build, prepare the next unused TestFlight build on a separately guarded delivery
+branch, rerun the full release gates, and assign it only to the approved testing
+group. Do not merge, upload, or alter App Store review state without that
+separate approval.
 
 ## Frank's decision required
 
