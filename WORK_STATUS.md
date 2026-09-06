@@ -1,16 +1,16 @@
 # KeyHollow Work Status
 
 Updated: 2026-09-06
-Branch: `feature/general-file-export-parity`
+Branch: `delivery/general-file-export-parity`
 Parent release source: `ec25031` (merged and physically accepted Build 34 source)
 
 ## Current task
 
-General-file export parity is implemented and fully validated in isolated draft
-review #40. The existing security-tested export engine is now exposed through
-obvious individual-file and mixed-selection actions without changing the
-encrypted file format, protected store, or accepted Build 34 data paths. Exact
-application implementation commit `2a0ce9f` passed every required remote gate.
+Prepare an isolated Build 35 delivery candidate from the fully validated
+general-file export implementation. Synchronize the app and thumbnail extension
+build numbers and narrow the guarded upload workflow to this exact delivery
+branch without merging, uploading, assigning testers, or changing App Store
+review state.
 
 ## Completed work
 
@@ -48,6 +48,20 @@ application implementation commit `2a0ce9f` passed every required remote gate.
   `7a0bdc712ade36168c041873e2524404e47f083fd559645af8c5428357d2500d`.
 - Simulator artifact `9994570329` was recorded with SHA-256 digest
   `2c55f7c2699eb199ba2c18fa7d9ace72cb0cd39aaf2863cf7682ede881292623`.
+- Final documentation-head reproducibility run
+  [#258](https://github.com/Frankbell84/KeyHollow/actions/runs/34052071992)
+  passed every required gate at head `eb1b01c` in 27m12s; the exact application
+  implementation remained `2a0ce9f`.
+- The repeated Mac build, complete unit/launch/security suite, release hygiene,
+  architecture enforcement, build-number guard, and packaged-thumbnail check
+  passed in 6m29s. Swift CodeQL passed in 27m03s.
+- Reproducibility security-test artifact `9994938931` was recorded with SHA-256
+  digest `3999176ae22ce53cee09c6d23698b1d0db3b10cccb449b4f34a2e09714bad70f`.
+- Reproducibility simulator artifact `9994937192` was recorded with SHA-256
+  digest `b7fb68d4aaf7de375414eb5ee72c3bcda6793bd14bce5657cd3b65b3077cfb48`.
+- Created `delivery/general-file-export-parity` from the exact validated review
+  head `eb1b01c`; production, TestFlight, tester groups, and App Store review
+  state remain unchanged.
 - Created `feature/secure-unified-file-preview` directly from hardened checkpoint
   `0d86997`; the validated gallery and release branches remain untouched.
 - Mapped the existing routing seam: Photos-origin images use the full-screen
@@ -490,17 +504,16 @@ application implementation commit `2a0ce9f` passed every required remote gate.
 
 ## Blockers
 
-- No known engineering blocker. The correction is CI-clean but has not yet been
-  exercised on Frank's physical device. TestFlight delivery remains
-  intentionally unapproved.
+- No known engineering blocker. Build 35 preparation is authorized, but creating
+  the external release review and running the signed TestFlight upload remain
+  separate action-time approval points.
 
 ## Next action
 
-Keep draft PR #40 isolated for review. If Frank explicitly approves a device
-build, prepare the next unused TestFlight build on a separately guarded delivery
-branch, rerun the full release gates, and assign it only to the approved testing
-group. Do not merge, upload, or alter App Store review state without that
-separate approval.
+Reserve Build 35 for the app and thumbnail extension, replace the obsolete
+Build 34 delivery-branch exception with this exact branch, and validate the
+release source locally. Push the isolated delivery branch, then stop before
+creating its external release review or running the signed upload workflow.
 
 ## Frank's decision required
 
