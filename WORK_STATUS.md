@@ -1,18 +1,50 @@
 # KeyHollow Work Status
 
 Updated: 2026-09-06
-Branch: `delivery/general-file-export-parity`
-Parent release source: `ec25031` (merged and physically accepted Build 34 source)
+Branch: `feature/encrypted-video-support`
+Parent baseline: `3dc0f4a` (hardened Build 35 source on `main`)
 
 ## Current task
 
-Build 35 passed release-source validation, guarded upload, Apple processing,
-Frank's physical-device acceptance, and the approved `Family` rollout. The
-remaining active task is to require the exact delivery head to pass every CI
-gate, merge release PR #41, and harden the resulting `main` baseline. App Store
-review state remains out of scope.
+Pre-implementation hardening audit for the next unfinished roadmap add-on.
+Roadmap item #2, Backup Verification Center, remains intentionally deferred;
+item #3, General File Support, is complete and hardened in Build 35. The next
+unfinished item is #4, Encrypted Video Support. No #4 application code has been
+written yet. The isolated feature branch is exact with hardened `main`, and its
+first implementation step must define and enforce narrow video capability,
+temporary-plaintext lifetime, playback, thumbnail, cancellation, and lock
+boundaries. App Store review state remains out of scope.
 
 ## Completed work
+
+- Reconciled the roadmap numbering before implementation: the historical
+  folder/presentation "Phase 4" is complete, while roadmap add-on #4 is the
+  distinct Encrypted Video Support feature.
+- Located and used the installed Git for Windows secure HTTPS transport after
+  the bundled runtime omitted its HTTPS helper; fetched `origin` successfully.
+- Created `feature/encrypted-video-support` directly from exact hardened
+  `origin/main` commit `3dc0f4a`; the branch has no application-source delta.
+- Re-ran release hygiene, architecture-boundary enforcement, and the TestFlight
+  build-number guard locally. All passed.
+- Confirmed every registered add-on remains an independently compiled static
+  target, compiles with strict concurrency and warnings as errors, is excluded
+  from duplicate app-target compilation, and is composed only by the app.
+- Confirmed the dependency-free gallery module remains separated from vault,
+  photo, transfer, session, and add-on capabilities; protected modules contain
+  no UI, Photos, network, cloud, subscription, analytics, or advertising SDKs.
+- Confirmed CI actions are pinned to exact commits and artifact upload uses the
+  Node 24 generation; no deprecated Node 20 uploader remains.
+- Rechecked exact post-merge run
+  [#266](https://github.com/Frankbell84/KeyHollow/actions/runs/34061295593):
+  `build-and-test` and Swift CodeQL both completed successfully for exact
+  hardened `main` commit `3dc0f4a`. Its simulator and security-test artifacts
+  remain retained and unexpired.
+- Scanned the tracked source for abandoned TODO/FIXME/HACK markers, remote SDKs,
+  accidental URLSession usage, editor debris, temporary artifacts, and legacy
+  document-icon code. No actionable residue was found.
+- Identified documentation drift on `main`: the status still described the
+  already-completed Build 35 merge and the old folder/presentation checkpoint.
+  Corrected the durable status before any video implementation begins.
 
 - Created `feature/general-file-export-parity` directly from merged Build 34
   baseline `ec25031`; no release branch or production state is being changed.
