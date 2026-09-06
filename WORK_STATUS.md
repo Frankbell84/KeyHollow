@@ -6,11 +6,11 @@ Parent release source: `ec25031` (merged and physically accepted Build 34 source
 
 ## Current task
 
-Build 35 passed release-source validation and the guarded signed upload completed
-successfully from the isolated delivery branch. Draft release PR #41 remains
-open and unmerged. Apple accepted the upload; App Store Connect processing still
-needs to be observed after its web session is restored. No tester group or App
-Store review state was changed.
+Build 35 passed release-source validation, the guarded signed upload, and Apple
+processing from the isolated delivery branch. It is `Ready to Submit` in
+TestFlight and App Store Connect automatically lists `KeyHollow Internal`; no
+manual group change was made and `Family` is not attached. Draft release PR #41
+remains open and unmerged, and App Store review state was not changed.
 
 ## Completed work
 
@@ -100,6 +100,12 @@ Store review state was changed.
   passed.
 - Signed Build 35 IPA artifact `9996841104` recorded SHA-256 digest
   `3db8cf453f9f2c6ea0a51c5eece3b3f1a62de18382b8ec0974e59982f4f87fbe`.
+- Apple finished processing Build 35. Its upload status is `Complete`, its
+  TestFlight status is `Ready to Submit`, and the upload date is September 6,
+  2026 at 4:46 PM EDT.
+- App Store Connect automatically lists `KeyHollow Internal` for Build 35.
+  `Family` is not attached, and no tester-group action was taken during this
+  verification.
 - Created `feature/secure-unified-file-preview` directly from hardened checkpoint
   `0d86997`; the validated gallery and release branches remain untouched.
 - Mapped the existing routing seam: Photos-origin images use the full-screen
@@ -550,17 +556,16 @@ Store review state was changed.
 
 ## Blockers
 
-- No known engineering blocker. The App Store Connect web session expired while
-  checking post-upload processing, so confirming Build 35's processed state
-  requires Frank to sign back in. Merge and tester rollout remain independent
-  later decisions.
+- No known engineering blocker. Build 35 is processed and available for
+  Internal physical-device acceptance. Family rollout and merge remain later
+  independent decisions.
 
 ## Next action
 
-After App Store Connect access is restored, verify Build 35 finishes processing
-and record its exact status without assigning a tester group. Physical-device
-acceptance, Internal/Family distribution, merge, and App Store review changes
-remain later gates.
+Frank should install and physically validate Internal Build 35, focusing on
+single-file export, mixed photo/file selection actions, temporary-file cleanup,
+and unchanged vault transfer compatibility. Family rollout, merge, and App Store
+review changes remain later gates.
 
 ## Frank's decision required
 
@@ -570,8 +575,9 @@ remain later gates.
   release-source and documentation-head CI passed.
 - Build 35 upload approval is complete. `Family` rollout, merge, and any App
   Store review change still require separate explicit approval.
-- Build 35's upload is complete; no tester group was assigned. Internal or
-  `Family` distribution requires a separate explicit decision after processing.
+- Build 35's upload and processing are complete. App Store Connect automatically
+  lists `KeyHollow Internal`; `Family` is not attached. Family rollout and merge
+  still require separate explicit decisions after physical acceptance.
 - Frank explicitly approved this Phase 4 TestFlight delivery and requested the
   `Family` group receive Build 30.
 - Build 30 is now `Testing` in both `KeyHollow Internal` and `Family`, with
