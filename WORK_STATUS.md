@@ -12,10 +12,12 @@ distortion is fixed and every visible item now has a filename-and-size footer.
 The same test exposed one integration defect: gallery selection still counts
 and selects photo-store records only, leaving general-file tiles disabled and
 excluded from `Select All`. The isolated feature branch now contains a unified
-mixed-content selection correction and focused regression tests; remote Mac and
-security validation are the next gate. The `Family` rollout remains held. Build
-30 remains unchanged and testing in both existing groups. App Store review
-remains untouched.
+mixed-content selection correction and focused regression tests. The exact
+implementation checkpoint `1fd4338` passed the complete remote Mac, regression,
+architecture, release-hygiene, and Swift security gates. The `Family` rollout
+remains held and no replacement build has been uploaded. Build 30 remains
+unchanged and testing in both existing groups. App Store review remains
+untouched.
 
 ## Completed work
 
@@ -237,21 +239,31 @@ remains untouched.
   it is disabled for file-only selections.
 - Added regression tests proving mixed selection/counting and kind-safe
   reconciliation even when a photo and general file share the same UUID.
+- Mixed-selection CI run
+  [#237](https://github.com/Frankbell84/KeyHollow/actions/runs/34003421923)
+  at exact commit `1fd4338`: passed in 23m10s.
+- Mac simulator build, complete unit and launch suite, release hygiene,
+  architecture enforcement, build-number guard, and packaged-thumbnail checks:
+  passed in 6m47s.
+- Swift CodeQL: passed in 22m25s with no failed security gate.
+- Simulator artifact `9980259722` was recorded with SHA-256 digest
+  `3401edb24ad7a332bdb1011581f4dbaa81fdf02f5f4282789b85f520f066e7ef`.
+- Security-test artifact `9980261496` was recorded with SHA-256 digest
+  `dcd9c205ed94a952149615a0fb8e8c16d3715b8fa5de152bc80b61cbcb544dab`.
 
 ## Blockers
 
-- Build 31 must not be promoted to `Family`: device testing found that gallery
-  selection excludes general-file records.
-- The correction has passed local architecture, release-hygiene, build-number
-  self-test, and diff-integrity gates; remote Mac compilation/tests and Swift
-  security analysis remain pending.
+- No engineering or validation blocker remains for the mixed-selection
+  correction.
+- Build 31 must not be promoted to `Family`; it does not contain this correction.
+- A fresh guarded TestFlight build requires Frank's explicit approval.
 
 ## Next action
 
-Publish the mixed-selection implementation checkpoint to draft PR #35 and run
-the full remote Mac build, complete regression suite, architecture gate, release
-hygiene, and Swift security analysis. Do not create or upload another TestFlight
-build until those gates pass and Frank separately approves delivery.
+After Frank's explicit approval, allocate the next unused build number, create
+an exact immutable delivery checkpoint, rerun the release-source gates, and
+upload the correction to `KeyHollow Internal` for device verification. Do not
+promote it to `Family` until the corrected selection behavior passes on-device.
 
 ## Frank's decision required
 
@@ -262,6 +274,8 @@ build until those gates pass and Frank separately approves delivery.
 - Frank explicitly approved the separate Build 31 TestFlight upload.
 - Build 31 is processed and assigned only to `KeyHollow Internal`; Frank's
   device feedback requires a selection correction before any `Family` rollout.
+- The source correction is fully green; Frank must decide whether to authorize
+  the next guarded TestFlight upload for device verification.
 - The later merge decision remains pending corrected device evidence.
 - Any App Store review change remains out of scope without separate explicit
   approval.
