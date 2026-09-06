@@ -6,14 +6,14 @@ Parent release source: `7503a68` (exact delivered Build 33 source)
 
 ## Current task
 
-Complete and remotely validate the hardened `KeyHollowGalleryUI` boundary before
-adding secure file-opening behavior. Build 33's folder/file UI remains the
-immutable visual baseline. The implementation is locally complete: the compiled
-UI target is dependency-free, accepts only immutable source-neutral presentation
-values and action closures, and is protected by CI rules against storage,
-session, cryptographic, transfer, and network coupling. No customer-facing
-behavior, vault data, Build 33 delivery, `Family`, production, or App Store
-review state may change.
+The `KeyHollowGalleryUI` hardening phase is complete and remotely validated.
+Hold the clean Build 33-derived checkpoint before beginning secure file-opening
+behavior as a separately scoped next phase. The compiled UI target is
+dependency-free, accepts only immutable source-neutral presentation values and
+action closures, and is protected by CI rules against storage, session,
+cryptographic, transfer, and network coupling. No customer-facing behavior,
+vault data, Build 33 delivery, `Family`, production, or App Store review state
+changed.
 
 ## Completed work
 
@@ -37,6 +37,9 @@ review state may change.
   caught one application-shell integration error: the photo branch of the new
   presentation mapper did not explicitly return its immutable value. The fix is
   an explicit return only; it changes no storage, UI, or security behavior.
+- Corrected run #249 passed the Apple compile, complete unit/launch/security
+  suite, packaged thumbnail verification, and Swift CodeQL at exact source
+  commit `1d423c8`.
 - Created `refactor/gallery-ui-module` directly from exact validated Build 33
   source `7503a68`; no delivery or production branch was modified.
 - Added `KeyHollowGalleryUI` as an independently compiled static library under
@@ -136,8 +139,18 @@ review state may change.
   [#248](https://github.com/Frankbell84/KeyHollow/actions/runs/34042394691):
   architecture, hygiene, build-number, and project-generation gates passed; the
   simulator compile stopped at the missing explicit return before tests ran.
-- Corrected remote Mac generation, compile, unit/launch tests, and CodeQL:
-  pending the explicit-return correction commit on draft PR #37.
+- Corrected remote hardening run
+  [#249](https://github.com/Frankbell84/KeyHollow/actions/runs/34042716549)
+  at exact source commit `1d423c8`: passed.
+- Mac project generation, independently compiled gallery target, app/simulator
+  build, complete unit and launch/security suite, release hygiene, architecture
+  enforcement, build-number guard, and packaged-thumbnail verification: passed.
+- Swift CodeQL build and vulnerability analysis: passed with no failed security
+  gate.
+- Simulator artifact `9992271568` recorded SHA-256 digest
+  `af28b2ecdce95abb273070d844b31f0f938b57c78736a4da672178bac6e909ed`.
+- Security-test artifact `9992272609` recorded SHA-256 digest
+  `9fe0129b8be364321cbd027ef770e26d2db1e233708c2b5b9c556b64ec528e27`.
 - Architecture boundary gate: passed locally.
 - Release-hygiene gate: passed locally.
 - TestFlight build-number guard self-test: passed locally.
@@ -343,16 +356,15 @@ review state may change.
 
 ## Blockers
 
-- No known local engineering blocker remains.
-- Windows cannot perform the Xcode generation, iOS compile, simulator, or Swift
-  CodeQL gates; those remain pending on the required remote Mac workflow.
+- No known engineering blocker remains for the gallery hardening phase.
 
 ## Next action
 
-Commit and push the completed hardening phase, open its isolated draft review,
-and run the mandatory remote Mac compile, complete unit/launch suite, architecture
-and hygiene gates, and Swift CodeQL. Do not begin secure file opening until those
-results are green and reviewed against the immutable Build 33 baseline.
+Preserve this rollback-ready checkpoint and draft PR #37. When the next phase
+begins, design secure file opening behind a separate narrow interface: decrypt
+only after an authenticated tap, keep temporary plaintext lifecycle-owned, and
+route image files to the same viewer as Photos-origin images without moving
+storage or cryptographic ownership into the gallery module.
 
 ## Frank's decision required
 
