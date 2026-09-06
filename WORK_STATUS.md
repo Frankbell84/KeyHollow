@@ -10,10 +10,11 @@ Production Build 30 was signed and uploaded from the exact reviewed commit.
 Frank's device feedback confirmed that Build 30 still contains two Phase 4
 presentation defects: image files can appear visually distorted and photos
 imported through Photos do not carry the filename-and-size footer used by
-general-file tiles. The isolated Build 31 source candidate corrects both paths
-and has passed the complete remote Mac and Swift security gates. Build 30
-remains unchanged and is testing in both `KeyHollow Internal` and `Family`.
-App Store review remains untouched.
+general-file tiles. Frank explicitly approved a Build 31 TestFlight delivery.
+The isolated source candidate corrects both paths, has passed the complete
+remote Mac and Swift security gates, and is now being prepared as a separately
+guarded release checkpoint. Build 30 remains unchanged and is testing in both
+`KeyHollow Internal` and `Family`. App Store review remains untouched.
 
 ## Completed work
 
@@ -200,20 +201,23 @@ App Store review remains untouched.
   `d67efc8fb12bf710184edcf98994a828d3bdc45a11bbd48c1701435043fbc954`.
 - The exact validated correction commit is `1d4fb12`; it has not been uploaded
   to TestFlight and is not present in Build 30.
+- Frank explicitly approved the separate Build 31 TestFlight delivery after the
+  distinction between Build 30 and the corrected source candidate was clarified.
+- Updated the app and embedded thumbnail extension together to Build 31 and
+  limited the production upload workflow to the new exact delivery branch,
+  `delivery/gallery-parity-correction`.
 
 ## Blockers
 
-- No engineering blocker remains. Device verification of the correction
-  requires a new TestFlight Build 31, and that guarded upload requires Frank's
-  explicit approval.
+- The Build 31 release-source gate and guarded Apple upload remain to run on the
+  remote Mac. No code or credential blocker is known.
 
 ## Next action
 
-After Frank explicitly approves a new TestFlight delivery, prepare a separate
-guarded Build 31 checkpoint from validated commit `1d4fb12`, rerun the exact
-release-source gates, upload it, and verify Apple processing before assigning it
-to the intended test groups. Build 30 must not be used as evidence for the
-gallery correction.
+Commit and push the separate guarded Build 31 checkpoint from validated commit
+`1d4fb12`, create its exact delivery branch, rerun the release-source gates,
+then upload and verify Apple processing before assigning it to the intended test
+groups. Build 30 must not be used as evidence for the gallery correction.
 
 ## Frank's decision required
 
@@ -221,9 +225,7 @@ gallery correction.
   `Family` group receive Build 30.
 - Build 30 is now `Testing` in both `KeyHollow Internal` and `Family`, with
   automatic tester notification enabled.
-- The gallery correction is fully validated in source. Frank must explicitly
-  approve a separate Build 31 TestFlight upload before device verification can
-  begin.
+- Frank explicitly approved the separate Build 31 TestFlight upload.
 - Device feedback on Build 31 and the later merge decision remain pending.
 - Any App Store review change remains out of scope without separate explicit
   approval.
