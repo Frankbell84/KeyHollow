@@ -6,14 +6,12 @@ Parent release source: `7503a68` (exact delivered Build 33 source)
 
 ## Current task
 
-Validate the completed first secure unified-opening milestone on its isolated
-branch. Images imported through Files now use the same full-screen viewer as
-Photos-origin images; non-image files retain their existing management route.
-The viewer is an independently compiled add-on with neutral immutable inputs and
-action closures. Only the application shell resolves records,
-authenticates/decrypts selected content, or routes save/delete operations. Build
-33 remains the immutable gallery baseline; no TestFlight, `Family`, merge,
-production, or App Store state changes during this validation.
+The first secure unified-opening milestone is implemented and fully validated
+on its isolated draft review. Images imported through Files now use the same
+full-screen viewer as Photos-origin images; non-image files retain their existing
+management route. Build 33 remains the immutable gallery baseline. The next
+step is a separately approved Internal TestFlight build for physical-device
+confirmation; no `Family`, merge, production, or App Store state has changed.
 
 ## Completed work
 
@@ -44,6 +42,15 @@ production, or App Store state changes during this validation.
   dependency-free target and narrow import allowlist, reject protected stores,
   keys, sessions, disk, and network capabilities, and prevent the obsolete
   viewer from returning.
+- Published exact implementation commit `228f927` to
+  `feature/secure-unified-file-preview` and opened isolated draft PR
+  [#38](https://github.com/Frankbell84/KeyHollow/pull/38), stacked directly on
+  the validated gallery-hardening branch so the review contains only this
+  phase's two commits and seven changed files.
+- Remote validation run
+  [#251](https://github.com/Frankbell84/KeyHollow/actions/runs/34044991236)
+  passed every Mac build, test, packaging, and security gate at that exact
+  source commit.
 - Frank confirmed the Build 33 folder/file UI is solid on a physical iPhone;
   that exact behavior is frozen as the hardening baseline.
 - Replaced all photo, general-file, and folder storage records at the compiled
@@ -158,9 +165,19 @@ production, or App Store state changes during this validation.
 
 - Secure-preview architecture, release-hygiene, build-number, and diff-integrity
   gates: passed locally.
-- Mac project generation, independent target compilation, simulator build,
-  complete unit/launch/security suite, packaged-thumbnail verification, and
-  Swift CodeQL: pending the isolated remote run.
+- Secure-preview validation run
+  [#251](https://github.com/Frankbell84/KeyHollow/actions/runs/34044991236)
+  at exact source commit `228f927`: passed.
+- Mac project generation, independent secure-preview target compilation,
+  simulator build, complete unit/launch/security suite, release hygiene,
+  architecture enforcement, build-number guard, and packaged-thumbnail
+  verification: passed.
+- Swift CodeQL build and vulnerability analysis: passed with no failed security
+  gate.
+- Simulator artifact `9992900450` recorded SHA-256 digest
+  `3d5b8fd6059d5bdb45aa60f295c4a1787fd4d8e87aa0f15ee0ed9592389d7526`.
+- Security-test artifact `9992901544` recorded SHA-256 digest
+  `3b56b84c1c7f9a0e96cbfade803bfa12dd410faaace69bbd9dcc5a8756326183`.
 - Gallery UI module architecture boundary gate: passed locally.
 - Gallery UI module release-hygiene gate: passed locally.
 - Gallery UI module TestFlight build-number guard self-test: passed locally.
@@ -393,11 +410,11 @@ production, or App Store state changes during this validation.
 
 ## Next action
 
-Commit and push the completed milestone, open its isolated draft review, and run
-all remote Mac and security gates. If they pass, request physical-device
-verification that a Files-origin image opens directly in the same viewer as a
-Photos-origin image. Broader PDF/audio/video/text preview remains a later
-milestone behind the same contract.
+After separate approval, prepare the next unused Internal-only TestFlight build
+from exact validated source `228f927` and ask Frank to confirm that a
+Files-origin image opens directly in the same viewer as a Photos-origin image.
+Broader PDF/audio/video/text preview remains a later milestone behind the same
+contract.
 
 ## Frank's decision required
 
