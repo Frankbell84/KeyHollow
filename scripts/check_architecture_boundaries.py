@@ -482,6 +482,27 @@ def main() -> int:
             if re.search(r"\bURLSession\b", source):
                 violations.append(f"{path}: core code introduced a network session")
 
+    gallery_file = SOURCE_ROOT / "Photos" / "VaultGalleryView.swift"
+    gallery_source = gallery_file.read_text(encoding="utf-8")
+    for required in (
+        "ForEach(visibleGalleryItems)",
+        "VaultGalleryItemTileView(",
+    ):
+        if required not in gallery_source:
+            violations.append(
+                f"KeyHollow/Photos/VaultGalleryView.swift: unified gallery "
+                f"composition is missing {required!r}"
+            )
+    for obsolete in (
+        "VaultGeneralFileTileView(",
+        "thumbnailCell(",
+    ):
+        if obsolete in gallery_source:
+            violations.append(
+                f"KeyHollow/Photos/VaultGalleryView.swift: parallel gallery "
+                f"presentation path returned ({obsolete})"
+            )
+
     if violations:
         print("Architecture boundary violations:", file=sys.stderr)
         for violation in violations:
