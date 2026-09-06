@@ -1,23 +1,24 @@
 # KeyHollow Work Status
 
 Updated: 2026-09-06
-Branch: `fix/unified-folder-gallery`
+Branch: `refactor/gallery-ui-module`
 Parent release source: `2eaf852` (Build 32)
 
 ## Current task
 
-The isolated unified-folder correction is implemented and remotely validated
-on `fix/unified-folder-gallery`. Frank approved the next Internal-only
-TestFlight delivery. App Store Connect confirms Build 32 is the newest upload,
-so Build 33 is reserved for this correction. The app and embedded thumbnail
-extension are both set to Build 33, and production upload permission is limited
-to `main` or the exact `delivery/unified-folder-gallery` branch. The release
-source must pass the full Mac and CodeQL gates before that delivery branch is
-created and the upload is dispatched. `Family` remains on Build 30 and App
-Store review remains untouched.
+Extract the gallery presentation from the application target into an
+independently compiled `KeyHollowGalleryUIAddOn`. The module will accept only
+immutable presentation values and user-action closures. It must not import or
+own vault sessions, cryptographic capabilities, encrypted stores, transfer
+coordinators, plaintext, or network clients. The refactor begins from exact
+validated Build 33 source `7503a68` on a new isolated branch; the immutable
+Build 33 delivery branch, `Family`, production, and App Store review remain
+untouched.
 
 ## Completed work
 
+- Created `refactor/gallery-ui-module` directly from exact validated Build 33
+  source `7503a68`; no delivery or production branch was modified.
 - Began from verified remote `main` at merged General File Support commit
   `bbd6bfa`; no completed feature or delivery branch was reused.
 - Preserved the compiled core modules and the independently compiled File
@@ -296,17 +297,17 @@ Store review remains untouched.
 
 ## Blockers
 
-- No known engineering or automated-validation blocker remains for the isolated
-  gallery correction.
-- Build 32 must not be promoted to `Family`; its folder presentation has not
-  passed the corrected visual/device gate.
+- No known engineering blocker at the extraction checkpoint.
+- The new module has not yet passed local generation, architecture, unit, build,
+  release-hygiene, or remote Mac/CodeQL gates.
 
 ## Next action
 
-Commit and publish the guarded Build 33 release-source checkpoint, wait for its
-Mac build/test and CodeQL gates, then create the exact immutable delivery branch
-and dispatch the approved signed upload. Keep Build 33 Internal-only for
-physical-device verification before any `Family` rollout or merge.
+Checkpoint and publish the pre-extraction state, add the independently compiled
+gallery UI target and narrow presentation contract, remove the extracted source
+from the app target, extend architecture enforcement and tests, then run the
+complete local and remote validation gates before requesting any delivery or
+merge decision.
 
 ## Frank's decision required
 
@@ -322,6 +323,8 @@ physical-device verification before any `Family` rollout or merge.
 - Frank approved beginning the unified folder-gallery correction.
 - Frank explicitly approved the next Internal-only TestFlight upload; Build 33
   is the verified next unused number.
+- Frank approved resolving the remaining gallery-isolation caveat by extracting
+  the presentation into its own compiled module.
 - Any TestFlight upload after Build 33, `Family` rollout, merge, or App Store
   review change still requires its own decision after corrected visual and
   automated evidence.
