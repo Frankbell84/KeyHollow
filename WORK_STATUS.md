@@ -6,12 +6,15 @@ Parent release source: `7503a68` (exact delivered Build 33 source)
 
 ## Current task
 
-The first secure unified-opening milestone is implemented and fully validated
-on its isolated draft review. Images imported through Files now use the same
-full-screen viewer as Photos-origin images; non-image files retain their existing
-management route. Build 33 remains the immutable gallery baseline. The next
-step is a separately approved Internal TestFlight build for physical-device
-confirmation; no `Family`, merge, production, or App Store state has changed.
+Prepare the explicitly approved Internal-only TestFlight delivery from exact
+validated secure-preview source `228f927`. Build 33 remains the immutable gallery
+rollback baseline. The next unused release number is Build 34: the guarded Build
+33 upload succeeded from `7503a68`, even though the currently open App Store
+Connect page is showing an older cached list ending at 32. Synchronize the app
+and embedded extension to 34, restrict upload permission to the exact delivery
+branch, re-run all source gates, and upload only after the unused-number API
+guard confirms 34. Do not change `Family`, merge, production, or App Store review
+state.
 
 ## Completed work
 
@@ -51,6 +54,9 @@ confirmation; no `Family`, merge, production, or App Store state has changed.
   [#251](https://github.com/Frankbell84/KeyHollow/actions/runs/34044991236)
   passed every Mac build, test, packaging, and security gate at that exact
   source commit.
+- Created `delivery/secure-unified-file-preview` directly from the validated
+  feature head. The application source remains exact commit `228f927`; the later
+  commit is evidence-only status documentation.
 - Frank confirmed the Build 33 folder/file UI is solid on a physical iPhone;
   that exact behavior is frozen as the hardening baseline.
 - Replaced all photo, general-file, and folder storage records at the compiled
@@ -410,11 +416,12 @@ confirmation; no `Family`, merge, production, or App Store state has changed.
 
 ## Next action
 
-After separate approval, prepare the next unused Internal-only TestFlight build
-from exact validated source `228f927` and ask Frank to confirm that a
-Files-origin image opens directly in the same viewer as a Photos-origin image.
-Broader PDF/audio/video/text preview remains a later milestone behind the same
-contract.
+Checkpoint and publish the delivery branch, set both bundled products to Build
+34, replace the stale release-branch exception with this exact delivery branch,
+run the complete release-source validation, and dispatch the guarded upload.
+After Apple processes it, assign only `KeyHollow Internal` and ask Frank to
+confirm that a Files-origin image opens directly in the same viewer as a
+Photos-origin image. Broader PDF/audio/video/text preview remains later.
 
 ## Frank's decision required
 
@@ -435,6 +442,8 @@ contract.
 - Frank approved hardening the current modular safety nets before any secure
   file-opening feature begins.
 - Frank approved beginning the first secure unified-opening milestone.
+- Frank explicitly approved the next Internal-only TestFlight delivery for the
+  validated secure-preview milestone. Build 34 is reserved for this upload.
 - Any TestFlight upload after Build 33, `Family` rollout, merge, or App Store
   review change still requires its own decision after corrected visual and
   automated evidence.
