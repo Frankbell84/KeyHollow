@@ -1,20 +1,17 @@
 # KeyHollow Work Status
 
 Updated: 2026-09-06
-Branch: `feature/secure-unified-file-preview`
+Branch: `delivery/secure-unified-file-preview`
 Parent release source: `7503a68` (exact delivered Build 33 source)
 
 ## Current task
 
-Prepare the explicitly approved Internal-only TestFlight delivery from exact
-validated secure-preview source `228f927`. Build 33 remains the immutable gallery
-rollback baseline. The next unused release number is Build 34: the guarded Build
-33 upload succeeded from `7503a68`, even though the currently open App Store
-Connect page is showing an older cached list ending at 32. Synchronize the app
-and embedded extension to 34, restrict upload permission to the exact delivery
-branch, re-run all source gates, and upload only after the unused-number API
-guard confirms 34. Do not change `Family`, merge, production, or App Store review
-state.
+Verify the processed Internal-only TestFlight Build 34 on a physical iPhone.
+The delivered candidate is exact release commit `4f865b6`; its secure-preview
+application source remains exact validated commit `228f927`, and Build 33 remains
+the immutable gallery rollback baseline. Confirm that an encrypted image imported
+through Files opens in the same secure full-screen viewer as a Photos-origin
+image. Do not change `Family`, merge, production, or App Store review state.
 
 ## Completed work
 
@@ -65,6 +62,21 @@ state.
 - Opened draft release review
   [#39](https://github.com/Frankbell84/KeyHollow/pull/39) against `main` so the
   full Build 34 source is exercised by the mandatory Mac and security workflows.
+- Exact Build 34 release-source run
+  [#252](https://github.com/Frankbell84/KeyHollow/actions/runs/34046844487)
+  passed the Mac build, complete unit/launch/security suite, packaged-thumbnail
+  verification, and Swift CodeQL at release commit `4f865b6`.
+- Guarded TestFlight upload run
+  [#44](https://github.com/Frankbell84/KeyHollow/actions/runs/34048323420)
+  completed successfully from exact release commit `4f865b6`.
+- The upload workflow independently confirmed Build 34 was unused in App Store
+  Connect before installing signing material. Release hygiene, production
+  identity, project generation, cloud signing, archive/module hygiene, signed
+  IPA export, Apple upload, artifact retention, and signing-material cleanup all
+  passed.
+- Apple finished processing Build 34. It is `Ready to Submit` and assigned only
+  to `KeyHollow Internal`; `Family`, merge, production, and App Store review
+  state were not changed.
 - Frank confirmed the Build 33 folder/file UI is solid on a physical iPhone;
   that exact behavior is frozen as the hardening baseline.
 - Replaced all photo, general-file, and folder storage records at the compiled
@@ -194,8 +206,20 @@ state.
   `3b56b84c1c7f9a0e96cbfade803bfa12dd410faaace69bbd9dcc5a8756326183`.
 - Build 34 release-source architecture, release-hygiene, build-number self-test,
   and diff-integrity gates: passed locally.
-- Build 34 remote release-source Mac build, complete test/security suite,
-  packaged-thumbnail verification, and Swift CodeQL: pending publication.
+- Build 34 release-source validation run
+  [#252](https://github.com/Frankbell84/KeyHollow/actions/runs/34046844487)
+  at exact release commit `4f865b6`: passed.
+- Simulator artifact `9993432906` recorded SHA-256 digest
+  `033adaa055a29fdf7103198844f5260f6d2b0d1cc27ae2418b3ea2f2e8cc5e99`.
+- Security-test artifact `9993433950` recorded SHA-256 digest
+  `2cfb421da74cc7e94d1f04901ddd7f05fe3f911341b853533394b103faeadd3c`.
+- Guarded Build 34 upload run
+  [#44](https://github.com/Frankbell84/KeyHollow/actions/runs/34048323420):
+  passed every release, signing, archive, upload, retention, and cleanup step.
+- Signed IPA artifact `9993824241` recorded SHA-256 digest
+  `e6bedb91499601abde59770253bac10982fb428ab05906b52993f149e9f38207`.
+- App Store Connect: Build 34 processing complete, `Ready to Submit`, assigned
+  only to `KeyHollow Internal`.
 - Gallery UI module architecture boundary gate: passed locally.
 - Gallery UI module release-hygiene gate: passed locally.
 - Gallery UI module TestFlight build-number guard self-test: passed locally.
@@ -423,17 +447,18 @@ state.
 
 ## Blockers
 
-- No known engineering blocker. Windows cannot perform the Xcode/iOS gates, so
-  the completed implementation will require the normal isolated Mac review.
+- No known engineering or delivery blocker. All Mac, security, signing, upload,
+  and Apple processing gates are complete. Physical-device preview parity is the
+  remaining acceptance check.
 
 ## Next action
 
-Commit and publish the guarded Build 34 source, open its narrow release review,
-and run the complete remote release-source validation. If every gate remains
-green, dispatch the approved upload; its API guard must independently reject 34
-if Apple already has that build. After processing, assign only `KeyHollow
-Internal` and ask Frank to verify image-opening parity. Broader
-PDF/audio/video/text preview remains later.
+Frank installs Internal Build 34 and verifies that an image imported through
+Files opens directly in the same secure viewer as a Photos-origin image, while a
+non-image file continues to use the existing management route. If confirmed,
+checkpoint this milestone and prepare the next narrowly scoped preview type.
+Broader PDF/audio/video/text preview remains later and must pass the same module,
+CI, and TestFlight gates.
 
 ## Frank's decision required
 
@@ -455,8 +480,9 @@ PDF/audio/video/text preview remains later.
   file-opening feature begins.
 - Frank approved beginning the first secure unified-opening milestone.
 - Frank explicitly approved the next Internal-only TestFlight delivery for the
-  validated secure-preview milestone. Build 34 is reserved for this upload.
-- Any TestFlight upload after Build 33, `Family` rollout, merge, or App Store
+  validated secure-preview milestone. Build 34 is processed and assigned only
+  to `KeyHollow Internal`.
+- Any TestFlight upload after Build 34, `Family` rollout, merge, or App Store
   review change still requires its own decision after corrected visual and
   automated evidence.
 - Any App Store review change remains out of scope without separate explicit
