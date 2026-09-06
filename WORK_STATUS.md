@@ -6,11 +6,11 @@ Parent release source: `ec25031` (merged and physically accepted Build 34 source
 
 ## Current task
 
-Build 35 passed release-source validation, guarded upload, Apple processing, and
-Frank's physical-device acceptance. Frank explicitly approved adding Build 35
-to `Family`, merging draft release PR #41, and hardening the resulting `main`
-baseline. Those three controlled steps are now the active task; App Store review
-state remains out of scope.
+Build 35 passed release-source validation, guarded upload, Apple processing,
+Frank's physical-device acceptance, and the approved `Family` rollout. The
+remaining active task is to require the exact delivery head to pass every CI
+gate, merge release PR #41, and harden the resulting `main` baseline. App Store
+review state remains out of scope.
 
 ## Completed work
 
@@ -110,6 +110,11 @@ state remains out of scope.
   export behavior works.
 - Frank explicitly approved Build 35 `Family` rollout, PR #41 merge, and
   post-merge hardening of the exact accepted source.
+- Added Build 35 to the `Family` TestFlight group with automatic tester
+  notification and focused guidance covering individual general-file export,
+  mixed-content opening and selection, encrypted vault transfer, metadata, and
+  layout regressions. App Store Connect now reports Build 35 as `Testing` in
+  both `KeyHollow Internal` and `Family`.
 - Created `feature/secure-unified-file-preview` directly from hardened checkpoint
   `0d86997`; the validated gallery and release branches remain untouched.
 - Mapped the existing routing seam: Photos-origin images use the full-screen
@@ -560,14 +565,14 @@ state remains out of scope.
 
 ## Blockers
 
-- No known engineering blocker. Family rollout, final branch validation, merge,
-  and post-merge hardening are approved and in progress.
+- No known engineering blocker. Family rollout is complete; final branch
+  validation, merge, and post-merge hardening are approved and in progress.
 
 ## Next action
 
-Add Build 35 to `Family`, require the exact delivery head to pass all mandatory
-checks, merge PR #41, then validate and checkpoint the resulting `main` commit.
-Do not alter App Store review state.
+Require this exact delivery head to pass all mandatory checks, merge PR #41,
+then validate and checkpoint the resulting `main` commit. Do not alter App Store
+review state.
 
 ## Frank's decision required
 
@@ -582,6 +587,8 @@ Do not alter App Store review state.
   merge were separate gates and are now explicitly approved after acceptance.
 - Frank completed physical acceptance and explicitly approved both Build 35
   `Family` rollout and PR #41 merge, plus hardening of the merged baseline.
+- Build 35 is now `Testing` in both `KeyHollow Internal` and `Family`; the
+  approved tester-group rollout is complete.
 - Frank explicitly approved this Phase 4 TestFlight delivery and requested the
   `Family` group receive Build 30.
 - Build 30 is now `Testing` in both `KeyHollow Internal` and `Family`, with
