@@ -6,16 +6,19 @@ Parent release source: `2eaf852` (Build 32)
 
 ## Current task
 
-The gallery presentation has been extracted from the application target into
-the independently compiled `KeyHollowGalleryUI` static library. The app now
-retains a thin authenticated coordinator while the module owns the visible
-three-column grid, unified item tiles, folder tiles, and mixed selection model.
-Local structural and hygiene gates pass; the exact implementation now requires
-the complete remote Mac build/test and CodeQL gates. The immutable Build 33
-delivery branch, `Family`, production, and App Store review remain untouched.
+Harden the new `KeyHollowGalleryUI` boundary before adding secure file-opening
+behavior. Build 33's folder/file UI passed Frank's physical-device check and is
+the immutable visual baseline. The hardening phase will remove the UI module's
+remaining compile-time dependencies on photo, general-file, and folder storage
+models; replace them with source-neutral immutable presentation values; and make
+CI reject any future storage, session, cryptographic, transfer, plaintext, or
+network dependency. No customer-facing behavior, vault data, Build 33 delivery,
+`Family`, production, or App Store review state may change.
 
 ## Completed work
 
+- Frank confirmed the Build 33 folder/file UI is solid on a physical iPhone;
+  that exact behavior is frozen as the hardening baseline.
 - Created `refactor/gallery-ui-module` directly from exact validated Build 33
   source `7503a68`; no delivery or production branch was modified.
 - Added `KeyHollowGalleryUI` as an independently compiled static library under
@@ -322,10 +325,10 @@ delivery branch, `Family`, production, and App Store review remain untouched.
 
 ## Next action
 
-Commit and publish the extraction implementation, open an isolated draft PR to
-trigger the required Mac and CodeQL workflows, then diagnose any compile or test
-failure without weakening the module boundary. No TestFlight delivery, Family
-rollout, or merge is authorized by this refactor alone.
+Checkpoint this hardening start, replace storage-owned records at the compiled
+UI boundary with immutable presentation values, remove the UI target's content-
+module dependencies, strengthen architecture enforcement and regression tests,
+then run all local and remote gates without changing Build 33 behavior.
 
 ## Frank's decision required
 
@@ -343,6 +346,8 @@ rollout, or merge is authorized by this refactor alone.
   is the verified next unused number.
 - Frank approved resolving the remaining gallery-isolation caveat by extracting
   the presentation into its own compiled module.
+- Frank approved hardening the current modular safety nets before any secure
+  file-opening feature begins.
 - Any TestFlight upload after Build 33, `Family` rollout, merge, or App Store
   review change still requires its own decision after corrected visual and
   automated evidence.
