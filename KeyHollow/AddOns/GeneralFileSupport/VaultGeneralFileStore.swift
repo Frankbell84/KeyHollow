@@ -14,7 +14,8 @@ public actor VaultGeneralFileStore {
     }
 
     /// A bounded first release avoids large plaintext/ciphertext copies causing
-    /// memory pressure. Video receives its own streaming add-on later.
+    /// memory pressure. The first video-playback add-on deliberately reuses
+    /// this limit; larger streaming ingress requires a separate storage review.
     public static let maximumFileByteCount: UInt64 = 100 * 1_024 * 1_024
     public static let maximumBatchCount = 50
 

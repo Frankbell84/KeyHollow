@@ -10,7 +10,8 @@ change `.khvault`, or weaken the 100 MB bounded-ingress contract.
 
 - conservative video classification from immutable name/type/size metadata;
 - a validated local-file playback handoff;
-- later video thumbnail and player presentation behavior.
+- native video player presentation and player-memory teardown;
+- later bounded video-thumbnail rendering behavior.
 
 The add-on never receives a vault key, session capability, encrypted manifest,
 general-file record, protected-store location, transfer coordinator, network
@@ -25,6 +26,21 @@ The application composition layer owns:
   cancellation, backgrounding, and failure;
 - storing any generated presentation thumbnail through the existing encrypted
   Folder Presentation boundary.
+
+## Playback integration
+
+- A video remains one General File Support record and one encrypted blob.
+- The app asks that existing store for a one-file authenticated export, then
+  hands only immutable metadata plus its protected local URL to the video
+  module.
+- The player module cannot read the vault store, obtain a key or session, export
+  a file, traverse folders, or access the network.
+- The app-owned playback coordinator removes the temporary plaintext on
+  validation failure, cancellation, dismissal, view teardown, and vault-session
+  change. The player independently pauses and releases its current media item
+  whenever its view disappears.
+- Playback does not count as an external system interaction: normal background
+  locking remains active and tears the playback session down.
 
 ## Initial compatibility boundary
 

@@ -232,6 +232,38 @@ final class VaultGalleryPresentationTests: XCTestCase {
         )
     }
 
+    func testVideoFileUsesEncryptedVideoPlaybackRoute() {
+        let file = VaultGeneralFileRecord(
+            id: UUID(),
+            importedAt: Date(timeIntervalSinceReferenceDate: 300),
+            displayName: "Evidence.MOV",
+            contentTypeIdentifier: "com.apple.quicktime-movie",
+            originalByteCount: 2_048,
+            blobName: "file.khg"
+        )
+
+        XCTAssertEqual(
+            VaultGalleryContentItem.generalFile(file).openRoute,
+            .videoPlayback
+        )
+    }
+
+    func testMisleadingVideoExtensionKeepsFileManagementRoute() {
+        let file = VaultGeneralFileRecord(
+            id: UUID(),
+            importedAt: Date(timeIntervalSinceReferenceDate: 300),
+            displayName: "Renamed.mov",
+            contentTypeIdentifier: "com.adobe.pdf",
+            originalByteCount: 2_048,
+            blobName: "file.khg"
+        )
+
+        XCTAssertEqual(
+            VaultGalleryContentItem.generalFile(file).openRoute,
+            .fileManagement
+        )
+    }
+
     func testSourceNeutralOrderUsesImportTimeInsteadOfStoreKind() {
         let olderPhoto = VaultPhotoRecord(
             id: UUID(),

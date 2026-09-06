@@ -25,7 +25,15 @@ PRESENTATION_PREFIXES = (
     "KeyHollow/AddOns/SecurePreview/",
 )
 
-UI_FRAMEWORKS = {"SwiftUI", "UIKit", "Photos", "PhotosUI", "UniformTypeIdentifiers"}
+UI_FRAMEWORKS = {
+    "AVFoundation",
+    "AVKit",
+    "Photos",
+    "PhotosUI",
+    "SwiftUI",
+    "UIKit",
+    "UniformTypeIdentifiers",
+}
 REMOTE_SDKS = {
     "AWSCore",
     "AWSS3",
@@ -670,7 +678,13 @@ def main() -> int:
                     )
 
         if path.startswith(ENCRYPTED_VIDEO_PREFIX):
-            unexpected = imported - {"Foundation", "UniformTypeIdentifiers"}
+            unexpected = imported - {
+                "AVFoundation",
+                "AVKit",
+                "Foundation",
+                "SwiftUI",
+                "UniformTypeIdentifiers",
+            }
             if unexpected:
                 violations.append(
                     f"{path}: encrypted-video add-on imports outside its allowlist: "
@@ -738,12 +752,16 @@ def main() -> int:
     gallery_source = gallery_file.read_text(encoding="utf-8")
     for required in (
         "import KeyHollowGalleryUI",
+        "import KeyHollowEncryptedVideoAddOn",
         "import KeyHollowSecurePreviewAddOn",
         "VaultGalleryGridView(",
         "VaultGalleryItemTileView(",
         "VaultSecureImagePreviewView(",
         "case .imagePreview:",
+        "case .videoPlayback:",
         "case .fileManagement:",
+        "VaultEncryptedVideoPlayerView(",
+        "videoPlayback.dismissAndWait()",
         "data = try await generalFileStore.loadFile(record)",
         "generalFileStore.prepareExport(files)",
         "GeneralFileShareSheet(urls: prepared.urls)",
@@ -771,6 +789,40 @@ def main() -> int:
                 f"KeyHollow/Photos/VaultGalleryView.swift: parallel gallery "
                 f"presentation path returned ({obsolete})"
             )
+
+    video_coordinator_file = (
+        SOURCE_ROOT / "Photos" / "VaultVideoPlaybackCoordinator.swift"
+    )
+    if not video_coordinator_file.exists():
+        violations.append(
+            "KeyHollow/Photos/VaultVideoPlaybackCoordinator.swift: "
+            "app-owned playback lifecycle boundary is missing"
+        )
+    else:
+        video_coordinator_source = video_coordinator_file.read_text(encoding="utf-8")
+        for required in (
+            "try Task.checkCancellation()",
+            "let prepared = try await store.prepareExport([record])",
+            "await store.discardExport(prepared)",
+            "await cleanup.store.discardExport(cleanup.export)",
+            "private(set) var active",
+        ):
+            if required not in video_coordinator_source:
+                violations.append(
+                    "KeyHollow/Photos/VaultVideoPlaybackCoordinator.swift: "
+                    f"plaintext-lifecycle boundary is missing {required!r}"
+                )
+        for forbidden in (
+            "FileManager",
+            "Data(contentsOf:",
+            "URLSession",
+            "SymmetricKey",
+        ):
+            if forbidden in video_coordinator_source:
+                violations.append(
+                    "KeyHollow/Photos/VaultVideoPlaybackCoordinator.swift: "
+                    f"playback coordinator bypasses its narrow boundary ({forbidden})"
+                )
 
     if violations:
         print("Architecture boundary violations:", file=sys.stderr)

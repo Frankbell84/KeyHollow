@@ -17,7 +17,7 @@ small local core with narrow adapters around it.
 | `UI` and gallery view | User interaction and presentation | Cryptographic algorithms or direct persistence formats |
 | `App` | Composition and lifecycle entry | Feature implementation details |
 | `AddOns/GeneralFileSupport` | Encrypted general-file records, manifests, blobs, and protected ingress/egress staging | Vault keys, photo storage, SwiftUI/UIKit, portable archive formats |
-| `AddOns/EncryptedVideo` | Conservative video routing and validated local playback handoff | Vault keys, sessions, encrypted stores, general-file records, transfer formats, file management, or networking |
+| `AddOns/EncryptedVideo` | Conservative video routing, validated local playback handoff, and native player presentation | Vault keys, sessions, encrypted stores, general-file records, transfer formats, file management, or networking |
 | `AddOns/FolderPresentation` | Folder metadata, neutral content references, and encrypted presentation thumbnails | Vault keys, protected photo/file content, SwiftUI/UIKit, portable archive formats |
 
 ## Enforced rules
@@ -72,10 +72,11 @@ revocable interface. The application layer presents Apple's Files and share
 interfaces and bridges the unlocked session capability; neither the protected
 vault core nor the photo core imports the add-on.
 
-`KeyHollowEncryptedVideoAddOn` classifies immutable file metadata and accepts
-only a validated local-file playback handoff. The application shell owns the
-authenticated general-file lookup, protected temporary plaintext, cleanup, and
-session lifetime. The video add-on does not own or import encrypted storage,
+`KeyHollowEncryptedVideoAddOn` classifies immutable file metadata, accepts only
+a validated local-file playback handoff, and owns native player presentation.
+The application shell owns the authenticated general-file lookup, protected
+temporary plaintext, cleanup, and session lifetime through one explicit
+coordinator. The video add-on does not own or import encrypted storage,
 vault/session capabilities, transfer formats, or network services.
 
 `KeyHollowFolderPresentationAddOn` owns only folder metadata, neutral content

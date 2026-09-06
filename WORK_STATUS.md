@@ -10,11 +10,33 @@ Roadmap add-on #4, Encrypted Video Support. Its first isolated milestone now
 defines the dependency-free video policy and validated local-file playback
 handoff, pins the module boundary in CI, and adds contract tests. Exact-source
 Mac build/test and Swift CodeQL gates have passed. The next isolated milestone
-adds app-composed playback with deterministic protected-temporary-file cleanup;
-thumbnail decoding, storage migration, transfer changes, and App Store review
-state remain out of scope.
+now adds app-composed native playback with deterministic protected-temporary-
+file cleanup and is ready for exact-source Mac validation. Thumbnail decoding,
+storage migration, transfer changes, and App Store review state remain out of
+scope.
 
 ## Completed work
+
+- Added a native `VideoPlayer` surface inside the independently compiled
+  `KeyHollowEncryptedVideoAddOn`; the module receives only its already-validated
+  local playback handoff and releases the player item when the surface closes.
+- Added one app-owned playback coordinator that authenticates exactly one
+  existing general-file record, prepares its protected temporary export, and
+  owns deletion on validation failure, cancellation, dismissal, repeated
+  teardown, vault-session change, and view disappearance.
+- Routed only policy-approved video general-file records to playback. Photos and
+  image files keep the shared secure-image route; misleading or non-video files
+  keep the file-management route.
+- Preserved normal background locking during playback; the player is not marked
+  as an external system interaction and therefore cannot suppress the lock.
+- Added cleanup, cancellation, idempotence, positive video routing, and
+  misleading-extension regression tests.
+- Strengthened architecture enforcement to pin native-media frameworks to
+  presentation code, require the playback lifecycle coordinator and its cleanup
+  calls, and forbid direct file, key, session, or network bypasses.
+- Updated the durable encrypted-video and architecture documentation. The
+  encrypted general-file store, `.khvault` format, folder model, photo route,
+  and production delivery configuration are unchanged.
 
 - Exact encrypted-video boundary run
   [#267](https://github.com/Frankbell84/KeyHollow/actions/runs/34066713733)
@@ -636,7 +658,10 @@ state remain out of scope.
   Mac build/tests and Swift CodeQL passed.
 - Local release hygiene, architecture enforcement, build-number guard self-test,
   and whitespace checks: passed.
-- Playback integration: not yet implemented or submitted to CI.
+- Playback integration local release hygiene, architecture enforcement,
+  build-number guard self-test, and whitespace checks: passed.
+- Playback integration Mac compilation, full tests, and Swift CodeQL: pending
+  the pushed exact-source run.
 
 ## Blockers
 
@@ -644,10 +669,9 @@ state remain out of scope.
 
 ## Next action
 
-Add one module-owned native video playback surface and one app-owned lifecycle
-coordinator, route only validated video records into it, prove protected
-temporary plaintext deletion on failure/dismissal/session teardown, then run
-the same local and exact-source Mac CI gates. Do not alter App Store review
+Commit and push the isolated playback milestone, then require its exact source
+to pass the complete Mac build/test and Swift CodeQL gates. Correct any failure
+before video-thumbnail work begins. Do not alter TestFlight or App Store review
 state.
 
 ## Frank's decision required

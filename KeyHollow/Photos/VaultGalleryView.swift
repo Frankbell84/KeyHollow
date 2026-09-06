@@ -1,6 +1,7 @@
 import SwiftUI
 import UIKit
 import UniformTypeIdentifiers
+import KeyHollowEncryptedVideoAddOn
 import KeyHollowFolderPresentationAddOn
 import KeyHollowGalleryUI
 import KeyHollowGeneralFileSupportAddOn
@@ -90,13 +91,25 @@ enum VaultGalleryContentItem: Identifiable, Equatable {
         case .photo:
             return .imagePreview
         case .generalFile(let record):
-            return VaultSecurePreviewPolicy.kind(
+            if VaultSecurePreviewPolicy.kind(
                 for: VaultSecurePreviewDescriptor(
                     displayName: record.displayName,
                     contentTypeIdentifier: record.contentTypeIdentifier,
                     originalByteCount: record.originalByteCount
                 )
-            ) == .image ? .imagePreview : .fileManagement
+            ) == .image {
+                return .imagePreview
+            }
+            if VaultEncryptedVideoPolicy.kind(
+                for: VaultEncryptedVideoDescriptor(
+                    displayName: record.displayName,
+                    contentTypeIdentifier: record.contentTypeIdentifier,
+                    originalByteCount: record.originalByteCount
+                )
+            ) == .video {
+                return .videoPlayback
+            }
+            return .fileManagement
         }
     }
 
@@ -113,6 +126,7 @@ enum VaultGalleryContentItem: Identifiable, Equatable {
 
 enum VaultGalleryOpenRoute: Equatable {
     case imagePreview
+    case videoPlayback
     case fileManagement
 }
 
@@ -130,6 +144,8 @@ struct VaultGalleryView: View {
     @EnvironmentObject private var session: VaultSession
 
     let service: VaultUnlockService
+
+    @StateObject private var videoPlayback = VaultVideoPlaybackCoordinator()
 
     @State private var store: VaultPhotoStore?
     @State private var records: [VaultPhotoRecord] = []
@@ -266,6 +282,18 @@ struct VaultGalleryView: View {
                 onDelete: { deletePreviewSource(active.source) }
             )
         }
+        .sheet(
+            item: Binding(
+                get: { videoPlayback.active },
+                set: { if $0 == nil { videoPlayback.dismiss() } }
+            ),
+            onDismiss: videoPlayback.dismiss
+        ) { active in
+            VaultEncryptedVideoPlayerView(
+                playback: active.playback,
+                onDismiss: videoPlayback.dismiss
+            )
+        }
         .confirmationDialog(
             "Delete Selected Items?",
             isPresented: $showingDeleteSelectionConfirmation,
@@ -320,6 +348,7 @@ struct VaultGalleryView: View {
             Text(message ?? "")
         }
         .task(id: session.activeVaultID) {
+            await videoPlayback.dismissAndWait()
             store = nil
             records = []
             generalFileStore = nil
@@ -334,6 +363,12 @@ struct VaultGalleryView: View {
             leaveSelectionMode()
             await initializeStores()
             contentStoresLoaded = true
+        }
+        .onChange(of: session.securityEpoch) { _, _ in
+            videoPlayback.dismiss()
+        }
+        .onDisappear {
+            videoPlayback.dismiss()
         }
     }
 
@@ -695,6 +730,8 @@ struct VaultGalleryView: View {
         switch item.openRoute {
         case .imagePreview:
             openImage(item)
+        case .videoPlayback:
+            openVideo(item)
         case .fileManagement:
             showingVaultFiles = true
         }
@@ -1187,6 +1224,26 @@ struct VaultGalleryView: View {
                 return
             } catch {
                 message = "The image could not be authenticated, validated, and opened."
+            }
+        }
+        if taskID == nil { isWorking = false }
+    }
+
+    private func openVideo(_ item: VaultGalleryContentItem) {
+        guard item.openRoute == .videoPlayback,
+              case .generalFile(let record) = item,
+              let generalFileStore,
+              !isWorking else { return }
+        isWorking = true
+
+        let taskID = session.startSensitiveTask { _ in
+            defer { isWorking = false }
+            do {
+                try await videoPlayback.prepare(record, using: generalFileStore)
+            } catch is CancellationError {
+                return
+            } catch {
+                message = "The video could not be authenticated, validated, and opened."
             }
         }
         if taskID == nil { isWorking = false }

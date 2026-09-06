@@ -1,8 +1,8 @@
 # KeyHollow Development Checkpoint
 
 **Updated:** September 6, 2026
-**Purpose:** Durable restart point after Build 35 hardening and before roadmap
-add-on #4 implementation.
+**Purpose:** Durable restart point for roadmap add-on #4 after its module
+boundary passed and its isolated playback integration entered validation.
 
 ## Executive status
 
@@ -17,7 +17,8 @@ add-on #4 implementation.
 - Roadmap add-on #3, General File Support, is complete. Its encrypted import,
   `.khvault` round trip, unified gallery, secure image preview, selection, and
   individual general-file export behavior are hardened through Build 35.
-- The next unfinished roadmap item is #4, Encrypted Video Support.
+- Roadmap add-on #4, Encrypted Video Support, has a validated compiled boundary;
+  its first app-composed playback milestone is now in progress.
 
 ## Numbering clarification
 
@@ -36,8 +37,8 @@ work and **Folder Presentation** for the completed historical phase.
   journaling, and rollback.
 - `KeyHollowPhotosAdapter` owns the narrow Apple Photos boundary.
 - File Recognition, General File Support, Folder Presentation, Secure Preview,
-  and Gallery UI are separately compiled targets with strict concurrency and
-  warnings treated as errors where required.
+  Encrypted Video, and Gallery UI are separately compiled targets with strict
+  concurrency and warnings treated as errors where required.
 - Protected core targets do not import add-ons. Concrete feature wiring remains
   in the application composition layer.
 
@@ -52,8 +53,11 @@ work and **Folder Presentation** for the completed historical phase.
 - Simulator and security-test artifacts: retained and unexpired.
 - CI actions: pinned to exact commits; artifact uploader is the Node 24
   generation.
-- Feature branch `feature/encrypted-video-support`: exact with `origin/main`
-  before this documentation-only checkpoint; no application code changed.
+- Encrypted-video boundary run #267 passed the complete Mac build/test job and
+  Swift CodeQL at exact commit `1c02979f989d296eaadc52becec6b45dcdf29ff1`.
+- Feature branch `feature/encrypted-video-support` now contains isolated
+  playback integration on top of that validated boundary; no production or
+  TestFlight state has changed.
 
 ## Roadmap add-on #4 entry requirements
 
@@ -91,7 +95,8 @@ work and **Folder Presentation** for the completed historical phase.
 
 There is no modular or security blocker. Windows cannot run the Apple simulator,
 so exact-source Mac compilation and tests remain a required remote CI gate as
-before. The next action is to write the add-on #4 threat model and narrow public
-contract, extend the architecture gate to enforce that contract, and only then
-implement video behavior. Do not change TestFlight groups, production delivery,
-or App Store review state without the required later approvals.
+before. The current action is to validate the video-only gallery route, native
+module player, app-owned temporary-file lifecycle, and new cleanup regression
+tests. Video thumbnail generation remains a later isolated milestone. Do not
+change TestFlight groups, production delivery, or App Store review state without
+the required later approvals.
