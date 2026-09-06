@@ -45,7 +45,7 @@ enum VaultGalleryContentItem: Identifiable, Equatable {
     var presentationItem: VaultGalleryPresentationItem {
         switch self {
         case .photo(let record):
-            VaultGalleryPresentationItem(
+            return VaultGalleryPresentationItem(
                 id: id,
                 importedAt: record.importedAt,
                 displayName: record.displayName,

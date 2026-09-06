@@ -33,6 +33,10 @@ review state may change.
   dependency, and preserve the protected-capability/import denylist.
 - Added module-contract regression coverage for immutable item/folder values and
   retained the mixed-selection, naming, ordering, geometry, and thumbnail tests.
+- Remote run #248 proved the architecture rules before the Apple compile, then
+  caught one application-shell integration error: the photo branch of the new
+  presentation mapper did not explicitly return its immutable value. The fix is
+  an explicit return only; it changes no storage, UI, or security behavior.
 - Created `refactor/gallery-ui-module` directly from exact validated Build 33
   source `7503a68`; no delivery or production branch was modified.
 - Added `KeyHollowGalleryUI` as an independently compiled static library under
@@ -128,8 +132,12 @@ review state may change.
 - Gallery UI module whitespace/diff integrity check: passed locally.
 - Hardened source-neutral contract gate: passed locally.
 - Dependency-free target/source-ownership gate: passed locally.
-- Remote Mac generation, compile, unit/launch tests, and CodeQL: pending the
-  hardened implementation commit and isolated draft PR.
+- Initial remote hardening run
+  [#248](https://github.com/Frankbell84/KeyHollow/actions/runs/34042394691):
+  architecture, hygiene, build-number, and project-generation gates passed; the
+  simulator compile stopped at the missing explicit return before tests ran.
+- Corrected remote Mac generation, compile, unit/launch tests, and CodeQL:
+  pending the explicit-return correction commit on draft PR #37.
 - Architecture boundary gate: passed locally.
 - Release-hygiene gate: passed locally.
 - TestFlight build-number guard self-test: passed locally.
