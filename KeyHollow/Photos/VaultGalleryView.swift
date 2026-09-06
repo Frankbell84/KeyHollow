@@ -57,7 +57,7 @@ struct VaultGalleryView: View {
     @State private var folderPendingDeletion: VaultFolderRecord?
     @State private var importMode: VaultImportMode = .copy
     @State private var isSelecting = false
-    @State private var selectedPhotoIDs: Set<UUID> = []
+    @State private var selection = VaultGallerySelection()
     @State private var isWorking = false
     @State private var message: String?
     @State private var importProgress: VaultImportProgress?
@@ -106,13 +106,25 @@ struct VaultGalleryView: View {
                                 VaultGeneralFileTileView(
                                     record: record,
                                     thumbnail: generalFileThumbnails[record.id],
-                                    isEnabled: !isSelecting,
-                                    openFileManager: { showingVaultFiles = true }
+                                    selectionState: isSelecting
+                                        ? selection.contains(.generalFile(record.id))
+                                        : nil,
+                                    openFileManager: { showingVaultFiles = true },
+                                    toggleSelection: {
+                                        selection.toggle(.generalFile(record.id))
+                                    }
                                 )
                                 .task(id: record.id) {
                                     await loadGeneralFileThumbnailIfNeeded(record)
                                 }
                                 .contextMenu {
+                                    Button {
+                                        isSelecting = true
+                                        selection.selectOnly(.generalFile(record.id))
+                                    } label: {
+                                        Label("Select", systemImage: "checkmark.circle")
+                                    }
+
                                     moveDestinationMenu(
                                         for: VaultPresentedContentReference(
                                             kind: .generalFile,
@@ -207,16 +219,16 @@ struct VaultGalleryView: View {
             }
         }
         .confirmationDialog(
-            "Delete Selected Photos?",
+            "Delete Selected Items?",
             isPresented: $showingDeleteSelectionConfirmation,
             titleVisibility: .visible
         ) {
             Button(deleteSelectionButtonTitle, role: .destructive) {
-                deleteSelectedPhotos()
+                deleteSelectedItems()
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("This permanently removes the selected encrypted copies from this vault. Photos outside KeyHollow are not affected.")
+            Text("This permanently removes the selected encrypted copies from this vault. Originals outside KeyHollow are not affected.")
         }
         .alert(folderEditorTitle, isPresented: $showingFolderEditor) {
             TextField("Folder name", text: $folderNameDraft)
@@ -284,10 +296,10 @@ struct VaultGalleryView: View {
 
                 Spacer()
 
-                Button(allPhotosSelected ? "Deselect All" : "Select All") {
+                Button(allVisibleItemsSelected ? "Deselect All" : "Select All") {
                     toggleSelectAll()
                 }
-                .disabled(visiblePhotoRecords.isEmpty || isWorking)
+                .disabled(visibleSelectableItems.isEmpty || isWorking)
             } else {
                 if activeFolderID == nil {
                     Button("Lock") { session.lock() }
@@ -305,7 +317,7 @@ struct VaultGalleryView: View {
                 Button("Select") {
                     isSelecting = true
                 }
-                .disabled(visiblePhotoRecords.isEmpty || isWorking)
+                .disabled(visibleSelectableItems.isEmpty || isWorking)
 
                 if activeFolderID == nil {
                     Button {
@@ -369,7 +381,7 @@ struct VaultGalleryView: View {
             }
         }
         .overlay {
-            Text(isSelecting ? "\(selectedPhotoIDs.count) Selected" : galleryTitle)
+            Text(isSelecting ? "\(selection.count) Selected" : galleryTitle)
                 .font(.headline)
                 .lineLimit(1)
                 .padding(.horizontal, 120)
@@ -386,7 +398,7 @@ struct VaultGalleryView: View {
             } label: {
                 Label("Save to Photos", systemImage: "square.and.arrow.down")
             }
-            .disabled(selectedPhotoIDs.isEmpty || isWorking)
+            .disabled(selectedPhotoRecords.isEmpty || isWorking)
 
             Spacer()
 
@@ -395,7 +407,7 @@ struct VaultGalleryView: View {
             } label: {
                 Label("Delete", systemImage: "trash")
             }
-            .disabled(selectedPhotoIDs.isEmpty || isWorking)
+            .disabled(selection.isEmpty || isWorking)
         }
         .padding(.horizontal)
         .padding(.vertical, 12)
@@ -503,7 +515,7 @@ struct VaultGalleryView: View {
     private func thumbnailCell(_ record: VaultPhotoRecord) -> some View {
         Button {
             if isSelecting {
-                toggleSelection(record.id)
+                selection.toggle(.photo(record.id))
             } else {
                 open(record)
             }
@@ -524,10 +536,10 @@ struct VaultGalleryView: View {
                         }
 
                         if isSelecting {
-                            Image(systemName: selectedPhotoIDs.contains(record.id) ? "checkmark.circle.fill" : "circle")
+                            Image(systemName: selection.contains(.photo(record.id)) ? "checkmark.circle.fill" : "circle")
                                 .font(.title2)
                                 .foregroundStyle(
-                                    selectedPhotoIDs.contains(record.id) ? Color.accentColor : Color.white,
+                                    selection.contains(.photo(record.id)) ? Color.accentColor : Color.white,
                                     Color.white
                                 )
                                 .padding(8)
@@ -554,7 +566,7 @@ struct VaultGalleryView: View {
 
             Button {
                 isSelecting = true
-                selectedPhotoIDs = [record.id]
+                selection.selectOnly(.photo(record.id))
             } label: {
                 Label("Select", systemImage: "checkmark.circle")
             }
@@ -575,8 +587,8 @@ struct VaultGalleryView: View {
     private func photoAccessibilityValue(_ record: VaultPhotoRecord) -> String {
         let metadata = "Encrypted photo, \(VaultPhotoPresentationMetadata.detail(for: record))"
         guard isSelecting else { return metadata }
-        let selection = selectedPhotoIDs.contains(record.id) ? "Selected" : "Not selected"
-        return "\(selection), \(metadata)"
+        let state = selection.contains(.photo(record.id)) ? "Selected" : "Not selected"
+        return "\(state), \(metadata)"
     }
 
     private func initializeStores() async {
@@ -630,6 +642,10 @@ struct VaultGalleryView: View {
             generalFileRecords = try await generalFileStore.loadManifest().files
             let validIDs = Set(generalFileRecords.map(\.id))
             generalFileThumbnails = generalFileThumbnails.filter { validIDs.contains($0.key) }
+            reconcileSelection()
+            if isSelecting && visibleSelectableItems.isEmpty {
+                leaveSelectionMode()
+            }
             await reconcilePresentationStore()
         } catch {
             message = "The encrypted file list could not be refreshed."
@@ -729,8 +745,8 @@ struct VaultGalleryView: View {
             do {
                 try await presentationStore.move(item, to: folderID)
                 folderManifest = try await presentationStore.loadManifest()
-                selectedPhotoIDs.remove(item.id)
-                if isSelecting && visiblePhotoRecords.isEmpty {
+                selection.remove(selectionItem(for: item))
+                if isSelecting && visibleSelectableItems.isEmpty {
                     leaveSelectionMode()
                 }
             } catch is CancellationError {
@@ -794,9 +810,9 @@ struct VaultGalleryView: View {
         records = manifest.photos
         let validIDs = Set(manifest.photos.map(\.id))
         thumbnails = thumbnails.filter { validIDs.contains($0.key) }
-        selectedPhotoIDs.formIntersection(Set(manifest.photos.map(\.id)))
+        reconcileSelection()
 
-        if records.isEmpty {
+        if visibleSelectableItems.isEmpty {
             leaveSelectionMode()
         }
         await reconcilePresentationStore()
@@ -1024,43 +1040,44 @@ struct VaultGalleryView: View {
         }
     }
 
-    private var selectedRecords: [VaultPhotoRecord] {
-        visiblePhotoRecords.filter { selectedPhotoIDs.contains($0.id) }
+    private var selectedPhotoRecords: [VaultPhotoRecord] {
+        visiblePhotoRecords.filter { selection.contains(.photo($0.id)) }
     }
 
-    private var allPhotosSelected: Bool {
-        !visiblePhotoRecords.isEmpty
-            && selectedPhotoIDs.count == visiblePhotoRecords.count
+    private var selectedGeneralFileRecords: [VaultGeneralFileRecord] {
+        visibleGeneralFileRecords.filter { selection.contains(.generalFile($0.id)) }
+    }
+
+    private var visibleSelectableItems: [VaultGallerySelection.Item] {
+        visibleGeneralFileRecords.map { .generalFile($0.id) }
+            + visiblePhotoRecords.map { .photo($0.id) }
+    }
+
+    private var allValidSelectableItems: [VaultGallerySelection.Item] {
+        generalFileRecords.map { .generalFile($0.id) }
+            + records.map { .photo($0.id) }
+    }
+
+    private var allVisibleItemsSelected: Bool {
+        selection.containsAll(visibleSelectableItems)
     }
 
     private var deleteSelectionButtonTitle: String {
-        let noun = selectedPhotoIDs.count == 1 ? "Photo" : "Photos"
-        return "Delete \(selectedPhotoIDs.count) \(noun) from Vault"
-    }
-
-    private func toggleSelection(_ id: UUID) {
-        if selectedPhotoIDs.contains(id) {
-            selectedPhotoIDs.remove(id)
-        } else {
-            selectedPhotoIDs.insert(id)
-        }
+        let noun = selection.count == 1 ? "Item" : "Items"
+        return "Delete \(selection.count) \(noun) from Vault"
     }
 
     private func toggleSelectAll() {
-        if allPhotosSelected {
-            selectedPhotoIDs.removeAll()
-        } else {
-            selectedPhotoIDs = Set(visiblePhotoRecords.map(\.id))
-        }
+        selection.toggleAll(visibleSelectableItems)
     }
 
     private func leaveSelectionMode() {
         isSelecting = false
-        selectedPhotoIDs.removeAll()
+        selection.clear()
     }
 
     private func saveSelectedPhotos() {
-        savePhotos(selectedRecords)
+        savePhotos(selectedPhotoRecords)
     }
 
     private func savePhotos(_ photos: [VaultPhotoRecord]) {
@@ -1116,26 +1133,81 @@ struct VaultGalleryView: View {
         }
     }
 
-    private func deleteSelectedPhotos() {
-        guard let store, !selectedRecords.isEmpty, !isWorking else { return }
-        let photos = selectedRecords
+    private func deleteSelectedItems() {
+        let photos = selectedPhotoRecords
+        let files = selectedGeneralFileRecords
+        guard !photos.isEmpty || !files.isEmpty, !isWorking else { return }
         isWorking = true
 
         session.startSensitiveTask { _ in
             defer { isWorking = false }
-            do {
-                try await store.delete(photos)
-                try await reload(using: store)
-                guard !Task.isCancelled else { return }
-                let noun = photos.count == 1 ? "photo" : "photos"
-                message = "Deleted \(photos.count) \(noun) from this vault."
-                leaveSelectionMode()
-            } catch is CancellationError {
-                return
-            } catch {
-                message = "The selected photos could not be deleted from the vault."
+            var deletedCount = 0
+            var failedCount = 0
+
+            if !photos.isEmpty {
+                if let store {
+                    do {
+                        try await store.delete(photos)
+                        deletedCount += photos.count
+                    } catch is CancellationError {
+                        return
+                    } catch {
+                        failedCount += photos.count
+                    }
+                } else {
+                    failedCount += photos.count
+                }
+            }
+
+            if !files.isEmpty {
+                if let generalFileStore {
+                    do {
+                        try await generalFileStore.delete(files)
+                        deletedCount += files.count
+                    } catch is CancellationError {
+                        return
+                    } catch {
+                        failedCount += files.count
+                    }
+                } else {
+                    failedCount += files.count
+                }
+            }
+
+            if let store {
+                try? await reload(using: store)
+            }
+            if let generalFileStore {
+                generalFileRecords = (try? await generalFileStore.loadManifest().files) ?? generalFileRecords
+            }
+            await reconcilePresentationStore()
+            guard !Task.isCancelled else { return }
+            leaveSelectionMode()
+
+            if deletedCount > 0, failedCount == 0 {
+                let noun = deletedCount == 1 ? "item" : "items"
+                message = "Deleted \(deletedCount) \(noun) from this vault."
+            } else if deletedCount > 0 {
+                message = "Deleted \(deletedCount) selected items. \(failedCount) items could not be removed."
+            } else {
+                message = "The selected items could not be deleted from the vault."
             }
         }
+    }
+
+    private func selectionItem(
+        for reference: VaultPresentedContentReference
+    ) -> VaultGallerySelection.Item {
+        switch reference.kind {
+        case .photo:
+            .photo(reference.id)
+        case .generalFile:
+            .generalFile(reference.id)
+        }
+    }
+
+    private func reconcileSelection() {
+        selection.reconcile(validItems: allValidSelectableItems)
     }
 }
 

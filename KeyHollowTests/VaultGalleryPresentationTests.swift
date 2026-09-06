@@ -6,6 +6,46 @@ import XCTest
 @testable import KeyHollowPhotoCore
 
 final class VaultGalleryPresentationTests: XCTestCase {
+    func testMixedGallerySelectionCountsPhotosAndGeneralFiles() {
+        let photoID = UUID()
+        let fileID = UUID()
+        let visible: [VaultGallerySelection.Item] = [
+            .generalFile(fileID),
+            .photo(photoID)
+        ]
+        var selection = VaultGallerySelection()
+
+        selection.toggleAll(visible)
+
+        XCTAssertEqual(selection.count, 2)
+        XCTAssertTrue(selection.contains(.photo(photoID)))
+        XCTAssertTrue(selection.contains(.generalFile(fileID)))
+        XCTAssertTrue(selection.containsAll(visible))
+
+        selection.toggleAll(visible)
+
+        XCTAssertTrue(selection.isEmpty)
+    }
+
+    func testMixedGallerySelectionReconcilesDeletedRecordsByKind() {
+        let sharedID = UUID()
+        let removedID = UUID()
+        var selection = VaultGallerySelection()
+        selection.toggle(.photo(sharedID))
+        selection.toggle(.generalFile(sharedID))
+        selection.toggle(.generalFile(removedID))
+
+        selection.reconcile(validItems: [
+            .photo(sharedID),
+            .generalFile(sharedID)
+        ])
+
+        XCTAssertEqual(selection.count, 2)
+        XCTAssertTrue(selection.contains(.photo(sharedID)))
+        XCTAssertTrue(selection.contains(.generalFile(sharedID)))
+        XCTAssertFalse(selection.contains(.generalFile(removedID)))
+    }
+
     func testPhotoRecordMetadataRemainsBackwardCompatible() throws {
         struct LegacyPhotoRecord: Encodable {
             let id: UUID

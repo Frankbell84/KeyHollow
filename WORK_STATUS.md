@@ -11,10 +11,11 @@ validated release commit `bc045e4`. Frank's device test confirms that image
 distortion is fixed and every visible item now has a filename-and-size footer.
 The same test exposed one integration defect: gallery selection still counts
 and selects photo-store records only, leaving general-file tiles disabled and
-excluded from `Select All`. The `Family` rollout is intentionally held while a
-unified mixed-content selection correction is developed on the isolated feature
-branch. Build 30 remains unchanged and testing in both existing groups. App
-Store review remains untouched.
+excluded from `Select All`. The isolated feature branch now contains a unified
+mixed-content selection correction and focused regression tests; remote Mac and
+security validation are the next gate. The `Family` rollout remains held. Build
+30 remains unchanged and testing in both existing groups. App Store review
+remains untouched.
 
 ## Completed work
 
@@ -225,19 +226,32 @@ Store review remains untouched.
   retention, and signing-material cleanup all passed.
 - Apple finished processing Build 31. It is `Ready to Submit` and already
   assigned to `KeyHollow Internal`; no App Store review state was changed.
+- Added one presentation-only selection model that represents both photo and
+  general-file records without owning plaintext or storage capabilities.
+- General-file tiles now participate in selection mode with the same tap,
+  checkmark, accessibility state, and long-press `Select` entry as photo tiles.
+- `Select All`, `Deselect All`, the header count, and Delete now cover every
+  visible photo and general file while each deletion remains routed to its own
+  protected store.
+- `Save to Photos` remains intentionally scoped to selected photo-store records;
+  it is disabled for file-only selections.
+- Added regression tests proving mixed selection/counting and kind-safe
+  reconciliation even when a photo and general file share the same UUID.
 
 ## Blockers
 
 - Build 31 must not be promoted to `Family`: device testing found that gallery
   selection excludes general-file records.
+- The correction has passed local architecture, release-hygiene, build-number
+  self-test, and diff-integrity gates; remote Mac compilation/tests and Swift
+  security analysis remain pending.
 
 ## Next action
 
-Replace the photo-only gallery selection state with one mixed-content selection
-model, make general-file tiles selectable, include every visible item in
-`Select All` and the displayed count, and make bulk deletion safely handle both
-protected stores. Add focused regression coverage and rerun all local and remote
-quality gates before proposing another TestFlight build.
+Publish the mixed-selection implementation checkpoint to draft PR #35 and run
+the full remote Mac build, complete regression suite, architecture gate, release
+hygiene, and Swift security analysis. Do not create or upload another TestFlight
+build until those gates pass and Frank separately approves delivery.
 
 ## Frank's decision required
 
