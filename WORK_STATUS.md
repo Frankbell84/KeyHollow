@@ -1,14 +1,32 @@
 # KeyHollow Work Status
 
-Updated: 2026-09-05
-Branch: `chore/phase-four-preflight`
-Pull request: [#34](https://github.com/Frankbell84/KeyHollow/pull/34) (draft)
+Updated: 2026-09-06
+Branch: `feature/folder-presentation-addon`
+Pull request: [#35](https://github.com/Frankbell84/KeyHollow/pull/35) (draft)
 
 ## Current task
 
-Preserve the completed, warning-free pre-Phase 4 cleanup as the clean baseline
-pending explicit merge approval. App Store review and TestFlight remain
-untouched.
+Build 31 was signed, processed, and delivered to `KeyHollow Internal` from exact
+validated release commit `bc045e4`. Frank's device test confirms that image
+distortion is fixed and every visible item now has a filename-and-size footer.
+The same test exposed one integration defect: gallery selection still counts
+and selects photo-store records only, leaving general-file tiles disabled and
+excluded from `Select All`. The isolated feature branch now contains a unified
+mixed-content selection correction and focused regression tests. The exact
+implementation checkpoint `1fd4338` passed the complete remote Mac, regression,
+architecture, release-hygiene, and Swift security gates. Frank approved a
+guarded Build 32 TestFlight upload. The app and thumbnail extension now share
+Build 32 and the upload workflow is restricted to the exact new delivery branch.
+The `Family` rollout remains held. Build 30 remains unchanged and testing in
+both existing groups. App Store review remains untouched.
+
+The immutable Build 32 release source is now fully validated at exact commit
+`2eaf852`. The complete Mac build/regression job and Swift CodeQL gate passed,
+and both evidence artifacts have recorded SHA-256 digests. Guarded upload run
+#42 then signed and uploaded Build 32 successfully from that exact commit. Apple
+has completed processing: Build 32 is `Ready to Submit` and assigned only to
+`KeyHollow Internal`. The corrected mixed-selection behavior is ready for
+Frank's physical-device confirmation.
 
 ## Completed work
 
@@ -31,6 +49,36 @@ untouched.
   exact Phase 4 entry requirements.
 - Preserved the deferred presentation requirement: images imported through
   Files receive encrypted thumbnail parity during the folder/presentation phase.
+- Merged the preflight cleanup through PR #34 and published the annotated
+  `checkpoint/pre-phase-4-clean-baseline` rollback tag at `69154ff`.
+- Created `feature/folder-presentation-addon` directly from that clean tagged
+  checkpoint.
+- Added the first independently compiled Phase 4 module:
+  `KeyHollowFolderPresentationAddOn`.
+- Defined neutral photo/general-file references, folder membership records, and
+  scoped cryptographic access without importing either protected content store.
+- Added an encrypted presentation store whose folder deletion and reconciliation
+  operations cannot delete protected photos or general files.
+- Added authenticated local thumbnail persistence as opaque bytes so image
+  generation and decoding remain outside the module.
+- Added folder lifecycle, input validation, encrypted-at-rest thumbnail,
+  reconciliation, and vault-access mismatch tests.
+- Opened draft PR #35 so all remote Mac and security gates run before UI
+  composition begins.
+- Added the visible one-level folder gallery milestone locally: encrypted
+  folder creation/rename, root and folder navigation, item counts, and folder
+  tiles live entirely in app presentation and the independent add-on.
+- Added move destinations for both protected photo references and encrypted
+  general-file references. Moving never decrypts, copies, or changes protected
+  content.
+- Folder deletion explicitly returns membership references to the vault root;
+  it cannot delete photos or files.
+- Folder-scoped photo selection preserves the established save/delete behavior
+  without selecting hidden photos from another folder.
+- Added reconciliation after protected-store refreshes so stale presentation
+  membership and thumbnail metadata are removed without touching content.
+- Added regression coverage proving moves between folders and back to the root
+  maintain at most one membership per item.
 
 ## Test and build status
 
@@ -38,8 +86,8 @@ untouched.
 - Release-hygiene gate: passed locally.
 - TestFlight build-number guard self-test: passed locally.
 - Whitespace and obsolete-status audit: passed locally.
-- Final remote CI run [#215](https://github.com/Frankbell84/KeyHollow/actions/runs/33985539241)
-  at `cce693e`: passed.
+- Final merged-baseline CI run [#216](https://github.com/Frankbell84/KeyHollow/actions/runs/33986912069)
+  at `7fb5487`: passed.
 - Mac simulator build and complete regression/security suite: passed in 6m49s.
 - Both first-party add-ons compiled under strict concurrency with
   warnings-as-errors; no add-on diagnostics remained.
@@ -47,22 +95,228 @@ untouched.
   multiple-destination warning.
 - Artifact uploads through the pinned Node 24 action: passed; simulator and
   security-test artifacts were produced with recorded SHA-256 digests.
-- Swift CodeQL: passed in 24m20s with zero unresolved AST nodes and no failed
-  security gate.
+- Swift CodeQL: passed with no failed security gate.
+- PR #34 merged into `main` as `69154ff`; all required checks were green.
+- Phase 4 inherits that green baseline.
+- Phase 4 architecture boundary gate: passed locally.
+- Phase 4 release-hygiene gate: passed locally.
+- Phase 4 whitespace audit: passed locally.
+- Thumbnail-composition architecture and release-hygiene gates: passed locally.
+- Thumbnail-composition build-number guard self-test: passed locally.
+- Thumbnail-composition diff integrity check: passed locally.
+- Remote Phase 4 run [#222](https://github.com/Frankbell84/KeyHollow/actions/runs/33992220446)
+  rejected `b55e40a` at compile time because the optional general-file content
+  type was not explicitly unwrapped before creating `UTType`. The architecture
+  and hygiene steps passed; tests did not run after the compiler stopped.
+- The thumbnail path now safely requires a non-nil content type before image
+  preview work begins. Files without a declared image type remain accessible
+  through their normal generic tile and are never guessed from untrusted bytes.
+- Corrected Phase 4 run [#223](https://github.com/Frankbell84/KeyHollow/actions/runs/33993203704)
+  at `55366a2`: passed in 23m31s.
+- Mac simulator build and complete regression/security suite: passed in 6m34s.
+- Swift CodeQL: passed in 22m46s with no failed security gate.
+- Security-test and simulator artifacts were produced with recorded SHA-256
+  digests.
+- Prepared and pushed the exact reviewed release commit `1cc359d` (`Prepare
+  guarded Phase 4 Build 30`) on `feature/folder-presentation-addon`.
+- Created `delivery/folder-presentation-addon` at that exact commit; the
+  delivery branch contains no unreviewed source changes.
+- Frank requested that this update also be made available to the `Family`
+  TestFlight group for broader feedback.
+- Frank confirmed Build 30's file-image thumbnails render, then identified that
+  photo and file tiles still use visibly different sizing and metadata rules.
+- Added one shared square gallery-tile surface so photo and general-file tiles
+  use the same media region, filename treatment, size/detail line, and footer.
+- Corrected file-image thumbnail generation to respect image orientation before
+  calculating dimensions, preventing portrait and rotated images from being
+  stretched.
+- Added optional photo display-name and stored-size metadata. New imports retain
+  this information; existing manifests and older `.khvault` archives remain
+  compatible because missing metadata decodes cleanly.
+- Existing photo records display their import date when their historical stored
+  size is unavailable; no protected photo is decrypted merely to populate UI.
+- Added regression coverage for legacy photo-record decoding, normalized stored
+  metadata, and orientation-preserving thumbnail dimensions.
+- Verified in App Store Connect that Build 30 is `Complete` / `Ready to Submit`
+  and remains assigned to `KeyHollow Internal`.
+- App Store Connect was checked directly after approval: Build 29 is the latest
+  completed production upload, so Build 30 is the next unused number.
+- Updated both the app and embedded thumbnail extension to Build 30.
+- Replaced the stale prior-feature workflow exception with the exact guarded
+  `delivery/folder-presentation-addon` branch; ordinary feature branches remain
+  unable to upload production builds.
+- Definitive Phase 4 run [#219](https://github.com/Frankbell84/KeyHollow/actions/runs/33989008013)
+  at `802252d`: passed in 28m43s.
+- Mac simulator build and complete regression/security suite: passed in 7m37s.
+- Swift CodeQL: passed in 27m04s with no failed security gate.
+- Simulator and test artifacts were produced with recorded SHA-256 digests.
+- Authenticated general-file preview read, scoped folder-presentation access,
+  presentation-aware vault cleanup, and the gallery thumbnail view seam were
+  checkpointed and pushed as `57ed011`.
+- Completed root-gallery composition for images imported through Files: the app
+  first loads an authenticated encrypted presentation thumbnail, otherwise it
+  decrypts only the selected manifest record, creates a bounded 512-pixel JPEG,
+  and stores that preview in the independent encrypted presentation add-on.
+- Added cancellation checks to authenticated general-file reads and a strict
+  2 MiB presentation-thumbnail ceiling with regression coverage.
+- Ordered presentation-store initialization before file records appear so a
+  fast first render cannot skip thumbnail generation.
+- Visible-folder architecture boundary gate: passed locally.
+- Visible-folder release-hygiene gate: passed locally.
+- Visible-folder build-number guard self-test: passed locally.
+- Visible-folder diff integrity check: passed locally.
+- Visible-folder CI run [#225](https://github.com/Frankbell84/KeyHollow/actions/runs/33994826801)
+  at `0739769`: passed in 23m14s.
+- Mac simulator build and complete regression/security suite: passed in 5m31s.
+- Swift CodeQL: passed in 22m33s with no failed security gate.
+- Security-test and simulator artifacts were produced with recorded SHA-256
+  digests.
+- Final Build 30 source-validation run
+  [#227](https://github.com/Frankbell84/KeyHollow/actions/runs/33997419767)
+  at `1cc359d`: passed in 19m53s.
+- Mac simulator build and complete regression/security suite: passed in 9m02s.
+- Swift CodeQL: passed in 19m08s with no failed security gate.
+- Simulator artifact `9978590186` was recorded with SHA-256 digest
+  `2900d9ab5f7e5efa6c357c6a73fcbd90636d1c27916eddfb8f55e6b38c72bcfc`.
+- Security-test artifact `9978590860` was recorded with SHA-256 digest
+  `133bd4e54a73936dbefe39889f5bcd2a136e008270830dbfd46b22a444da4916`.
+- Guarded TestFlight upload run
+  [#40](https://github.com/Frankbell84/KeyHollow/actions/runs/33998469992)
+  completed successfully in 2m16s from `delivery/folder-presentation-addon`.
+- Release hygiene, production identity, build-number verification, project
+  generation, cloud signing, archive, archive/module hygiene, signed IPA
+  export, Apple upload, artifact retention, and signing-material cleanup all
+  passed.
+- The only upload-run notice was a hosted-runner Homebrew trust warning for an
+  existing `aws/tap`; it did not affect the app, signing, archive, or upload.
+- Gallery-parity architecture boundary gate: passed locally.
+- Gallery-parity release-hygiene gate: passed locally.
+- Gallery-parity TestFlight build-number guard self-test: passed locally.
+- Gallery-parity whitespace/diff integrity check: passed locally.
+- First gallery-parity CI run
+  [#230](https://github.com/Frankbell84/KeyHollow/actions/runs/33999150470)
+  at `4469e19`: the app and simulator build passed, 105 of 106 unit tests
+  passed, and all launch tests passed. The new orientation test alone failed
+  because its synthetic image inherited the simulator's 3x screen scale while
+  asserting 1x dimensions.
+- The test fixture now fixes its renderer to an explicit 1x scale so it measures
+  orientation behavior deterministically across simulator devices. The
+  production thumbnail implementation was not weakened or changed.
+- Corrected gallery-parity CI run
+  [#231](https://github.com/Frankbell84/KeyHollow/actions/runs/34000437184)
+  at `1d4fb12`: passed.
+- Mac simulator build, all 106 unit tests, launch tests, release hygiene,
+  architecture enforcement, build-number guard, and packaged-thumbnail checks:
+  passed in 8m16s.
+- Swift CodeQL: passed in 17m26s with no failed security gate.
+- Security-test artifact `9979413820` was recorded with SHA-256 digest
+  `d67efc8fb12bf710184edcf98994a828d3bdc45a11bbd48c1701435043fbc954`.
+- The exact validated correction commit is `1d4fb12`; it has not been uploaded
+  to TestFlight and is not present in Build 30.
+- Frank explicitly approved the separate Build 31 TestFlight delivery after the
+  distinction between Build 30 and the corrected source candidate was clarified.
+- Updated the app and embedded thumbnail extension together to Build 31 and
+  limited the production upload workflow to the new exact delivery branch,
+  `delivery/gallery-parity-correction`.
+- Exact Build 31 release-source run
+  [#233](https://github.com/Frankbell84/KeyHollow/actions/runs/34001565564)
+  at `bc045e4`: passed.
+- Mac simulator build, all 106 unit tests, launch tests, release hygiene,
+  architecture enforcement, build-number guard, and packaged-thumbnail checks:
+  passed in 9m28s.
+- Swift CodeQL: passed with no failed security gate.
+- Simulator artifact `9979760402` was recorded with SHA-256 digest
+  `2a382575cdc4bca6fe7031373a2fdcab9e616e478bffa84034accff83bc31d38`.
+- Security-test artifact `9979762432` was recorded with SHA-256 digest
+  `417493a49b58c9cd767e770327c6228ecf340ea7faef8f1043d5dd77bc63aab6`.
+- Guarded TestFlight upload run
+  [#41](https://github.com/Frankbell84/KeyHollow/actions/runs/34002768326)
+  completed successfully in 2m15s from exact release commit `bc045e4`.
+- Release hygiene, production identity, unused Build 31 verification, cloud
+  signing, archive/module hygiene, signed IPA export, Apple upload, artifact
+  retention, and signing-material cleanup all passed.
+- Apple finished processing Build 31. It is `Ready to Submit` and already
+  assigned to `KeyHollow Internal`; no App Store review state was changed.
+- Added one presentation-only selection model that represents both photo and
+  general-file records without owning plaintext or storage capabilities.
+- General-file tiles now participate in selection mode with the same tap,
+  checkmark, accessibility state, and long-press `Select` entry as photo tiles.
+- `Select All`, `Deselect All`, the header count, and Delete now cover every
+  visible photo and general file while each deletion remains routed to its own
+  protected store.
+- `Save to Photos` remains intentionally scoped to selected photo-store records;
+  it is disabled for file-only selections.
+- Added regression tests proving mixed selection/counting and kind-safe
+  reconciliation even when a photo and general file share the same UUID.
+- Mixed-selection CI run
+  [#237](https://github.com/Frankbell84/KeyHollow/actions/runs/34003421923)
+  at exact commit `1fd4338`: passed in 23m10s.
+- Mac simulator build, complete unit and launch suite, release hygiene,
+  architecture enforcement, build-number guard, and packaged-thumbnail checks:
+  passed in 6m47s.
+- Swift CodeQL: passed in 22m25s with no failed security gate.
+- Simulator artifact `9980259722` was recorded with SHA-256 digest
+  `3401edb24ad7a332bdb1011581f4dbaa81fdf02f5f4282789b85f520f066e7ef`.
+- Security-test artifact `9980261496` was recorded with SHA-256 digest
+  `dcd9c205ed94a952149615a0fb8e8c16d3715b8fa5de152bc80b61cbcb544dab`.
+- Frank explicitly approved the next guarded TestFlight delivery as Build 32.
+- Updated the app and embedded thumbnail extension together to Build 32 and
+  limited production upload permission to the exact immutable branch
+  `delivery/mixed-gallery-selection`.
+- Created `delivery/mixed-gallery-selection` at exact release commit
+  `2eaf852d582ac84796c7750aa1fc632cb10445a5`; it contains no later status-only
+  changes.
+- Exact Build 32 release-source run
+  [#239](https://github.com/Frankbell84/KeyHollow/actions/runs/34029515379)
+  at `2eaf852`: passed.
+- Mac simulator build, complete unit and launch suite, release hygiene,
+  architecture enforcement, build-number guard, and packaged-thumbnail checks:
+  passed in 6m55s.
+- Swift CodeQL: passed in 29m08s with no failed security gate.
+- Simulator artifact `9988224216` was recorded with SHA-256 digest
+  `d50c8402d3d74248c7b2957f70649c73bb5d46e404999a56141816c6243f294d`.
+- Security-test artifact `9988225289` was recorded with SHA-256 digest
+  `17690a706cf004a9eb97040fa055fe642ad5ea3d69191aad2b776a72c935319e`.
+- Guarded TestFlight upload run
+  [#42](https://github.com/Frankbell84/KeyHollow/actions/runs/34031034352)
+  completed successfully in 2m31s from exact release commit `2eaf852` on
+  `delivery/mixed-gallery-selection`.
+- Release hygiene, production identity, unused Build 32 verification, cloud
+  signing, archive/module hygiene, signed IPA export, Apple upload, artifact
+  retention, and signing-material cleanup all passed.
+- Signed IPA artifact `9988636290` was recorded with SHA-256 digest
+  `fda6e071566b5fd42386b36d4b6df206bd6335d830f8f06d727daebb582fb931`.
+- App Store Connect verified Build 32 `Complete` in Build Uploads and
+  `Ready to Submit` in Version 1.0, uploaded Sep 6, 2026 at 7:46 AM.
+- Build 32 is assigned only to `KeyHollow Internal`. `Family` remains on Build
+  30 and no App Store review state was changed.
 
 ## Blockers
 
-- None.
+- No engineering or validation blocker remains for the mixed-selection
+  correction.
+- Build 31 must not be promoted to `Family`; it does not contain this correction.
+- No engineering, validation, upload, processing, or group-assignment blocker
+  remains for the Build 32 Internal device test.
 
 ## Next action
 
-Commit and push this final evidence record. Keep PR #34 in draft until Frank
-explicitly approves merging the clean baseline into `main`. After merge, tag
-the clean checkpoint and open Phase 4 on a fresh isolated branch.
+Install Build 32 from `KeyHollow Internal` and verify individual general-file
+selection, mixed `Select All` count, `Deselect All`, and deletion using only
+disposable test items. Do not promote it to `Family` until that corrected
+selection behavior passes on-device.
 
 ## Frank's decision required
 
-- Approve or defer merging draft PR #34 into `main`.
-- A new TestFlight build is not required for this behavior-neutral cleanup.
-- Any future TestFlight delivery or App Store review change still requires
-  Frank's explicit approval.
+- Frank explicitly approved this Phase 4 TestFlight delivery and requested the
+  `Family` group receive Build 30.
+- Build 30 is now `Testing` in both `KeyHollow Internal` and `Family`, with
+  automatic tester notification enabled.
+- Frank explicitly approved the separate Build 31 TestFlight upload.
+- Build 31 is processed and assigned only to `KeyHollow Internal`; Frank's
+  device feedback requires a selection correction before any `Family` rollout.
+- Frank explicitly approved the guarded Build 32 TestFlight upload for device
+  verification.
+- The later merge decision remains pending corrected device evidence.
+- Any App Store review change remains out of scope without separate explicit
+  approval.

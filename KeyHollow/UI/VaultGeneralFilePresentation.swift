@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import UIKit
 import UniformTypeIdentifiers
 import KeyHollowGeneralFileSupportAddOn
 
@@ -56,8 +57,10 @@ enum GeneralFileImportPresentation {
 
 struct VaultGeneralFileTileView: View {
     let record: VaultGeneralFileRecord
-    let isEnabled: Bool
+    let thumbnail: UIImage?
+    let selectionState: Bool?
     let openFileManager: () -> Void
+    let toggleSelection: () -> Void
 
     private var formattedSize: String {
         ByteCountFormatter.string(
@@ -67,32 +70,41 @@ struct VaultGeneralFileTileView: View {
     }
 
     var body: some View {
-        Button { openFileManager() } label: {
+        Button {
+            if selectionState == nil {
+                openFileManager()
+            } else {
+                toggleSelection()
+            }
+        } label: {
             GeometryReader { proxy in
-                ZStack(alignment: .bottomLeading) {
-                    Rectangle()
-                        .fill(.secondary.opacity(0.12))
-
-                    VStack(spacing: 0) {
-                        Image(systemName: GeneralFilePresentation.iconName(
-                            for: record.contentTypeIdentifier
-                        ))
-                        .font(.system(size: 38, weight: .regular))
-                        .foregroundStyle(.tint)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(record.displayName)
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(.primary)
-                                .lineLimit(2)
-                            Text(formattedSize)
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
+                VaultGalleryTileSurface(
+                    title: record.displayName,
+                    detail: formattedSize
+                ) {
+                    ZStack(alignment: .topTrailing) {
+                        if let thumbnail {
+                            Image(uiImage: thumbnail)
+                                .resizable()
+                                .scaledToFill()
+                        } else {
+                            Image(systemName: GeneralFilePresentation.iconName(
+                                for: record.contentTypeIdentifier
+                            ))
+                            .font(.system(size: 38, weight: .regular))
+                            .foregroundStyle(.tint)
                         }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(8)
-                        .background(.ultraThinMaterial)
+
+                        if let isSelected = selectionState {
+                            Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                                .font(.title2)
+                                .foregroundStyle(
+                                    isSelected ? Color.accentColor : Color.white,
+                                    Color.white
+                                )
+                                .padding(8)
+                                .shadow(radius: 2)
+                        }
                     }
                 }
                 .frame(width: proxy.size.width, height: proxy.size.height)
@@ -101,14 +113,18 @@ struct VaultGeneralFileTileView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .disabled(!isEnabled)
-        .opacity(isEnabled ? 1 : 0.45)
         .accessibilityLabel(record.displayName)
-        .accessibilityValue("Encrypted file, \(formattedSize)")
+        .accessibilityValue(accessibilityValue)
         .accessibilityHint(
-            isEnabled
+            selectionState == nil
                 ? "Opens encrypted vault files"
-                : "Exit photo selection mode to manage this file"
+                : "Toggles selection for this file"
         )
+    }
+
+    private var accessibilityValue: String {
+        let metadata = "Encrypted file, \(formattedSize)"
+        guard let isSelected = selectionState else { return metadata }
+        return "\(isSelected ? "Selected" : "Not selected"), \(metadata)"
     }
 }
