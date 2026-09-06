@@ -149,6 +149,20 @@ targets:
         DEFINES_MODULE: YES
         SKIP_INSTALL: YES
 
+  KeyHollowEncryptedVideoAddOn:
+    type: library.static
+    platform: iOS
+    sources:
+      - path: KeyHollow/AddOns/EncryptedVideo
+    settings:
+      base:
+        PRODUCT_NAME: KeyHollowEncryptedVideoAddOn
+        SWIFT_VERSION: 5.0
+        SWIFT_STRICT_CONCURRENCY: complete
+        SWIFT_TREAT_WARNINGS_AS_ERRORS: YES
+        DEFINES_MODULE: YES
+        SKIP_INSTALL: YES
+
   KeyHollowSecurePreviewAddOn:
     type: library.static
     platform: iOS
@@ -205,6 +219,7 @@ targets:
         excludes:
           - AddOns/FileRecognition
           - AddOns/GeneralFileSupport
+          - AddOns/EncryptedVideo
           - AddOns/FolderPresentation
           - AddOns/SecurePreview
           - UI/VaultGalleryGridView.swift
@@ -232,6 +247,7 @@ targets:
         embed: true
       - target: KeyHollowFileRecognitionAddOn
       - target: KeyHollowGeneralFileSupportAddOn
+      - target: KeyHollowEncryptedVideoAddOn
       - target: KeyHollowFolderPresentationAddOn
       - target: KeyHollowGalleryUI
       - target: KeyHollowSecurePreviewAddOn
@@ -294,6 +310,8 @@ targets:
         link: false
       - target: KeyHollowGeneralFileSupportAddOn
         link: false
+      - target: KeyHollowEncryptedVideoAddOn
+        link: false
       - target: KeyHollowFolderPresentationAddOn
         link: false
       - target: KeyHollowGalleryUI
@@ -335,6 +353,7 @@ schemes:
         KeyHollowVaultThumbnailExtension: all
         KeyHollowFileRecognitionAddOn: all
         KeyHollowGeneralFileSupportAddOn: all
+        KeyHollowEncryptedVideoAddOn: all
         KeyHollowFolderPresentationAddOn: all
         KeyHollowGalleryUI: all
         KeyHollowSecurePreviewAddOn: all

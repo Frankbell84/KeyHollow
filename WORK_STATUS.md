@@ -6,16 +6,37 @@ Parent baseline: `3dc0f4a` (hardened Build 35 source on `main`)
 
 ## Current task
 
-Pre-implementation hardening audit for the next unfinished roadmap add-on.
-Roadmap item #2, Backup Verification Center, remains intentionally deferred;
-item #3, General File Support, is complete and hardened in Build 35. The next
-unfinished item is #4, Encrypted Video Support. No #4 application code has been
-written yet. The isolated feature branch is exact with hardened `main`, and its
-first implementation step must define and enforce narrow video capability,
-temporary-plaintext lifetime, playback, thumbnail, cancellation, and lock
-boundaries. App Store review state remains out of scope.
+Roadmap add-on #4, Encrypted Video Support. Its first isolated milestone now
+defines the dependency-free video policy and validated local-file playback
+handoff, pins the module boundary in CI, and adds contract tests. No player,
+thumbnail decoder, storage migration, or gallery behavior has been added yet.
+The milestone must pass the exact-source Mac build/test and Swift CodeQL gates
+before playback integration begins. App Store review state remains out of
+scope.
 
 ## Completed work
+
+- Added the independently compiled, dependency-free
+  `KeyHollowEncryptedVideoAddOn` target with strict concurrency and Swift
+  warnings treated as errors.
+- Added immutable, source-neutral video metadata, conservative QuickTime/MPEG-4
+  routing, a size ceiling pinned to General File Support's existing 100 MB
+  ingress limit, and a local-file-only prepared-playback handoff.
+- Made recognized non-video metadata authoritative over a misleading video
+  filename extension, keeping arbitrary renamed files out of the media decoder.
+- Kept vault keys, sessions, encrypted stores, general-file records, transfer
+  formats, disk management, and networking outside the new module.
+- Extended architecture enforcement to pin exact source ownership, require a
+  dependency-free target, enforce a narrow import allowlist, and reject every
+  protected capability or direct file-reading primitive.
+- Added contract tests for declared movie types, safe extension fallback,
+  metadata/extension mismatch, unsupported types, empty/oversized payloads,
+  ingress-limit parity, and local-file-only playback preparation.
+- Documented ownership, compatibility, plaintext-lifetime responsibility, and
+  the full security/regression matrix in `docs/ENCRYPTED_VIDEO_SUPPORT.md`.
+- Post-milestone local release hygiene, architecture enforcement, build-number
+  guard self-test, and whitespace checks passed. Windows cannot compile the iOS
+  target; exact-source Mac CI remains required before integration.
 
 - Reconciled the roadmap numbering before implementation: the historical
   folder/presentation "Phase 4" is complete, while roadmap add-on #4 is the

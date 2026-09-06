@@ -21,6 +21,7 @@ PRESENTATION_FILES = {
 }
 PRESENTATION_PREFIXES = (
     "KeyHollow/UI/",
+    "KeyHollow/AddOns/EncryptedVideo/",
     "KeyHollow/AddOns/SecurePreview/",
 )
 
@@ -81,6 +82,7 @@ GALLERY_UI_MODULE_FILES = {
 FILE_RECOGNITION_PREFIX = "KeyHollow/AddOns/FileRecognition/"
 GENERAL_FILE_SUPPORT_PREFIX = "KeyHollow/AddOns/GeneralFileSupport/"
 SECURE_PREVIEW_PREFIX = "KeyHollow/AddOns/SecurePreview/"
+ENCRYPTED_VIDEO_PREFIX = "KeyHollow/AddOns/EncryptedVideo/"
 SECURITY_SCOPED_INGRESS_PREFIXES = (
     FILE_RECOGNITION_PREFIX,
     GENERAL_FILE_SUPPORT_PREFIX,
@@ -450,6 +452,34 @@ def main() -> int:
                 "project.yml: KeyHollowSecurePreviewAddOn must remain dependency-free"
             )
 
+    encrypted_video_target = target_body(project, "KeyHollowEncryptedVideoAddOn")
+    if encrypted_video_target is None:
+        violations.append("project.yml: KeyHollowEncryptedVideoAddOn target is missing")
+    else:
+        expected_sources = {"KeyHollow/AddOns/EncryptedVideo"}
+        declared_sources = set(
+            re.findall(r"(?m)^      - path: ([^\r\n]+)$", encrypted_video_target)
+        )
+        if declared_sources != expected_sources:
+            violations.append(
+                "project.yml: KeyHollowEncryptedVideoAddOn source ownership changed; "
+                f"expected {sorted(expected_sources)}, got {sorted(declared_sources)}"
+            )
+        for marker in (
+            "type: library.static",
+            "SWIFT_TREAT_WARNINGS_AS_ERRORS: YES",
+            "DEFINES_MODULE: YES",
+            "SKIP_INSTALL: YES",
+        ):
+            if marker not in encrypted_video_target:
+                violations.append(
+                    f"project.yml: KeyHollowEncryptedVideoAddOn is missing {marker!r}"
+                )
+        if re.search(r"(?m)^    dependencies:\s*$", encrypted_video_target):
+            violations.append(
+                "project.yml: KeyHollowEncryptedVideoAddOn must remain dependency-free"
+            )
+
     gallery_grid_source = (
         SOURCE_ROOT / "UI" / "VaultGalleryGridView.swift"
     ).read_text(encoding="utf-8")
@@ -636,6 +666,34 @@ def main() -> int:
                 if forbidden_symbol in source:
                     violations.append(
                         f"{path}: secure-preview add-on directly references protected "
+                        f"capability {forbidden_symbol}"
+                    )
+
+        if path.startswith(ENCRYPTED_VIDEO_PREFIX):
+            unexpected = imported - {"Foundation", "UniformTypeIdentifiers"}
+            if unexpected:
+                violations.append(
+                    f"{path}: encrypted-video add-on imports outside its allowlist: "
+                    f"{', '.join(sorted(unexpected))}"
+                )
+            for forbidden_symbol in (
+                "VaultSession",
+                "VaultUnlockService",
+                "VaultPhotoRecord",
+                "VaultPhotoStore",
+                "VaultGeneralFileRecord",
+                "VaultGeneralFileStore",
+                "VaultFolderRecord",
+                "VaultFolderPresentationStore",
+                "EncryptedVaultTransferCoordinator",
+                "SymmetricKey",
+                "FileManager",
+                "URLSession",
+                "Data(contentsOf:",
+            ):
+                if forbidden_symbol in source:
+                    violations.append(
+                        f"{path}: encrypted-video add-on directly references protected "
                         f"capability {forbidden_symbol}"
                     )
 
