@@ -8,13 +8,27 @@ Parent baseline: `3dc0f4a` (hardened Build 35 source on `main`)
 
 Roadmap add-on #4, Encrypted Video Support. Its first isolated milestone now
 defines the dependency-free video policy and validated local-file playback
-handoff, pins the module boundary in CI, and adds contract tests. No player,
-thumbnail decoder, storage migration, or gallery behavior has been added yet.
-The milestone must pass the exact-source Mac build/test and Swift CodeQL gates
-before playback integration begins. App Store review state remains out of
-scope.
+handoff, pins the module boundary in CI, and adds contract tests. Exact-source
+Mac build/test and Swift CodeQL gates have passed. The next isolated milestone
+adds app-composed playback with deterministic protected-temporary-file cleanup;
+thumbnail decoding, storage migration, transfer changes, and App Store review
+state remain out of scope.
 
 ## Completed work
+
+- Exact encrypted-video boundary run
+  [#267](https://github.com/Frankbell84/KeyHollow/actions/runs/34066713733)
+  passed at commit `1c02979f989d296eaadc52becec6b45dcdf29ff1`.
+- Mac simulator compilation, packaged-thumbnail verification, the complete
+  unit/launch/security suite, release hygiene, architecture enforcement, and
+  the build-number guard all passed in the `build-and-test` job.
+- Swift CodeQL completed successfully with no failed security gate.
+- Security-test artifact `9999244574` was retained with SHA-256 digest
+  `2251eaa0a48b71fde7982e789378a972b970dd515ad1b6d57bd2a8fef7e38a75`.
+- Simulator artifact `9999243445` was retained with SHA-256 digest
+  `9ba9c3a7f7d12069d0a67a6dee0aa0ae6ef0b5ebf975f9e00ed0e3e3b33ebf04`.
+- The module boundary is therefore cleared for the separately gated playback
+  integration milestone; no application behavior changed in this checkpoint.
 
 - Added the independently compiled, dependency-free
   `KeyHollowEncryptedVideoAddOn` target with strict concurrency and Swift
@@ -616,18 +630,31 @@ scope.
   limited production upload permission to the exact immutable branch
   `delivery/mixed-gallery-selection`.
 
+## Test / build status
+
+- Exact boundary commit `1c02979f989d296eaadc52becec6b45dcdf29ff1`:
+  Mac build/tests and Swift CodeQL passed.
+- Local release hygiene, architecture enforcement, build-number guard self-test,
+  and whitespace checks: passed.
+- Playback integration: not yet implemented or submitted to CI.
+
 ## Blockers
 
-- No known engineering blocker. Family rollout is complete; final branch
-  validation, merge, and post-merge hardening are approved and in progress.
+- No known engineering blocker.
 
 ## Next action
 
-Require this exact delivery head to pass all mandatory checks, merge PR #41,
-then validate and checkpoint the resulting `main` commit. Do not alter App Store
-review state.
+Add one module-owned native video playback surface and one app-owned lifecycle
+coordinator, route only validated video records into it, prove protected
+temporary plaintext deletion on failure/dismissal/session teardown, then run
+the same local and exact-source Mac CI gates. Do not alter App Store review
+state.
 
 ## Frank's decision required
+
+- No decision is required for the isolated playback implementation and its
+  automated validation. Merge, TestFlight delivery, tester assignment, and any
+  App Store review change remain later explicit decisions.
 
 - Frank explicitly approved creating draft Build 35 release PR #41. That review
   is open and its exact release-source CI is green.
