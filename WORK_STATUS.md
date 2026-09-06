@@ -6,14 +6,15 @@ Parent release source: `2eaf852` (Build 32)
 
 ## Current task
 
-The isolated unified-folder correction is implemented on
-`fix/unified-folder-gallery`. Photos and general files now enter one
-source-neutral presentation collection and one fixed-geometry tile. The
-correction is ready for the remote Mac build, full regression suite, security
-scan, and then an Internal-only device gate. Secure storage, cryptography,
-import/export formats, folder membership, and protected content operations
-remain frozen. `Family` remains on Build 30 and App Store review remains
-untouched.
+The isolated unified-folder correction is implemented and remotely validated
+on `fix/unified-folder-gallery`. Photos and general files now enter one
+source-neutral presentation collection and one fixed-geometry tile. The Mac
+build, complete regression and launch suite, packaging checks, and Swift CodeQL
+all passed for exact code commit `c88fbf7`. The next gate is a separately
+approved Internal-only TestFlight build and physical-device verification.
+Secure storage, cryptography, import/export formats, folder membership, and
+protected content operations remain frozen. `Family` remains on Build 30 and
+App Store review remains untouched.
 
 ## Completed work
 
@@ -83,6 +84,10 @@ untouched.
   cannot silently return.
 - Committed the complete correction as `c88fbf7` and published it to the
   isolated `fix/unified-folder-gallery` branch.
+- Opened isolated draft PR
+  [#36](https://github.com/Frankbell84/KeyHollow/pull/36) against `main` so the
+  complete Phase 4 history and unified-gallery correction receive the same
+  mandatory validation gates.
 
 ## Test and build status
 
@@ -107,8 +112,17 @@ untouched.
 - Unified-folder release-hygiene gate: passed locally.
 - TestFlight build-number guard self-test: passed locally.
 - Unified-folder whitespace audit: passed locally.
-- Remote Mac compilation, complete tests, launch tests, and CodeQL: pending the
-  isolated draft review.
+- Unified-folder validation run
+  [#243](https://github.com/Frankbell84/KeyHollow/actions/runs/34033056486)
+  at branch head `7862ec9` and exact code commit `c88fbf7`: passed in 21m00s.
+- Mac simulator build, complete regression and launch suite, release hygiene,
+  architecture enforcement, build-number guard, and packaged-thumbnail checks:
+  passed in 6m20s.
+- Swift CodeQL: passed in 20m51s with no failed security gate.
+- Simulator artifact `9989340664` was recorded with SHA-256 digest
+  `0bb1c9562fcac8d6a42a1690fd54d6860f277c379293087e4db38a30e3a8d52d`.
+- Security-test artifact `9989342373` was recorded with SHA-256 digest
+  `757da37170a960f0008ed02994eb26aa5351ad1cb028845387d963714af8fa88`.
 - Phase 4 release-hygiene gate: passed locally.
 - Phase 4 whitespace audit: passed locally.
 - Thumbnail-composition architecture and release-hygiene gates: passed locally.
@@ -276,17 +290,17 @@ untouched.
 
 ## Blockers
 
-- No known engineering blocker prevents remote validation of the isolated
+- No known engineering or automated-validation blocker remains for the isolated
   gallery correction.
 - Build 32 must not be promoted to `Family`; its folder presentation has not
   passed the corrected visual/device gate.
 
 ## Next action
 
-Open the isolated draft review for published commit `c88fbf7`, then run the Mac
-build, complete regression and launch suites, packaging checks, and CodeQL. If
-every automated gate is green, prepare an Internal-only TestFlight build for
-Frank's device verification before any `Family` rollout.
+After Frank explicitly approves the next TestFlight upload, prepare a guarded
+Internal-only delivery from exact validated code commit `c88fbf7`, rerun the
+release-source gates, upload the next unused build, and perform physical-device
+verification before any `Family` rollout or merge.
 
 ## Frank's decision required
 
