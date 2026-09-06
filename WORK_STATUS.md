@@ -6,11 +6,11 @@ Parent release source: `ec25031` (merged and physically accepted Build 34 source
 
 ## Current task
 
-Prepare an isolated Build 35 delivery candidate from the fully validated
-general-file export implementation. Synchronize the app and thumbnail extension
-build numbers and narrow the guarded upload workflow to this exact delivery
-branch without merging, uploading, assigning testers, or changing App Store
-review state.
+Build 35 release-source preparation is complete on the isolated delivery branch.
+The app and thumbnail extension use one synchronized build number, and the
+guarded upload workflow recognizes only this exact delivery branch or `main`.
+The release source is locally clean and ready for an external release review;
+nothing has been merged, uploaded, assigned to testers, or submitted to Apple.
 
 ## Completed work
 
@@ -62,6 +62,13 @@ review state.
 - Created `delivery/general-file-export-parity` from the exact validated review
   head `eb1b01c`; production, TestFlight, tester groups, and App Store review
   state remain unchanged.
+- Reserved Build 35 and synchronized `CURRENT_PROJECT_VERSION` for both the app
+  and embedded vault-thumbnail extension.
+- Replaced the obsolete Build 34 delivery-branch exception with the exact
+  `delivery/general-file-export-parity` branch. Feature and unrelated delivery
+  branches remain unable to invoke the signed upload job.
+- Build 35 release-source architecture, release-hygiene, build-number self-test,
+  and diff-integrity gates passed locally.
 - Created `feature/secure-unified-file-preview` directly from hardened checkpoint
   `0d86997`; the validated gallery and release branches remain untouched.
 - Mapped the existing routing seam: Photos-origin images use the full-screen
@@ -504,16 +511,15 @@ review state.
 
 ## Blockers
 
-- No known engineering blocker. Build 35 preparation is authorized, but creating
-  the external release review and running the signed TestFlight upload remain
-  separate action-time approval points.
+- No known engineering blocker. Creating the external release review and running
+  the signed TestFlight upload remain separate action-time approval points.
 
 ## Next action
 
-Reserve Build 35 for the app and thumbnail extension, replace the obsolete
-Build 34 delivery-branch exception with this exact branch, and validate the
-release source locally. Push the isolated delivery branch, then stop before
-creating its external release review or running the signed upload workflow.
+Push the exact Build 35 release-source checkpoint. After action-time approval,
+open a draft release review against `main` so its full Mac build, tests,
+architecture gates, packaging verification, and Swift CodeQL run. Do not merge,
+run the signed upload, assign tester groups, or alter App Store review state.
 
 ## Frank's decision required
 
@@ -546,5 +552,8 @@ creating its external release review or running the signed upload workflow.
 - Any TestFlight upload after Build 34, `Family` rollout, merge, or App Store
   review change still requires its own decision after corrected visual and
   automated evidence.
+- Creating the Build 35 external release review requires Frank's action-time
+  confirmation; TestFlight upload, tester assignment, merge, and App Store
+  submission remain separate later decisions.
 - Any App Store review change remains out of scope without separate explicit
   approval.
