@@ -19,7 +19,10 @@ PRESENTATION_FILES = {
     "KeyHollow/Photos/SecurePhotoPicker.swift",
     "KeyHollow/Photos/VaultGalleryView.swift",
 }
-PRESENTATION_PREFIXES = ("KeyHollow/UI/",)
+PRESENTATION_PREFIXES = (
+    "KeyHollow/UI/",
+    "KeyHollow/AddOns/SecurePreview/",
+)
 
 UI_FRAMEWORKS = {"SwiftUI", "UIKit", "Photos", "PhotosUI", "UniformTypeIdentifiers"}
 REMOTE_SDKS = {
@@ -77,6 +80,7 @@ GALLERY_UI_MODULE_FILES = {
 }
 FILE_RECOGNITION_PREFIX = "KeyHollow/AddOns/FileRecognition/"
 GENERAL_FILE_SUPPORT_PREFIX = "KeyHollow/AddOns/GeneralFileSupport/"
+SECURE_PREVIEW_PREFIX = "KeyHollow/AddOns/SecurePreview/"
 SECURITY_SCOPED_INGRESS_PREFIXES = (
     FILE_RECOGNITION_PREFIX,
     GENERAL_FILE_SUPPORT_PREFIX,
@@ -418,6 +422,34 @@ def main() -> int:
                     f"module {forbidden_dependency} instead of immutable presentation values"
                 )
 
+    secure_preview_target = target_body(project, "KeyHollowSecurePreviewAddOn")
+    if secure_preview_target is None:
+        violations.append("project.yml: KeyHollowSecurePreviewAddOn target is missing")
+    else:
+        expected_sources = {"KeyHollow/AddOns/SecurePreview"}
+        declared_sources = set(
+            re.findall(r"(?m)^      - path: ([^\r\n]+)$", secure_preview_target)
+        )
+        if declared_sources != expected_sources:
+            violations.append(
+                "project.yml: KeyHollowSecurePreviewAddOn source ownership changed; "
+                f"expected {sorted(expected_sources)}, got {sorted(declared_sources)}"
+            )
+        for marker in (
+            "type: library.static",
+            "SWIFT_TREAT_WARNINGS_AS_ERRORS: YES",
+            "DEFINES_MODULE: YES",
+            "SKIP_INSTALL: YES",
+        ):
+            if marker not in secure_preview_target:
+                violations.append(
+                    f"project.yml: KeyHollowSecurePreviewAddOn is missing {marker!r}"
+                )
+        if re.search(r"(?m)^    dependencies:\s*$", secure_preview_target):
+            violations.append(
+                "project.yml: KeyHollowSecurePreviewAddOn must remain dependency-free"
+            )
+
     gallery_grid_source = (
         SOURCE_ROOT / "UI" / "VaultGalleryGridView.swift"
     ).read_text(encoding="utf-8")
@@ -572,6 +604,41 @@ def main() -> int:
                         f"capability {forbidden_symbol}"
                     )
 
+        if path.startswith(SECURE_PREVIEW_PREFIX):
+            unexpected = imported - {
+                "CoreFoundation",
+                "Foundation",
+                "ImageIO",
+                "SwiftUI",
+                "UIKit",
+                "UniformTypeIdentifiers",
+            }
+            if unexpected:
+                violations.append(
+                    f"{path}: secure-preview add-on imports outside its allowlist: "
+                    f"{', '.join(sorted(unexpected))}"
+                )
+            for forbidden_symbol in (
+                "VaultSession",
+                "VaultUnlockService",
+                "VaultPhotoRecord",
+                "VaultPhotoStore",
+                "VaultGeneralFileRecord",
+                "VaultGeneralFileStore",
+                "VaultFolderRecord",
+                "VaultFolderPresentationStore",
+                "EncryptedVaultTransferCoordinator",
+                "SymmetricKey",
+                "FileManager",
+                "URLSession",
+                "Data(contentsOf:",
+            ):
+                if forbidden_symbol in source:
+                    violations.append(
+                        f"{path}: secure-preview add-on directly references protected "
+                        f"capability {forbidden_symbol}"
+                    )
+
         leaked_ui = imported & UI_FRAMEWORKS
         if leaked_ui and not is_presentation(path) and path not in PHOTOS_ADAPTER_FILES:
             violations.append(
@@ -613,8 +680,13 @@ def main() -> int:
     gallery_source = gallery_file.read_text(encoding="utf-8")
     for required in (
         "import KeyHollowGalleryUI",
+        "import KeyHollowSecurePreviewAddOn",
         "VaultGalleryGridView(",
         "VaultGalleryItemTileView(",
+        "VaultSecureImagePreviewView(",
+        "case .imagePreview:",
+        "case .fileManagement:",
+        "data = try await generalFileStore.loadFile(record)",
         "visibleGalleryContentItems.map(\\.presentationItem)",
         "folders: visibleGalleryFolders",
         "items: visibleGalleryItems",
@@ -630,6 +702,7 @@ def main() -> int:
         "ForEach(visibleGalleryItems)",
         "VaultGeneralFileTileView(",
         "thumbnailCell(",
+        "DecryptedPhotoView(",
     ):
         if obsolete in gallery_source:
             violations.append(

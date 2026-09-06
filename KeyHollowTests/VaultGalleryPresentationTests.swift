@@ -174,6 +174,47 @@ final class VaultGalleryPresentationTests: XCTestCase {
         )
     }
 
+    func testPhotosAndFilesOriginImagesUseTheSameSecurePreviewRoute() {
+        let photo = VaultPhotoRecord(
+            id: UUID(),
+            importedAt: Date(timeIntervalSinceReferenceDate: 300),
+            blobName: "photo.khp",
+            thumbnailName: "photo.kht",
+            displayName: "Evidence.HEIC",
+            originalByteCount: 2_048
+        )
+        let fileImage = VaultGeneralFileRecord(
+            id: UUID(),
+            importedAt: Date(timeIntervalSinceReferenceDate: 300),
+            displayName: "Evidence.HEIC",
+            contentTypeIdentifier: "public.heic",
+            originalByteCount: 2_048,
+            blobName: "file.khg"
+        )
+
+        XCTAssertEqual(VaultGalleryContentItem.photo(photo).openRoute, .imagePreview)
+        XCTAssertEqual(
+            VaultGalleryContentItem.generalFile(fileImage).openRoute,
+            .imagePreview
+        )
+    }
+
+    func testNonImageFileKeepsFileManagementRoute() {
+        let file = VaultGeneralFileRecord(
+            id: UUID(),
+            importedAt: Date(timeIntervalSinceReferenceDate: 300),
+            displayName: "Evidence.pdf",
+            contentTypeIdentifier: "com.adobe.pdf",
+            originalByteCount: 2_048,
+            blobName: "file.khg"
+        )
+
+        XCTAssertEqual(
+            VaultGalleryContentItem.generalFile(file).openRoute,
+            .fileManagement
+        )
+    }
+
     func testSourceNeutralOrderUsesImportTimeInsteadOfStoreKind() {
         let olderPhoto = VaultPhotoRecord(
             id: UUID(),

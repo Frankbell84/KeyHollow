@@ -6,15 +6,14 @@ Parent release source: `7503a68` (exact delivered Build 33 source)
 
 ## Current task
 
-Implement the first secure unified-opening milestone on a dedicated branch from
-the green gallery-hardening checkpoint. Images imported through Files must open
-in the same full-screen viewer as Photos-origin images; tapping one item must
-never open the file-management queue. The new preview feature must be an
-independently compiled add-on with neutral immutable inputs and action closures.
-Only the application shell may resolve records, authenticate/decrypt selected
-content, or route save/delete operations. Build 33 remains the immutable gallery
-baseline; no TestFlight, `Family`, merge, production, or App Store state may
-change during implementation.
+Validate the completed first secure unified-opening milestone on its isolated
+branch. Images imported through Files now use the same full-screen viewer as
+Photos-origin images; non-image files retain their existing management route.
+The viewer is an independently compiled add-on with neutral immutable inputs and
+action closures. Only the application shell resolves records,
+authenticates/decrypts selected content, or routes save/delete operations. Build
+33 remains the immutable gallery baseline; no TestFlight, `Family`, merge,
+production, or App Store state changes during this validation.
 
 ## Completed work
 
@@ -23,6 +22,28 @@ change during implementation.
 - Mapped the existing routing seam: Photos-origin images use the full-screen
   decrypted viewer, while all general-file taps currently open the management
   queue regardless of type.
+- Added the independently compiled, dependency-free
+  `KeyHollowSecurePreviewAddOn` under strict concurrency with warnings treated
+  as errors.
+- Added one source-neutral image-preview policy and viewer for Photos-origin and
+  Files-origin encrypted images; image detection uses declared type with a safe
+  filename-extension fallback.
+- Kept authentication, decryption, encrypted stores, session control, saving,
+  and deletion in the application composition shell. The add-on receives only
+  bounded immutable metadata, validated in-memory image bytes, and action
+  closures; it has no disk, network, key, session, or store capability.
+- Added encoded-size and decoded-pixel ceilings before the viewer accepts an
+  image, and clear the lifecycle-owned preview when the sheet closes or the
+  active vault session changes.
+- Removed the obsolete app-owned photo viewer and routed both image origins
+  through the same preview surface. PDFs and other non-image files continue to
+  open the existing file-management surface.
+- Added policy, invalid-payload, validated-image, cross-source routing, and
+  non-image routing regression coverage.
+- Strengthened the architecture gate to pin exact module ownership, require a
+  dependency-free target and narrow import allowlist, reject protected stores,
+  keys, sessions, disk, and network capabilities, and prevent the obsolete
+  viewer from returning.
 - Frank confirmed the Build 33 folder/file UI is solid on a physical iPhone;
   that exact behavior is frozen as the hardening baseline.
 - Replaced all photo, general-file, and folder storage records at the compiled
@@ -135,8 +156,11 @@ change during implementation.
 
 ## Test and build status
 
-- Secure-preview architecture, hygiene, build-number, Mac compile/tests, and
-  CodeQL gates: pending implementation.
+- Secure-preview architecture, release-hygiene, build-number, and diff-integrity
+  gates: passed locally.
+- Mac project generation, independent target compilation, simulator build,
+  complete unit/launch/security suite, packaged-thumbnail verification, and
+  Swift CodeQL: pending the isolated remote run.
 - Gallery UI module architecture boundary gate: passed locally.
 - Gallery UI module release-hygiene gate: passed locally.
 - Gallery UI module TestFlight build-number guard self-test: passed locally.
@@ -369,10 +393,11 @@ change during implementation.
 
 ## Next action
 
-Checkpoint and push this phase start, create the dependency-free secure-preview
-module and enforcement rules, route both image sources into its one viewer, add
-safe failure/lock/deletion tests, and run all local and remote gates. Broader
-PDF/audio/video/text preview remains a later milestone behind the same contract.
+Commit and push the completed milestone, open its isolated draft review, and run
+all remote Mac and security gates. If they pass, request physical-device
+verification that a Files-origin image opens directly in the same viewer as a
+Photos-origin image. Broader PDF/audio/video/text preview remains a later
+milestone behind the same contract.
 
 ## Frank's decision required
 
@@ -392,6 +417,7 @@ PDF/audio/video/text preview remains a later milestone behind the same contract.
   the presentation into its own compiled module.
 - Frank approved hardening the current modular safety nets before any secure
   file-opening feature begins.
+- Frank approved beginning the first secure unified-opening milestone.
 - Any TestFlight upload after Build 33, `Family` rollout, merge, or App Store
   review change still requires its own decision after corrected visual and
   automated evidence.
