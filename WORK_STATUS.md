@@ -6,12 +6,13 @@ Parent release source: `7503a68` (exact delivered Build 33 source)
 
 ## Current task
 
-Verify the processed Internal-only TestFlight Build 34 on a physical iPhone.
-The delivered candidate is exact release commit `4f865b6`; its secure-preview
-application source remains exact validated commit `228f927`, and Build 33 remains
-the immutable gallery rollback baseline. Confirm that an encrypted image imported
-through Files opens in the same secure full-screen viewer as a Photos-origin
-image. Do not change `Family`, merge, production, or App Store review state.
+Merge the physically accepted Build 34 source through release PR #39 and add
+processed Build 34 to the explicitly approved `Family` TestFlight group. The
+delivered candidate is exact release commit `4f865b6`; its secure-preview
+application source remains exact validated commit `228f927`, and later commits
+contain status evidence only. Mark the draft ready and merge only if GitHub still
+reports the expected head, clean mergeability, and no source change after the
+green release run. Do not change App Store review state.
 
 ## Completed work
 
@@ -77,6 +78,10 @@ image. Do not change `Family`, merge, production, or App Store review state.
 - Apple finished processing Build 34. It is `Ready to Submit` and assigned only
   to `KeyHollow Internal`; `Family`, merge, production, and App Store review
   state were not changed.
+- Frank completed the physical-device acceptance gate on Internal Build 34:
+  Photos-origin and Files-origin images both open correctly in the secure image
+  viewer, while non-image files continue to open through the file-management
+  route.
 - Frank confirmed the Build 33 folder/file UI is solid on a physical iPhone;
   that exact behavior is frozen as the hardening baseline.
 - Replaced all photo, general-file, and folder storage records at the compiled
@@ -447,18 +452,16 @@ image. Do not change `Family`, merge, production, or App Store review state.
 
 ## Blockers
 
-- No known engineering or delivery blocker. All Mac, security, signing, upload,
-  and Apple processing gates are complete. Physical-device preview parity is the
-  remaining acceptance check.
+- No known engineering, delivery, or acceptance blocker. All automated and
+  physical-device gates are complete.
 
 ## Next action
 
-Frank installs Internal Build 34 and verifies that an image imported through
-Files opens directly in the same secure viewer as a Photos-origin image, while a
-non-image file continues to use the existing management route. If confirmed,
-checkpoint this milestone and prepare the next narrowly scoped preview type.
-Broader PDF/audio/video/text preview remains later and must pass the same module,
-CI, and TestFlight gates.
+Add Build 34 to `Family`, mark release PR #39 ready, and merge its expected head
+into `main`. Verify both the tester-group assignment and resulting merge commit,
+then checkpoint the merged milestone before preparing the next narrowly scoped
+preview type. Broader PDF/audio/video/text preview remains later and must pass
+the same module, CI, and TestFlight gates.
 
 ## Frank's decision required
 
@@ -482,6 +485,9 @@ CI, and TestFlight gates.
 - Frank explicitly approved the next Internal-only TestFlight delivery for the
   validated secure-preview milestone. Build 34 is processed and assigned only
   to `KeyHollow Internal`.
+- Frank confirmed Build 34 passes physical-device preview routing and explicitly
+  approved merging release PR #39.
+- Frank explicitly approved adding Build 34 to the `Family` TestFlight group.
 - Any TestFlight upload after Build 34, `Family` rollout, merge, or App Store
   review change still requires its own decision after corrected visual and
   automated evidence.
