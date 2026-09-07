@@ -1,18 +1,165 @@
 # KeyHollow Work Status
 
 Updated: 2026-09-06
-Branch: `delivery/general-file-export-parity`
-Parent release source: `ec25031` (merged and physically accepted Build 34 source)
+Branch: `feature/encrypted-video-support`
+Parent baseline: `3dc0f4a` (hardened Build 35 source on `main`)
 
 ## Current task
 
-Build 35 passed release-source validation, guarded upload, Apple processing,
-Frank's physical-device acceptance, and the approved `Family` rollout. The
-remaining active task is to require the exact delivery head to pass every CI
-gate, merge release PR #41, and harden the resulting `main` baseline. App Store
-review state remains out of scope.
+Roadmap add-on #4, Encrypted Video Support. Its first isolated milestone now
+defines the dependency-free video policy and validated local-file playback
+handoff, pins the module boundary in CI, and adds contract tests. Exact-source
+Mac build/test and Swift CodeQL gates have passed. The second isolated milestone
+adds app-composed native playback with deterministic protected-temporary-file
+cleanup and has also passed its exact-source Mac build/tests and CodeQL. The
+third isolated milestone adds bounded, encrypted-at-rest video thumbnails and
+has now passed its exact-source Mac build/tests and CodeQL. Physical-iPhone
+video, interruption, background-lock, low-storage, export/restore, and data-
+integrity validation remain required before delivery or merge. Storage
+migration, transfer changes, and App Store review state remain out of scope.
 
 ## Completed work
+
+- Exact encrypted-video thumbnail run
+  [#269](https://github.com/Frankbell84/KeyHollow/actions/runs/34070080085)
+  passed at commit `dcef6d5f090c13b8f90664b097b4de2db5104707`.
+- The Mac simulator build and complete unit/launch/security suite passed in
+  5m49s, including bounded-JPEG generation, oversized-frame rejection,
+  malformed-media cleanup, architecture enforcement, and existing regression
+  coverage.
+- Swift CodeQL passed in 31m39s with no failed security gate.
+- Thumbnail security-test artifact `10000256227` was retained with SHA-256
+  digest `65bba1a1f1dd527bf3a157fb869e11e428e012266b14c318bf719747546b806f`.
+- Thumbnail simulator artifact `10000255308` was retained with SHA-256 digest
+  `c1ec9cecf1db651652bef951449dc0cc39a01285835a30551f7d28f979ec4013`.
+- The thumbnail milestone is closed at an exact auditable source checkpoint;
+  no TestFlight, tester-group, production, merge, or App Store action occurred.
+- Frank confirmed that roadmap add-on #2, Backup Verification Center, is the
+  next feature after Encrypted Video Support closes. It must remain a separate
+  read-only phase and reuse the authenticated archive validator without
+  installing a vault, creating a second transfer path, or accepting a portable
+  recovery credential as a local unlock method.
+
+- Added a bounded video-frame renderer to `KeyHollowEncryptedVideoAddOn` using
+  Apple's native media generator with preferred-orientation transforms, a
+  512-pixel maximum dimension, a 2 MB encoded ceiling, and explicit decoder
+  cancellation.
+- Added one app-owned thumbnail coordinator that serializes decoder work,
+  prepares only one authenticated general-file export at a time, and removes
+  the temporary plaintext on success, cancellation, malformed media, or any
+  other failure.
+- Reused Folder Presentation's existing encrypted thumbnail store. The bounded
+  JPEG is persisted only after its source video plaintext has been removed; no
+  second thumbnail store or transfer field was introduced.
+- Extended the unified gallery thumbnail path to video records while preserving
+  the existing image-file path and ordinary icon fallback when rendering fails.
+- Added tests for encrypted-store size-limit parity, bounded JPEG generation,
+  oversized decoded-frame rejection, missing/malformed media failure, and
+  temporary-file cleanup after decoder failure.
+- Strengthened the architecture gate to require serialized rendering,
+  AVFoundation cancellation, bounded output, and cleanup while continuing to
+  reject keys, sessions, stores, transfer types, direct file reads, and network
+  access inside the video module.
+
+- Exact encrypted-video playback run
+  [#268](https://github.com/Frankbell84/KeyHollow/actions/runs/34068222542)
+  passed at commit `37f0e2cc8e0a9842b4bce633e0410812fb738cf1`.
+- The Mac simulator build and complete unit/launch/security suite passed in
+  7m02s, including video routing, cancellation, validation-failure cleanup,
+  dismissal cleanup, and idempotent teardown tests.
+- Swift CodeQL passed in 27m03s with no failed security gate.
+- Playback security-test artifact `9999720650` was retained with SHA-256 digest
+  `b9a752a69282595dc84c3326118dc517337ca5b21bf1c107c0c159969049bf15`.
+- Playback simulator artifact `9999719722` was retained with SHA-256 digest
+  `3c6dfd4758737555ad1525cc48ff062f71155217639bc250aa8939914fd10b9e`.
+- The playback milestone is now closed at an exact auditable source checkpoint;
+  no TestFlight, tester-group, production, merge, or App Store action occurred.
+
+- Added a native `VideoPlayer` surface inside the independently compiled
+  `KeyHollowEncryptedVideoAddOn`; the module receives only its already-validated
+  local playback handoff and releases the player item when the surface closes.
+- Added one app-owned playback coordinator that authenticates exactly one
+  existing general-file record, prepares its protected temporary export, and
+  owns deletion on validation failure, cancellation, dismissal, repeated
+  teardown, vault-session change, and view disappearance.
+- Routed only policy-approved video general-file records to playback. Photos and
+  image files keep the shared secure-image route; misleading or non-video files
+  keep the file-management route.
+- Preserved normal background locking during playback; the player is not marked
+  as an external system interaction and therefore cannot suppress the lock.
+- Added cleanup, cancellation, idempotence, positive video routing, and
+  misleading-extension regression tests.
+- Strengthened architecture enforcement to pin native-media frameworks to
+  presentation code, require the playback lifecycle coordinator and its cleanup
+  calls, and forbid direct file, key, session, or network bypasses.
+- Updated the durable encrypted-video and architecture documentation. The
+  encrypted general-file store, `.khvault` format, folder model, photo route,
+  and production delivery configuration are unchanged.
+
+- Exact encrypted-video boundary run
+  [#267](https://github.com/Frankbell84/KeyHollow/actions/runs/34066713733)
+  passed at commit `1c02979f989d296eaadc52becec6b45dcdf29ff1`.
+- Mac simulator compilation, packaged-thumbnail verification, the complete
+  unit/launch/security suite, release hygiene, architecture enforcement, and
+  the build-number guard all passed in the `build-and-test` job.
+- Swift CodeQL completed successfully with no failed security gate.
+- Security-test artifact `9999244574` was retained with SHA-256 digest
+  `2251eaa0a48b71fde7982e789378a972b970dd515ad1b6d57bd2a8fef7e38a75`.
+- Simulator artifact `9999243445` was retained with SHA-256 digest
+  `9ba9c3a7f7d12069d0a67a6dee0aa0ae6ef0b5ebf975f9e00ed0e3e3b33ebf04`.
+- The module boundary is therefore cleared for the separately gated playback
+  integration milestone; no application behavior changed in this checkpoint.
+
+- Added the independently compiled, dependency-free
+  `KeyHollowEncryptedVideoAddOn` target with strict concurrency and Swift
+  warnings treated as errors.
+- Added immutable, source-neutral video metadata, conservative QuickTime/MPEG-4
+  routing, a size ceiling pinned to General File Support's existing 100 MB
+  ingress limit, and a local-file-only prepared-playback handoff.
+- Made recognized non-video metadata authoritative over a misleading video
+  filename extension, keeping arbitrary renamed files out of the media decoder.
+- Kept vault keys, sessions, encrypted stores, general-file records, transfer
+  formats, disk management, and networking outside the new module.
+- Extended architecture enforcement to pin exact source ownership, require a
+  dependency-free target, enforce a narrow import allowlist, and reject every
+  protected capability or direct file-reading primitive.
+- Added contract tests for declared movie types, safe extension fallback,
+  metadata/extension mismatch, unsupported types, empty/oversized payloads,
+  ingress-limit parity, and local-file-only playback preparation.
+- Documented ownership, compatibility, plaintext-lifetime responsibility, and
+  the full security/regression matrix in `docs/ENCRYPTED_VIDEO_SUPPORT.md`.
+- Post-milestone local release hygiene, architecture enforcement, build-number
+  guard self-test, and whitespace checks passed. Windows cannot compile the iOS
+  target; exact-source Mac CI remains required before integration.
+
+- Reconciled the roadmap numbering before implementation: the historical
+  folder/presentation "Phase 4" is complete, while roadmap add-on #4 is the
+  distinct Encrypted Video Support feature.
+- Located and used the installed Git for Windows secure HTTPS transport after
+  the bundled runtime omitted its HTTPS helper; fetched `origin` successfully.
+- Created `feature/encrypted-video-support` directly from exact hardened
+  `origin/main` commit `3dc0f4a`; the branch has no application-source delta.
+- Re-ran release hygiene, architecture-boundary enforcement, and the TestFlight
+  build-number guard locally. All passed.
+- Confirmed every registered add-on remains an independently compiled static
+  target, compiles with strict concurrency and warnings as errors, is excluded
+  from duplicate app-target compilation, and is composed only by the app.
+- Confirmed the dependency-free gallery module remains separated from vault,
+  photo, transfer, session, and add-on capabilities; protected modules contain
+  no UI, Photos, network, cloud, subscription, analytics, or advertising SDKs.
+- Confirmed CI actions are pinned to exact commits and artifact upload uses the
+  Node 24 generation; no deprecated Node 20 uploader remains.
+- Rechecked exact post-merge run
+  [#266](https://github.com/Frankbell84/KeyHollow/actions/runs/34061295593):
+  `build-and-test` and Swift CodeQL both completed successfully for exact
+  hardened `main` commit `3dc0f4a`. Its simulator and security-test artifacts
+  remain retained and unexpired.
+- Scanned the tracked source for abandoned TODO/FIXME/HACK markers, remote SDKs,
+  accidental URLSession usage, editor debris, temporary artifacts, and legacy
+  document-icon code. No actionable residue was found.
+- Identified documentation drift on `main`: the status still described the
+  already-completed Build 35 merge and the old folder/presentation checkpoint.
+  Corrected the durable status before any video implementation begins.
 
 - Created `feature/general-file-export-parity` directly from merged Build 34
   baseline `ec25031`; no release branch or production state is being changed.
@@ -563,18 +710,37 @@ review state remains out of scope.
   limited production upload permission to the exact immutable branch
   `delivery/mixed-gallery-selection`.
 
+## Test / build status
+
+- Exact boundary commit `1c02979f989d296eaadc52becec6b45dcdf29ff1`:
+  Mac build/tests and Swift CodeQL passed.
+- Local release hygiene, architecture enforcement, build-number guard self-test,
+  and whitespace checks: passed.
+- Playback integration local release hygiene, architecture enforcement,
+  build-number guard self-test, and whitespace checks: passed.
+- Playback integration commit `37f0e2cc8e0a9842b4bce633e0410812fb738cf1`:
+  Mac compilation, full tests, retained evidence, and Swift CodeQL passed.
+- Video-thumbnail local release hygiene, architecture enforcement, build-number
+  guard self-test, and whitespace checks: passed.
+- Video-thumbnail Mac compilation, full tests, and Swift CodeQL: pending the
+  pushed exact-source run.
+
 ## Blockers
 
-- No known engineering blocker. Family rollout is complete; final branch
-  validation, merge, and post-merge hardening are approved and in progress.
+- No known engineering blocker.
 
 ## Next action
 
-Require this exact delivery head to pass all mandatory checks, merge PR #41,
-then validate and checkpoint the resulting `main` commit. Do not alter App Store
-review state.
+Commit and push the isolated video-thumbnail milestone, then require its exact
+source to pass the complete Mac build/test and Swift CodeQL gates. Correct any
+failure before preparing a TestFlight delivery candidate. Do not alter
+TestFlight or App Store review state.
 
 ## Frank's decision required
+
+- No decision is required for the isolated playback implementation and its
+  automated validation. Merge, TestFlight delivery, tester assignment, and any
+  App Store review change remain later explicit decisions.
 
 - Frank explicitly approved creating draft Build 35 release PR #41. That review
   is open and its exact release-source CI is green.
