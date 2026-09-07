@@ -1,18 +1,37 @@
 # KeyHollow Work Status
 
 Updated: 2026-09-06
-Branch: `delivery/general-file-export-parity`
-Parent release source: `ec25031` (merged and physically accepted Build 34 source)
+Branch: `fix/batch-move-to-folder`
+Parent baseline: `3dc0f4a` (hardened Build 35 source on `main`)
 
 ## Current task
 
-Build 35 passed release-source validation, guarded upload, Apple processing,
-Frank's physical-device acceptance, and the approved `Family` rollout. The
-remaining active task is to require the exact delivery head to pass every CI
-gate, merge release PR #41, and harden the resulting `main` baseline. App Store
-review state remains out of scope.
+Correct the missing multi-select folder move on the unified gallery before any
+new add-on begins. The encrypted Folder Presentation module already supports
+single-item membership changes, but the selection toolbar exposes only
+save/export and delete. Add one atomic batch-membership operation and one
+source-neutral Move action for photos, general files, videos, and mixed
+selections. Encrypted content stores, `.khvault`, Encrypted Video Support, and
+App Store review state remain out of scope.
 
 ## Completed work
+
+- Frank's physical-device report confirmed that selected gallery items cannot
+  currently be moved to an existing folder; screenshots show the selection
+  count is correct while the toolbar omits a folder action.
+- Paused Encrypted Video Support delivery after its implementation commit
+  `dcef6d5` passed exact-source Mac build/tests and Swift CodeQL. Its evidence is
+  preserved on `feature/encrypted-video-support` at `c56edff`; no video work is
+  mixed into this correction.
+- Created `fix/batch-move-to-folder` directly from exact hardened `origin/main`
+  commit `3dc0f4a` so the correction can be reviewed, tested, delivered, and
+  merged independently.
+- Confirmed the existing Folder Presentation store owns only encrypted folder
+  membership metadata and already supports both photo and general-file
+  references. The missing behavior is the narrow batch operation and unified
+  gallery composition, not a storage migration or encrypted-content move.
+- Backup Verification Center remains next after this correction and Encrypted
+  Video Support close; no work on that add-on has begun.
 
 - Created `feature/general-file-export-parity` directly from merged Build 34
   baseline `ec25031`; no release branch or production state is being changed.
