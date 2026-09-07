@@ -19,7 +19,16 @@ state.
   upload; Build 37 is unused and available for this release candidate.
 - Created isolated release branch `delivery/gallery-grid-normalization` from the
   closed validated correction head `85e8d9e`. No build-number or production-
-  workflow source has been changed yet.
+  workflow source had been changed at the pre-release checkpoint.
+- Reserved Build 37 and synchronized `CURRENT_PROJECT_VERSION` for both the app
+  and embedded thumbnail extension after confirming the number is unused in App
+  Store Connect.
+- Replaced the retired Build 36 delivery exception with the exact
+  `delivery/gallery-grid-normalization` branch in the guarded production upload
+  workflow. `main` remains the only other permitted source; feature branches
+  remain unable to dispatch a production upload.
+- The signed TestFlight upload has not been dispatched. Exact Build 37 release-
+  source build/tests and Swift CodeQL are required before upload approval.
 - Frank physically confirmed that Build 36 folders work and selected photos and
   files can be moved successfully.
 - Build 36 screenshots exposed one remaining presentation defect: folders,
@@ -750,17 +759,17 @@ state.
 
 ## Blockers
 
-- No known protected-data, folder-move, build, security-scan, upload, or tester-
-  assignment blocker. The exact implementation and documentation heads are
-  both green. Physical-device visual acceptance remains required before merge
-  or wider rollout.
+- No known protected-data, folder-move, build-number, upload, or tester-
+  assignment blocker. Exact Build 37 release-source Mac build/tests and Swift
+  CodeQL remain required before the signed upload can be proposed. Physical-
+  device visual acceptance remains required before merge or wider rollout.
 
 ## Next action
 
-Prepare the next unused Internal-only release source, verify its build number
-against App Store Connect, and require exact-source Mac build/tests and Swift
-CodeQL. Stop before dispatching the signed TestFlight upload for explicit
-approval. Do not alter `Family`, merge, or App Store review state.
+Commit and push the exact Build 37 release source, open an isolated draft release
+review, and require exact-source Mac build/tests and Swift CodeQL. Stop before
+dispatching the signed TestFlight upload for explicit approval. Do not alter
+`Family`, merge, or App Store review state.
 
 ## Frank's decision required
 
@@ -787,6 +796,8 @@ approval. Do not alter `Family`, merge, or App Store review state.
   and the Vault Escape Hatch migration/share extension be retained as later
   add-ons. Their implementation order and detailed privacy/product design remain
   later decisions; none is authorized for the current release candidate.
+- Frank approved proceeding with Build 37 release preparation. The signed
+  TestFlight upload remains a separate explicit approval boundary.
 
 - Frank explicitly approved creating draft Build 35 release PR #41. That review
   is open and its exact release-source CI is green.
