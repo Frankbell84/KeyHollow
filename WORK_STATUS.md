@@ -6,13 +6,12 @@ Parent baseline: `3dc0f4a` (hardened Build 35 source on `main`)
 
 ## Current task
 
-Correct the missing multi-select folder move on the unified gallery before any
-new add-on begins. The encrypted Folder Presentation module already supports
-single-item membership changes, but the selection toolbar exposes only
-save/export and delete. Add one atomic batch-membership operation and one
-source-neutral Move action for photos, general files, videos, and mixed
-selections. Encrypted content stores, `.khvault`, Encrypted Video Support, and
-App Store review state remain out of scope.
+Deliver the validated multi-select folder move to an isolated Internal testing
+build before any new add-on begins. The correction is implemented and its exact
+source commit has passed the complete Mac build/test and Swift CodeQL gates.
+Prepare the next unused app/extension build number and an exact delivery branch
+without changing protected content, `.khvault`, tester groups, merge state, or
+App Store review state.
 
 ## Completed work
 
@@ -50,6 +49,22 @@ App Store review state remain out of scope.
 - Local release hygiene, architecture enforcement, build-number guard self-
   test, and whitespace/diff checks passed. Exact-source Mac compilation, full
   regression/security tests, and Swift CodeQL are required next.
+- Opened isolated draft review
+  [#43](https://github.com/Frankbell84/KeyHollow/pull/43) against `main`; it
+  remains non-mergeable and contains only the correction and its status
+  checkpoint.
+- Exact-source validation run
+  [#270](https://github.com/Frankbell84/KeyHollow/actions/runs/34074994541)
+  passed every mandatory gate at implementation commit `fac2eb1`.
+- Release hygiene, architecture enforcement, build-number guard, project
+  generation, simulator compilation, packaged-thumbnail verification, and the
+  complete unit/launch/security suite passed in the 5m55s build-and-test job.
+- Swift CodeQL passed in 26m01s with no failed security gate or unresolved
+  finding.
+- Security-test artifact `10001823710` recorded SHA-256 digest
+  `5e61cf7f1785147b5272d9179e8948c36e0852f4e8ca1780999fa35f250c0efe`.
+- Simulator artifact `10001822388` recorded SHA-256 digest
+  `4120a1d0a2b9e5ca0d9bb2c51de1fa869deb9dd65932ee2e14911aa0e78f6286`.
 
 - Created `feature/general-file-export-parity` directly from merged Build 34
   baseline `ec25031`; no release branch or production state is being changed.
@@ -602,16 +617,26 @@ App Store review state remain out of scope.
 
 ## Blockers
 
-- No known engineering blocker. Family rollout is complete; final branch
-  validation, merge, and post-merge hardening are approved and in progress.
+- No known engineering blocker. The exact correction source is green. A signed
+  TestFlight upload remains an explicit external delivery gate after the
+  isolated Build 36 source is prepared and validated.
 
 ## Next action
 
-Require this exact delivery head to pass all mandatory checks, merge PR #41,
-then validate and checkpoint the resulting `main` commit. Do not alter App Store
-review state.
+Commit and push this exact green evidence checkpoint, then create an isolated
+Build 36 delivery branch from it. Synchronize the app and embedded thumbnail
+extension build numbers, restrict the signed-upload workflow to that exact
+branch, and require the release-source CI gates before requesting permission to
+dispatch the TestFlight upload. Do not alter tester groups, merge state, or App
+Store review state.
 
 ## Frank's decision required
+
+- Frank approved creating draft correction PR #43 and proceeding through the
+  full review gates. Those gates are complete and green.
+- Frank requested completion for testing. The isolated release source may be
+  prepared and validated; dispatching the signed TestFlight upload will be
+  confirmed at the final external-action boundary.
 
 - Frank explicitly approved creating draft Build 35 release PR #41. That review
   is open and its exact release-source CI is green.
