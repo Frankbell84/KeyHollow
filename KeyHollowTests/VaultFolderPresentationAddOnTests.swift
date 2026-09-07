@@ -47,6 +47,44 @@ final class VaultFolderPresentationAddOnTests: XCTestCase {
         XCTAssertNil(rootFolderID)
     }
 
+    func testBatchMoveSupportsMixedPhotoAndFileReferencesAtomically() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        let photo = VaultPresentedContentReference(kind: .photo, id: UUID())
+        let file = VaultPresentedContentReference(kind: .generalFile, id: UUID())
+        let items: Set<VaultPresentedContentReference> = [photo, file]
+        let folder = try await fixture.store.createFolder(named: "Mixed")
+
+        try await fixture.store.move(items, to: folder.id)
+        var manifest = try await fixture.store.loadManifest()
+        XCTAssertEqual(Set(manifest.memberships.map(\.item)), items)
+        XCTAssertEqual(Set(manifest.memberships.map(\.folderID)), [folder.id])
+
+        try await fixture.store.move(items, to: nil)
+        manifest = try await fixture.store.loadManifest()
+        XCTAssertTrue(manifest.memberships.isEmpty)
+    }
+
+    func testBatchMoveRejectsMissingDestinationWithoutChangingMemberships() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        let photo = VaultPresentedContentReference(kind: .photo, id: UUID())
+        let file = VaultPresentedContentReference(kind: .generalFile, id: UUID())
+        let items: Set<VaultPresentedContentReference> = [photo, file]
+        let folder = try await fixture.store.createFolder(named: "Existing")
+        try await fixture.store.move(items, to: folder.id)
+        let originalManifest = try await fixture.store.loadManifest()
+
+        await XCTAssertThrowsErrorAsync(
+            try await fixture.store.move(items, to: UUID())
+        ) { error in
+            XCTAssertEqual(error as? VaultFolderPresentationStore.StoreError, .folderNotFound)
+        }
+
+        let unchangedManifest = try await fixture.store.loadManifest()
+        XCTAssertEqual(unchangedManifest, originalManifest)
+    }
+
     func testDuplicateAndInvalidFolderNamesFailWithoutChangingManifest() async throws {
         let fixture = try Fixture()
         defer { fixture.cleanup() }

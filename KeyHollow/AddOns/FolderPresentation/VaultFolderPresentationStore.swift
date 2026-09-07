@@ -102,14 +102,32 @@ public actor VaultFolderPresentationStore {
     }
 
     public func move(_ item: VaultPresentedContentReference, to folderID: UUID?) throws {
+        try move(Set([item]), to: folderID)
+    }
+
+    /// Changes membership for one mixed selection with a single authenticated
+    /// manifest write. The referenced photo and file ciphertext never moves.
+    public func move(
+        _ items: Set<VaultPresentedContentReference>,
+        to folderID: UUID?
+    ) throws {
+        guard !items.isEmpty else { return }
         var manifest = try loadManifest()
         if let folderID,
            !manifest.folders.contains(where: { $0.id == folderID }) {
             throw StoreError.folderNotFound
         }
-        manifest.memberships.removeAll { $0.item == item }
+        manifest.memberships.removeAll { items.contains($0.item) }
         if let folderID {
-            manifest.memberships.append(VaultFolderMembership(item: item, folderID: folderID))
+            let orderedItems = items.sorted {
+                if $0.kind.rawValue != $1.kind.rawValue {
+                    return $0.kind.rawValue < $1.kind.rawValue
+                }
+                return $0.id.uuidString < $1.id.uuidString
+            }
+            manifest.memberships.append(contentsOf: orderedItems.map {
+                VaultFolderMembership(item: $0, folderID: folderID)
+            })
         }
         try saveManifest(manifest)
     }

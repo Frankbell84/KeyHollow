@@ -77,8 +77,10 @@ the photo store, general-file store, vault key, transfer coordinator, or UI.
 The application maps protected-store record IDs into neutral references and
 supplies scoped seal/open access while the unlocked session is valid. Deleting
 a folder returns its references to the root gallery and cannot delete protected
-content. Removing the add-on leaves the protected stores and existing
-`.khvault` format operational.
+content. Single-item and mixed-selection moves update only the encrypted folder
+manifest; a batch is committed with one authenticated manifest write and never
+moves or rewrites photo or general-file ciphertext. Removing the add-on leaves
+the protected stores and existing `.khvault` format operational.
 
 ## Change policy
 

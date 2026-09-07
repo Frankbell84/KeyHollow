@@ -1,18 +1,439 @@
 # KeyHollow Work Status
 
-Updated: 2026-09-06
-Branch: `delivery/general-file-export-parity`
-Parent release source: `ec25031` (merged and physically accepted Build 34 source)
+Updated: 2026-09-07
+Branch: `delivery/gallery-file-performance`
+Parent validation head: `8e356b8` (green gallery-performance evidence head)
 
 ## Current task
 
-Build 35 passed release-source validation, guarded upload, Apple processing,
-Frank's physical-device acceptance, and the approved `Family` rollout. The
-remaining active task is to require the exact delivery head to pass every CI
-gate, merge release PR #41, and harden the resulting `main` baseline. App Store
-review state remains out of scope.
+Commit and validate the accepted Build 38 `Family` rollout checkpoint, then
+merge draft PR #48 only after that exact updated head reproduces green. Frank
+explicitly authorized both actions; App Store review state remains out of scope.
 
 ## Completed work
+
+- Frank completed all seven Build 38 physical-device acceptance checks and
+  reported the gallery is now "smooth as butter." Warm/cold mixed-content
+  scrolling, Files-origin thumbnail fill, first/repeat image opening,
+  dismiss/lock recovery, folder navigation and mixed moves, non-image routing,
+  and the largest representative image all passed without reported lag, stale
+  state, overheating, or crash.
+- Added Build 38 to the `Family` TestFlight group with automatic tester
+  notification and focused guidance covering mixed-gallery scrolling, image
+  opening across both import routes, folder moves, non-image routing, thumbnail
+  and label correctness, stale previews, heat, and crashes. App Store Connect
+  now authoritatively reports Build 38 as `Testing` in both `KeyHollow Internal`
+  and `Family`.
+- Frank reported that a mixed vault containing only 26 images/files is slow to
+  scroll and slower than before when opening images. This count is far below a
+  reasonable scale limit, so the report is classified as a presentation/loading
+  regression rather than excessive vault content.
+- A read-only history and code-path audit confirmed that Build 37 did not change
+  image opening. The secure preview path is identical to Build 34; Build 37's
+  grid-normalization work is not being rolled back.
+- Identified the primary scroll defect: each grid cell rebuilds, filters, sorts,
+  formats, and linearly searches the complete visible mixed-content list. Each
+  thumbnail completion changes parent state and repeats that work, producing
+  avoidable superlinear recomposition at ordinary item counts.
+- Identified a second UI-thread defect: photo thumbnail decoding and Files-origin
+  full-image decode, resizing, and JPEG thumbnail generation resume on the main
+  actor. Files-origin cache misses also serialize authenticated manifest and
+  blob work before publishing one parent-state update per tile.
+- Identified the image-open regression: the app waits for full authenticated
+  read/decryption and ImageIO validation before presenting, then constructs a
+  full-resolution `UIImage` inside the SwiftUI preview body. The prior viewer
+  retained one prepared image instead of recreating it during view evaluation.
+- Confirmed the correction requires no encrypted-data migration and no change to
+  vault keys, blob formats, folder membership, portable archives, or security
+  gates. Created isolated branch `fix/gallery-file-performance` from the exact
+  Build 37 documentation head before implementation changes.
+- Replaced the per-cell mixed-content rebuild and linear source search with one
+  immutable gallery snapshot per state revision. Each source-neutral
+  presentation value is constructed once, sorted once, and paired with a
+  constant-time typed source lookup while the compiled gallery module still
+  receives no store, key, capability, or plaintext payload.
+- Added deterministic 26-item mixed-gallery coverage, including the valid case
+  where a photo and general file share the same UUID, and strengthened the
+  architecture gate to reject a return to per-cell full-list recovery.
+- Snapshot-phase diff checks, release hygiene, architecture enforcement, and
+  build-number guard self-test pass locally. UIKit compilation and the complete
+  test suite remain pending on the required Mac CI runner.
+- Reworked secure image preparation so encrypted thumbnails and full previews
+  are bounded and eagerly decoded through a dedicated non-main actor before
+  SwiftUI receives one immutable display image. The preview sheet now appears
+  immediately with the existing encrypted thumbnail, shows honest opening
+  progress, and replaces the placeholder only after the original authenticates
+  and its bounded preview is ready.
+- Removed full-resolution `UIImage` construction from the SwiftUI preview body,
+  normalized future Photo-library thumbnail rendering to an explicit 1x scale,
+  moved cell work to utility priority, and replaced the per-tile live blur with
+  an opaque adaptive system background to reduce scrolling GPU work.
+- Added stable processor identities across SwiftUI recomposition and a FIFO
+  Files-origin thumbnail pipeline that holds the complete authenticated load,
+  decode, resize, JPEG encode, and encrypted-cache write behind one permit.
+  At most one full decrypted Files-origin image can now be resident in that
+  miss path; duplicate tasks recheck the encrypted cache after the first write.
+- Added lifecycle-scoped preview-task cancellation without removing the task
+  from the session registry prematurely, so dismissal releases work promptly
+  while lock-and-wait can still observe in-flight cryptographic or ImageIO
+  cleanup.
+- Added processor dimension and targeted sensitive-task cancellation tests.
+  The architecture gate now rejects main-view full-image decoding, ephemeral
+  processor actors, an unbounded Files-origin miss path, and per-tile live blur.
+- Performance-phase architecture enforcement, release hygiene, build-number
+  guard self-test, and whitespace/diff checks pass locally. Exact-source Mac
+  compilation, complete tests, and Swift CodeQL remain pending.
+- Opened isolated draft performance review
+  [#47](https://github.com/Frankbell84/KeyHollow/pull/47) against `main` from
+  implementation commit `d1cd0fc`. It remains a draft and did not trigger a
+  TestFlight workflow, tester-group change, merge, or App Store review action.
+- Initial exact-source validation run
+  [#286](https://github.com/Frankbell84/KeyHollow/actions/runs/34137635585)
+  compiled the app and packaged thumbnail successfully. Its security-test
+  target then found a test-only Swift compiler-inference blocker in the new
+  26-item snapshot regression: two dense record-construction expressions timed
+  out type checking, and shorthand key paths/enum cases lacked context.
+- Replaced those test-only expressions with explicit typed arrays, simple loop
+  construction, a typed date array, and fully qualified selection cases. No
+  application, encrypted-store, folder, transfer, or image-pipeline behavior
+  changed. Architecture enforcement, release hygiene, the build-number guard
+  self-test, and whitespace/diff checks pass locally after the correction.
+- Replacement exact-source run
+  [#287](https://github.com/Frankbell84/KeyHollow/actions/runs/34139105084)
+  compiled the corrected test target and completed the full Mac build/test job
+  successfully in 6m51s at commit `3ff9870`.
+- Run #287 produced simulator artifact `10025392482` with SHA-256 digest
+  `ae2f0365dec01bfe3948d6c314ec022afe05a391894afefd11f099ba20819ffb`
+  and security-test artifact `10025394115` with SHA-256 digest
+  `c00df266484ae9c15bb87b3d9326d11b940098da7fb20e73ab778dd63661f8d0`.
+- A focused performance/concurrency audit identified one remaining source of
+  head-of-line blocking: encrypted general-file thumbnail cache hits acquired
+  the same permit as expensive full-original cache misses.
+- Added a dedicated warm encrypted-cache lane and retained a separate bounded
+  miss processor. Warm thumbnails now decode without waiting for full-original
+  work; queued misses recheck the cache after acquiring the single permit, and
+  at most one decrypted original still occupies the miss lane.
+- Preserved cancellation across both lanes, added a defense-in-depth check
+  immediately before loading an original, and strengthened the architecture
+  gate to enforce separate processors plus cache-check/permit/original-load
+  ordering. Independent Swift strict-concurrency and performance audits found
+  no remaining code blocker.
+- Final-hardening architecture enforcement, release hygiene, build-number guard
+  self-test, and whitespace/diff checks pass locally. A new exact-source Mac
+  build/test and Swift CodeQL run is required after this checkpoint is pushed.
+- Final-hardening run
+  [#288](https://github.com/Frankbell84/KeyHollow/actions/runs/34140799578)
+  completed successfully at exact commit
+  `1de12cecc2271833889675fc6f707b5010d199b6` in 26m09s.
+- Run #288's complete Mac simulator build/test job passed in 9m28s, including
+  the complete regression/security suite. Swift CodeQL passed in 25m17s with no
+  failed security gate or unresolved finding.
+- Run #288 produced simulator artifact `10026093697` with SHA-256 digest
+  `fabb457740faabf03ed79bd547d6e1d10c75b4f9d785d3b6ca6fef62a9473ffd`
+  and security-test artifact `10026098390` with SHA-256 digest
+  `5c15d231bba730b827e4b62886628363cfe16ef495242eb361a3bfb6ee6844cb`.
+- Final branch-wide modular/security and Swift concurrency reviews passed with
+  no concrete blocker, format migration, scope creep, or protected-boundary
+  change. Physical-device performance and interaction acceptance remain
+  mandatory because launch UI automation does not exercise the gallery.
+- Final documentation-head reproducibility run
+  [#289](https://github.com/Frankbell84/KeyHollow/actions/runs/34143156772)
+  passed every mandatory gate at exact head
+  `8e356b8cec9ed71b5eb9e9aa605b72bc4e711813` in 24m04s.
+- Run #289's repeated complete Mac build/test job passed in 9m00s. Swift CodeQL
+  passed in 23m55s with no failed security gate or unresolved finding.
+- Reproducibility simulator artifact `10026889458` recorded SHA-256 digest
+  `e571107e700830315fa1742654a0b27b2f63e376521ee3efc39eb961ba1e178a`;
+  security-test artifact `10026891926` recorded SHA-256 digest
+  `b2797bc94c05c37c9147db9e745fa62853827cd3d0f227528395bf80287943c7`.
+- App Store Connect was refreshed directly and authoritatively shows Build 37
+  complete and assigned only to `KeyHollow Internal`; Build 38 is unused.
+- Created isolated `delivery/gallery-file-performance` directly from exact
+  green head `8e356b8`; no implementation source changed during the transition.
+- Reserved Build 38 and synchronized `CURRENT_PROJECT_VERSION` for both the app
+  and embedded thumbnail extension. Marketing version remains 1.0.
+- Replaced the retired Build 37 gallery-grid delivery exception with only
+  `delivery/gallery-file-performance`. `main` remains the other permitted
+  source in the current workflow; feature branches cannot upload.
+- Opened cumulative draft Build 38 release review
+  [#48](https://github.com/Frankbell84/KeyHollow/pull/48) against `main` from
+  exact release commit `69a7bf4`. It remains draft, clean, mergeable, and
+  unmerged; no upload, tester-group, or App Store review state changed.
+- Exact Build 38 release-source validation run
+  [#290](https://github.com/Frankbell84/KeyHollow/actions/runs/34145561538)
+  passed every mandatory gate at commit
+  `69a7bf45d079986a9c741555f2ef680acbeb97c8` in 24m00s.
+- Build 38 Mac simulator build, complete regression/security and launch suite,
+  release hygiene, architecture enforcement, build-number guard, and packaged-
+  thumbnail verification passed in 9m22s. Swift CodeQL passed in 23m47s with no
+  failed gate or unresolved finding.
+- Build 38 simulator artifact `10027733201` recorded SHA-256 digest
+  `35dfc44774e6606ddacba51a64ba9d76c7525b30ed3014d50b6b131124d47eb6`;
+  security-test artifact `10027736511` recorded SHA-256 digest
+  `61cc5f66a92bd718cdc35a6222943dbeede143c65843e7f0e7d7b7339fc15647`.
+- Final Build 38 evidence-head run
+  [#291](https://github.com/Frankbell84/KeyHollow/actions/runs/34147583185)
+  passed every mandatory gate at exact branch head
+  `2a0d7b5a50ba444559b9419bdaa4b12d458eee8e` in 28m36s.
+- Run #291's repeated Mac build/test job passed in 9m08s. Swift CodeQL passed
+  in 28m25s with no failed security gate or unresolved finding.
+- Final-head simulator artifact `10028403863` recorded SHA-256 digest
+  `9bcc86a7dd5262364db26c57f8940f3d58112918da3da1dc8f56b541e714012a`;
+  security-test artifact `10028406356` recorded SHA-256 digest
+  `f494982f01bce7d07ceddf38faf95d744dee88358ffec026c8b04f1ea5a57036`.
+- Frank explicitly authorized a signed Build 38 upload to `KeyHollow Internal`
+  only after the final-head gates passed. That authorization did not include
+  `Family`, merge, or App Store review changes.
+- Guarded TestFlight workflow
+  [#48](https://github.com/Frankbell84/KeyHollow/actions/runs/34151277109)
+  completed successfully from exact green head `2a0d7b5` in 3m16s.
+- Release hygiene, production identity, unused Build 38 verification, project
+  generation, cloud signing, archive/module verification, signed IPA export,
+  Apple upload, artifact retention, and signing-material cleanup all passed
+  with zero GitHub annotations.
+- Signed IPA artifact `10029499203` recorded SHA-256 digest
+  `b3ee94e163daba0ed990de394a5eab9ac87aba75ca327b20b5fbd60916db96c6`.
+- Apple's upload transaction accepted the binary. App Store Connect now
+  authoritatively shows Build 38 upload processing `Complete`, build status
+  `Ready to Submit`, and automatic assignment only to `KeyHollow Internal`.
+  `Family` is not attached; no tester-group, merge, or App Store review action
+  occurred.
+- Final release-source audit confirmed that only the two synchronized build
+  values, current delivery allowlist/comment, and status documentation changed
+  from green feature head `8e356b8`. Application source, protected modules,
+  product identity, signing/provisioning, pinned actions, and other workflows
+  are unchanged.
+- Repository-wide hardening caveat: historical remote delivery branches retain
+  historical copies of their self-allowing manual upload workflow. Their build
+  numbers are already consumed, so the App Store build-number guard rejects
+  them before signing or upload. Strict retirement would require an explicit
+  destructive branch-cleanup or protected-environment decision; it is not a
+  Build 38 source defect.
+
+- App Store Connect authoritatively shows Build 36 as the latest completed
+  upload; Build 37 is unused and available for this release candidate.
+- Created isolated release branch `delivery/gallery-grid-normalization` from the
+  closed validated correction head `85e8d9e`. No build-number or production-
+  workflow source had been changed at the pre-release checkpoint.
+- Reserved Build 37 and synchronized `CURRENT_PROJECT_VERSION` for both the app
+  and embedded thumbnail extension after confirming the number is unused in App
+  Store Connect.
+- Replaced the retired Build 36 delivery exception with the exact
+  `delivery/gallery-grid-normalization` branch in the guarded production upload
+  workflow. `main` remains the only other permitted source; feature branches
+  remain unable to dispatch a production upload.
+- The signed TestFlight upload was dispatched only after exact Build 37 release-
+  source build/tests and Swift CodeQL completed green and Frank explicitly
+  authorized the external action.
+- Opened isolated draft Build 37 release review
+  [#46](https://github.com/Frankbell84/KeyHollow/pull/46) against `main` from
+  exact release commit `fac32b1`. The review is open, draft, mergeable, and
+  clean; it has not changed any tester group, merge, or App Store review state.
+- Exact Build 37 release-source validation run
+  [#282](https://github.com/Frankbell84/KeyHollow/actions/runs/34120940399)
+  passed every mandatory gate at commit
+  `fac32b1fe54653895a3ff51fc07f85af1938e0b8`.
+- Mac simulator build, complete regression/security and launch suites, release
+  hygiene, architecture enforcement, build-number guard, and packaged-
+  thumbnail verification passed in 5m11s.
+- Swift CodeQL passed in 25m39s with no failed security gate.
+- Simulator artifact `10018304873` was recorded with SHA-256 digest
+  `776d221a78bd47e8964c0e498a3e0397b374d18ebc86f898c074606ac87e5954`.
+- Security-test artifact `10018306713` was recorded with SHA-256 digest
+  `1c2b9ef81ca5cb5997bdbed999093b5230b903d3b787b165c95c8eb68d7f3e5c`.
+- Exact documentation-head reproducibility run
+  [#283](https://github.com/Frankbell84/KeyHollow/actions/runs/34123533457)
+  passed every mandatory gate at commit
+  `4d715fdb30b893cf8f7de0c4c2edceb9e73b7438`.
+- Reproducibility Mac simulator build, complete regression/security and launch
+  suites, release hygiene, architecture enforcement, build-number guard, and
+  packaged-thumbnail verification passed in 9m30s.
+- Reproducibility Swift CodeQL passed in 26m07s with no failed security gate.
+- Simulator artifact `10019460121` was recorded with SHA-256 digest
+  `7328c2c0d9b30e3c434019a9854e8ca008bb96b43e9a0470b650b80c55fad09c`.
+- Security-test artifact `10019464923` was recorded with SHA-256 digest
+  `7e7b0cf485b0ba503ecfb9a2b600b961f890b591cf9c260b1e894b39d75beafa`.
+- Final exact-head validation run
+  [#284](https://github.com/Frankbell84/KeyHollow/actions/runs/34126197160)
+  passed every mandatory gate at uploaded commit
+  `db4996e5cd63e4211f8f8d2c436f3eb4f5567afd`.
+- Final Mac simulator build, complete regression/security and launch suites,
+  release hygiene, architecture enforcement, build-number guard, and packaged-
+  thumbnail verification passed in 8m11s. Final Swift CodeQL passed in 26m22s.
+- Final simulator artifact `10020457996` was recorded with SHA-256 digest
+  `0b9126237a5d0c90cc6ba174a95f3d4023a1ab5d7905dc9086c92563265c81ee`.
+- Final security-test artifact `10020461739` was recorded with SHA-256 digest
+  `2f185d4ee013522dc8ce44d88c48f8914190df3a1f39dc98af4c6f4606a6df50`.
+- Guarded TestFlight workflow
+  [#47](https://github.com/Frankbell84/KeyHollow/actions/runs/34129257407)
+  completed successfully in 2m40s from exact commit `db4996e`.
+- Release hygiene, production identity, unused Build 37 verification, cloud
+  signing, archive/module hygiene, signed IPA export, Apple upload, artifact
+  retention, and signing-material cleanup all passed.
+- Signed IPA artifact `10021471622` was recorded with SHA-256 digest
+  `c8d598c4da341e52585457aa1171fb22d6645aeeb52e0d9170e030bad3dda1e8`.
+- Apple accepted the binary upload. Build 37 processing and confirmation of its
+  automatic `KeyHollow Internal` availability remain pending; `Family`, merge,
+  and App Store review state were not changed.
+- Frank physically confirmed that Build 36 folders work and selected photos and
+  files can be moved successfully.
+- Build 36 screenshots exposed one remaining presentation defect: folders,
+  screenshots, photos, and non-photo files can produce unequal tile heights;
+  the grid centers shorter cells within the row, making row tops and selection
+  indicators appear staggered.
+- Confirmed the correction belongs entirely to the independently compiled
+  `KeyHollowGalleryUI` module. Protected storage, encryption, authenticated
+  folder membership, and the accepted batch-move operation do not need changes.
+- Approved visual contract: every item uses the same fixed media viewport and
+  metadata footer. Images preserve their original aspect ratio with aspect-fill
+  cropping inside that viewport; the underlying full image is never resized or
+  altered.
+- Created and pushed isolated branch `fix/gallery-grid-normalization` from the
+  exact Build 36 delivery head before modifying implementation source.
+- Rebuilt the shared tile surface around a neutral square viewport whose size
+  cannot be influenced by a portrait, landscape, screenshot, or placeholder's
+  intrinsic dimensions. Image content remains aspect-fill and clipped only for
+  its thumbnail presentation.
+- Removed the folder-only `GeometryReader` layout and routed folders through
+  the same shared media viewport and fixed 56-point metadata footer used by
+  every photo and general-file tile.
+- Set all three grid columns to explicit top alignment and centralized column
+  count and spacing with the existing tile metrics, eliminating implicit
+  vertical centering of shorter cells.
+- Extended gallery regression coverage for the centralized three-column
+  geometry and strengthened the architecture gate to reject a return to
+  variable folder geometry or a non-top-aligned grid.
+- Local release hygiene, architecture enforcement, build-number guard self-
+  test, and whitespace/diff checks passed. Exact-source Mac compilation, full
+  regression/security tests, and Swift CodeQL were then required remotely.
+- Opened isolated draft review
+  [#45](https://github.com/Frankbell84/KeyHollow/pull/45) against `main` for the
+  presentation-only correction; it remains unmerged and has not changed any
+  TestFlight group or App Store review state.
+- Exact implementation-source validation run
+  [#279](https://github.com/Frankbell84/KeyHollow/actions/runs/34108714858)
+  passed every mandatory gate at commit `5036c8b`.
+- Mac simulator build, complete regression/security and launch suites, release
+  hygiene, architecture enforcement, build-number guard, and packaged-
+  thumbnail verification passed in 11m24s.
+- Swift CodeQL passed in 30m50s with no failed security gate.
+- Simulator artifact `10013806986` was recorded with SHA-256 digest
+  `b4928b82d967a56c696c2cbcd365f55325b02c4deb487873b1e48c46caae4ed4`.
+- Security-test artifact `10013814113` was recorded with SHA-256 digest
+  `13d9c769bdca1635bc324fbd2cb8caa15279b767d6698b6aa5613751d3e2e45f`.
+- Exact documentation-head reproducibility run
+  [#280](https://github.com/Frankbell84/KeyHollow/actions/runs/34111719875)
+  passed every mandatory gate at commit `74c44d4`.
+- Reproducibility Mac simulator build, complete regression/security and launch
+  suites, release hygiene, architecture enforcement, build-number guard, and
+  packaged-thumbnail verification passed in 7m56s.
+- Reproducibility Swift CodeQL passed in 26m30s with no failed security gate.
+- Simulator artifact `10014857665` was recorded with SHA-256 digest
+  `cfa52b51c9a5e4424c2e4eeaaeeb68714f76207cee71b5d9e21ca95b4db0097e`.
+- Security-test artifact `10014860871` was recorded with SHA-256 digest
+  `b29f44e593cc440711e8a1a50370957b095af25f059c27b6c2d99c21070645fc`.
+- Frank's physical-device report confirmed that selected gallery items cannot
+  currently be moved to an existing folder; screenshots show the selection
+  count is correct while the toolbar omits a folder action.
+- Paused Encrypted Video Support delivery after its implementation commit
+  `dcef6d5` passed exact-source Mac build/tests and Swift CodeQL. Its evidence is
+  preserved on `feature/encrypted-video-support` at `c56edff`; no video work is
+  mixed into this correction.
+- Created `fix/batch-move-to-folder` directly from exact hardened `origin/main`
+  commit `3dc0f4a` so the correction can be reviewed, tested, delivered, and
+  merged independently.
+- Confirmed the existing Folder Presentation store owns only encrypted folder
+  membership metadata and already supports both photo and general-file
+  references. The missing behavior is the narrow batch operation and unified
+  gallery composition, not a storage migration or encrypted-content move.
+- Backup Verification Center remains next after this correction and Encrypted
+  Video Support close; no work on that add-on has begun.
+- Added a visible multi-select Move menu alongside save/export and delete. At
+  the vault root it lists every folder; inside a folder it also offers Vault
+  Root and excludes the current destination.
+- Added a source-neutral selected-reference bridge so photo-only, file-only,
+  video-file, and mixed selections all use the same folder-membership path.
+- Added an atomic batch move to `KeyHollowFolderPresentationAddOn`. It validates
+  the destination first, removes prior memberships for the complete set, and
+  writes the new encrypted manifest once without touching protected content.
+- Preserved the existing single-item move surface by routing it through the
+  same batch operation, eliminating parallel implementations.
+- Added regression tests for mixed photo/file movement, return to the vault
+  root, and failure against a missing destination with an unchanged manifest.
+- Strengthened the architecture gate and durable behavior baseline so removal
+  of the selection Move action or reintroduction of content-moving behavior is
+  review-visible.
+- Local release hygiene, architecture enforcement, build-number guard self-
+  test, and whitespace/diff checks passed. Exact-source Mac compilation, full
+  regression/security tests, and Swift CodeQL are required next.
+- Opened isolated draft review
+  [#43](https://github.com/Frankbell84/KeyHollow/pull/43) against `main`; it
+  remains non-mergeable and contains only the correction and its status
+  checkpoint.
+- Exact-source validation run
+  [#270](https://github.com/Frankbell84/KeyHollow/actions/runs/34074994541)
+  passed every mandatory gate at implementation commit `fac2eb1`.
+- Release hygiene, architecture enforcement, build-number guard, project
+  generation, simulator compilation, packaged-thumbnail verification, and the
+  complete unit/launch/security suite passed in the 5m55s build-and-test job.
+- Swift CodeQL passed in 26m01s with no failed security gate or unresolved
+  finding.
+- Security-test artifact `10001823710` recorded SHA-256 digest
+  `5e61cf7f1785147b5272d9179e8948c36e0852f4e8ca1780999fa35f250c0efe`.
+- Simulator artifact `10001822388` recorded SHA-256 digest
+  `4120a1d0a2b9e5ca0d9bb2c51de1fa869deb9dd65932ee2e14911aa0e78f6286`.
+- Final documentation-head reproducibility run
+  [#274](https://github.com/Frankbell84/KeyHollow/actions/runs/34076597749)
+  passed every mandatory gate at exact branch head `6117aa2`.
+- The repeated simulator build, complete unit/launch/security suite, release
+  hygiene, architecture enforcement, build-number guard, and packaged-thumbnail
+  check passed in 9m44s. Swift CodeQL passed in 23m27s with no failed gate.
+- Reproducibility security-test artifact `10002441788` recorded SHA-256 digest
+  `3fda0124213ddb613d268fb607e1c7ec5edd494ed13b0d44dc264ce13354b924`.
+- Reproducibility simulator artifact `10002439591` recorded SHA-256 digest
+  `da7ce041dd25837f5b106fcbeead41ff15e74c76984163ca152bfe197d1c461a`.
+- Created `delivery/batch-move-to-folder` directly from that exact green head;
+  no implementation source changed during the branch transition.
+- Reserved Build 36 and synchronized `CURRENT_PROJECT_VERSION` for both the app
+  and embedded vault-thumbnail extension.
+- Replaced the obsolete Build 35 delivery exception with only the exact
+  `delivery/batch-move-to-folder` branch. Feature and unrelated delivery
+  branches remain unable to invoke the signed upload workflow.
+- Opened isolated draft release review
+  [#44](https://github.com/Frankbell84/KeyHollow/pull/44) from the exact Build 36
+  delivery branch. The review remains non-mergeable and no tester group or App
+  Store review state was changed.
+- Exact Build 36 release-source validation run
+  [#275](https://github.com/Frankbell84/KeyHollow/actions/runs/34100902710)
+  passed every mandatory gate at commit `2668da4`.
+- Build 36 project generation, simulator compilation, release hygiene,
+  architecture enforcement, build-number guard, packaged-thumbnail check, and
+  the complete unit/launch/security suite passed in 8m37s.
+- Swift CodeQL passed in 24m27s with no failed security gate or unresolved
+  finding.
+- Build 36 security-test artifact `10010697401` recorded SHA-256 digest
+  `5186b6404be7215e9853fd3c41cfde527f3f637433dbec74646d47755ec5ca77`.
+- Build 36 simulator artifact `10010694262` recorded SHA-256 digest
+  `b5014f949890dd2d5bf1c201abc94c112d23f41d8e5bd4beae315c878302b180`.
+- Final Build 36 evidence-head reproducibility run
+  [#276](https://github.com/Frankbell84/KeyHollow/actions/runs/34103379382)
+  passed every mandatory gate at exact delivery head `9b3d353`.
+- The repeated complete build/test suite passed in 7m53s, and Swift CodeQL
+  passed in 18m11s with no failed security gate or unresolved finding.
+- Final-head security-test artifact `10011633718` recorded SHA-256 digest
+  `dacf08acc7c6b46a2087b81a5b1064aef349776d3c10fa5e0e3645956aae673b`.
+- Final-head simulator artifact `10011630800` recorded SHA-256 digest
+  `1886eead573fe4de0d9e24ad88ea932dc3a43b6db14455d0af7efd29b5a0fac6`.
+- After Frank's explicit authorization, guarded TestFlight workflow
+  [#46](https://github.com/Frankbell84/KeyHollow/actions/runs/34105375436)
+  successfully archived, signed, validated, and uploaded Build 36 from exact
+  green head `9b3d353` in 3m52s.
+- No `Family` assignment, merge, or App Store review action was performed.
+- App Store Connect completed processing Build 36 and lists it as `Ready to
+  Submit` in exactly the `KeyHollow Internal` group. `Family` is not attached.
+- Frank confirmed that unified swipe navigation across Photo-library images and
+  image files belongs in a separate later build; Build 36 remains limited to
+  the folder-move correction.
 
 - Created `feature/general-file-export-parity` directly from merged Build 34
   baseline `ec25031`; no release branch or production state is being changed.
@@ -293,6 +714,23 @@ review state remains out of scope.
 
 ## Test and build status
 
+- App Store Connect rollout verification: Build 38 is `Testing` in both
+  `KeyHollow Internal` and `Family`; automatic tester notification was enabled.
+- Build 38 physical-device acceptance: all seven required performance and
+  interaction scenarios passed.
+- Documentation-head validation run
+  [#293](https://github.com/Frankbell84/KeyHollow/actions/runs/34152694773)
+  at exact commit `024d144`: Mac simulator build, packaged-thumbnail check,
+  complete regression/security suite, and both artifact uploads passed in
+  6m52s with zero Mac-job annotations. Swift CodeQL build and analysis also
+  passed, leaving every mandatory gate green.
+- Run #293 simulator artifact `10030072987` recorded SHA-256 digest
+  `ba76f8ae4da750b3e58dc193062a4d6726e4d2d3816d435b8222a625a46c043d`;
+  security-test artifact `10030074902` recorded SHA-256 digest
+  `13edeb1c512c3b40510b2a370914eaa5de8dda812e32791f3dc893274f11daf9`.
+- App Store Connect processing verification: Build 38 upload processing is
+  `Complete`; after the authorized rollout its testing groups are `KeyHollow
+  Internal` and `Family`.
 - General-file export parity architecture gate: passed locally.
 - Release hygiene and TestFlight build-number guard self-test: passed locally.
 - Diff whitespace validation: passed locally.
@@ -563,18 +1001,119 @@ review state remains out of scope.
   limited production upload permission to the exact immutable branch
   `delivery/mixed-gallery-selection`.
 
+## Deferred roadmap additions
+
+- **Vault catalog search and sort:** add an authenticated presentation-only
+  catalog/index so name, type, size, date, and folder queries never decrypt or
+  scan full file payloads. Current fixed newest-first/name ordering remains until
+  that separately reviewed module is ready.
+- **Nested folders:** extend folder metadata with an optional parent reference,
+  cycle prevention, bounded depth, safe deletion behavior, and breadcrumb
+  navigation. This is a folder-presentation schema change, not a content-store
+  rewrite.
+- **Cross-vault links:** keep direct `.khvault` import/embedding blocked to avoid
+  recursive archives, ambiguous recovery, and unbounded exports. If needed,
+  design a lightweight authenticated reference to a separately managed vault
+  instead of nesting a complete portable vault payload.
+- **Import progress:** add honest item-level encrypted-import progress after the
+  gallery performance correction. True byte-level progress remains paired with
+  the later streaming/large-video storage path.
+
+- **Break-in Reports / Intruder Capture:** optional, local-only records of
+  failed access attempts. Design must avoid creating a plaintext vault-existence
+  signal, must have bounded retention, and must not weaken lockout behavior.
+- **App Icon Camouflage:** optional alternate icons such as calculator, notes,
+  or stock-tracker styles. Before implementation, verify current App Store
+  policy, make the setting reversible, and preserve an unambiguous recovery
+  path for the owner.
+- **Vault Escape Hatch migration:** an isolated iOS Share Extension that accepts
+  only files the user explicitly shares from another app and hands them to a
+  protected KeyHollow import path for immediate encryption. The extension must
+  not enumerate vaults, retain plaintext, or possess a general vault-unlock
+  capability. Competitor-specific three-step migration guides may be added as
+  onboarding after each supported app's current export behavior is verified.
+- These roadmap items begin only after the current gallery normalization,
+  separate swipe-navigation correction, and already-planned security/backup
+  work. None is part of the present release candidate.
+
 ## Blockers
 
-- No known engineering blocker. Family rollout is complete; final branch
-  validation, merge, and post-merge hardening are approved and in progress.
+- Build 37 remains rejected for wider rollout because it reproduced scrolling
+  and image-opening lag at 26 items; accepted Build 38 supersedes it.
+- Feature-head runs #288/#289, Build 38 release-source run #290, final release
+  head #291, guarded upload #48, Apple processing/Internal availability, and all
+  seven physical-device checks are complete. Documentation-head run #293 also
+  passed its Mac and Swift CodeQL jobs. There is no known code, performance,
+  security, or delivery defect. `Family` rollout is complete; only the
+  authorized merge checkpoint remains.
 
 ## Next action
 
-Require this exact delivery head to pass all mandatory checks, merge PR #41,
-then validate and checkpoint the resulting `main` commit. Do not alter App Store
-review state.
+Commit and push the complete physical-acceptance and `Family` rollout evidence,
+wait for that exact branch head to pass all mandatory checks, then merge PR #48
+and verify the resulting `main` state. Do not change App Store review state.
 
 ## Frank's decision required
+
+- Frank accepted the recommendation to keep full `.khvault` payloads from being
+  nested inside vaults. A separately managed cross-vault reference may be
+  designed later; recursive archive embedding remains intentionally blocked.
+- Frank agreed that authenticated catalog search/sort, cycle-safe nested folder
+  metadata, and lightweight cross-vault references should remain separate later
+  modules. They must not expand the current performance correction or rewrite
+  the encrypted stores.
+- Frank's 26-item device report rejected Build 37 for wider rollout on
+  performance grounds. Build 38's isolated correction, release-source evidence,
+  guarded upload, Apple processing, and all seven physical-device acceptance
+  scenarios now pass. Frank explicitly authorized adding Build 38 to `Family`
+  and merging PR #48 after the exact acceptance head is green. The `Family`
+  rollout is complete; the merge remains pending its updated-head gates. App
+  Store review remains a separate decision.
+- Historical delivery branches may be permanently retired or protected later
+  to remove their manually runnable historical workflow copies. Their consumed
+  build numbers already fail closed before signing/upload; deleting branches or
+  changing repository deployment controls requires Frank's separate decision
+  and is not authorized by Build 38 preparation.
+- Frank explicitly confirmed creation of draft performance PR #47. That
+  confirmation authorized only the draft review and its validation gates; it
+  did not authorize a signed upload, `Family` assignment, merge, or App Store
+  review change.
+
+- Frank approved the isolated gallery-normalization correction after confirming
+  that the fixed thumbnail viewport will crop with preserved aspect ratio rather
+  than stretch or alter images.
+- Frank approved creating draft correction PR #43 and proceeding through the
+  full review gates. Those gates are complete and green.
+- Frank requested completion for testing. The isolated release source may be
+  prepared and validated; dispatching the signed TestFlight upload will be
+  confirmed at the final external-action boundary.
+- Frank explicitly approved creating draft Build 36 release PR #44. The review
+  exists and exact release-source CI is green. The signed upload, tester-group
+  assignment, merge, and App Store review remain separate decisions.
+- Frank explicitly authorized the signed Build 36 upload to `KeyHollow
+  Internal`; guarded workflow #46 succeeded. `Family` rollout, merge, and App
+  Store review remain separate decisions.
+- Build 36 processing and Internal-only assignment are complete. Frank's
+  physical-device acceptance is now required before merge; `Family` remains a
+  separate later decision.
+- Frank confirmed the missing image-swipe behavior should be corrected in a
+  separate build rather than expanding Build 36.
+- Frank requested that Break-in Reports / Intruder Capture, App Icon Camouflage,
+  and the Vault Escape Hatch migration/share extension be retained as later
+  add-ons. Their implementation order and detailed privacy/product design remain
+  later decisions; none is authorized for the current release candidate.
+- Frank approved proceeding with Build 37 release preparation. The signed
+  TestFlight upload remains a separate explicit approval boundary.
+- Draft Build 37 release PR #46 and exact-source CI run #282 are complete and
+  green. Frank's explicit authorization is now required before dispatching the
+  signed Build 37 upload to `KeyHollow Internal`.
+- Documentation-head reproducibility run #283 is also complete and green. No
+  automated release gate or known code issue remains before the explicit
+  signed-upload decision.
+- Frank explicitly authorized proceeding with the signed Build 37 upload when
+  the final exact-head gate passed. That authorization was used only for guarded
+  upload workflow #47; the workflow succeeded. `Family`, merge, and App Store
+  review remain separate decisions after processing and device acceptance.
 
 - Frank explicitly approved creating draft Build 35 release PR #41. That review
   is open and its exact release-source CI is green.

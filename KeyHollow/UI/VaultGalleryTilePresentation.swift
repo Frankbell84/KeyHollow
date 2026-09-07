@@ -3,6 +3,8 @@ import SwiftUI
 import UIKit
 
 enum VaultGalleryTileMetrics {
+    static let columnCount = 3
+    static let gridSpacing: CGFloat = 3
     static let mediaAspectRatio: CGFloat = 1
     static let footerHeight: CGFloat = 56
     static let selectionInset: CGFloat = 8
@@ -149,28 +151,29 @@ struct VaultGalleryTileSurface<Media: View>: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            ZStack(alignment: .topTrailing) {
-                ZStack {
-                    Rectangle()
-                        .fill(.secondary.opacity(0.12))
-
+            Rectangle()
+                .fill(.secondary.opacity(0.12))
+                .aspectRatio(
+                    VaultGalleryTileMetrics.mediaAspectRatio,
+                    contentMode: .fit
+                )
+                .overlay {
                     media
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
-                .aspectRatio(VaultGalleryTileMetrics.mediaAspectRatio, contentMode: .fit)
                 .clipped()
-
-                if let isSelected = selectionState {
-                    Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                        .font(.title2)
-                        .foregroundStyle(
-                            isSelected ? Color.accentColor : Color.white,
-                            Color.white
-                        )
-                        .padding(VaultGalleryTileMetrics.selectionInset)
-                        .shadow(radius: 2)
+                .overlay(alignment: .topTrailing) {
+                    if let isSelected = selectionState {
+                        Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                            .font(.title2)
+                            .foregroundStyle(
+                                isSelected ? Color.accentColor : Color.white,
+                                Color.white
+                            )
+                            .padding(VaultGalleryTileMetrics.selectionInset)
+                            .shadow(radius: 2)
+                    }
                 }
-            }
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
@@ -191,8 +194,9 @@ struct VaultGalleryTileSurface<Media: View>: View {
                 maxHeight: VaultGalleryTileMetrics.footerHeight,
                 alignment: .topLeading
             )
-            .background(.ultraThinMaterial)
+            .background(Color(uiColor: .secondarySystemBackground))
         }
+        .frame(maxWidth: .infinity, alignment: .top)
     }
 }
 

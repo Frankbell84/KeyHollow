@@ -55,6 +55,19 @@ otherwise.
   collision, cancellation, or an interrupted restore must fail closed without
   exposing plaintext or replacing an existing vault.
 
+## Approved later gallery and folder behavior
+
+- The unified gallery selects photos and general files by distinct typed
+  references even when their UUID values match.
+- A selected photo-only, file-only, or mixed batch can move to an existing
+  folder. A selection already inside a folder can move to the vault root or a
+  different folder.
+- Batch movement changes only encrypted Folder Presentation membership
+  metadata with one authenticated manifest write. It never copies, decrypts,
+  rewrites, or deletes protected photo or general-file content.
+- A missing destination or failed membership write leaves the prior folder
+  assignments and protected content unchanged.
+
 ## Automated Stage One evidence
 
 - `VaultLifecycleBaselineTests` covers create, persistence across service

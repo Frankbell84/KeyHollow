@@ -257,7 +257,67 @@ final class VaultGalleryPresentationTests: XCTestCase {
         XCTAssertEqual(items.map(\.presentationItem.title), ["Newer", "Older"])
     }
 
+    func testGallerySnapshotMapsTwentySixMixedItemsOnceWithStableLookup() {
+        let sharedSourceID = UUID()
+        var photos: [VaultPhotoRecord] = []
+        var files: [VaultGeneralFileRecord] = []
+        photos.reserveCapacity(13)
+        files.reserveCapacity(13)
+
+        for index in 0..<13 {
+            let sourceID = index == 0 ? sharedSourceID : UUID()
+            let photoImportedAt = Date(
+                timeIntervalSinceReferenceDate: TimeInterval(100 + index)
+            )
+            let fileImportedAt = Date(
+                timeIntervalSinceReferenceDate: TimeInterval(200 + index)
+            )
+
+            photos.append(VaultPhotoRecord(
+                id: sourceID,
+                importedAt: photoImportedAt,
+                blobName: "photo-\(index).khp",
+                thumbnailName: "photo-\(index).kht",
+                displayName: "Photo \(index).HEIC",
+                originalByteCount: UInt64(1_000 + index)
+            ))
+            files.append(VaultGeneralFileRecord(
+                id: sourceID,
+                importedAt: fileImportedAt,
+                displayName: "File \(index).jpg",
+                contentTypeIdentifier: "public.jpeg",
+                originalByteCount: UInt64(2_000 + index),
+                blobName: "file-\(index).khg"
+            ))
+        }
+        let snapshot = VaultGalleryContentSnapshot(
+            items: photos.map(VaultGalleryContentItem.photo)
+                + files.map(VaultGalleryContentItem.generalFile)
+        )
+
+        XCTAssertEqual(snapshot.presentations.count, 26)
+        XCTAssertEqual(snapshot.orderedSources.count, 26)
+        XCTAssertEqual(snapshot.sourceByID.count, 26)
+        XCTAssertEqual(snapshot.selectableItems.count, 26)
+        let importedDates = snapshot.presentations.map { $0.importedAt }
+        XCTAssertEqual(
+            importedDates,
+            importedDates.sorted(by: >)
+        )
+        for presentation in snapshot.presentations {
+            XCTAssertEqual(snapshot.sourceByID[presentation.id]?.id, presentation.id)
+        }
+        XCTAssertNotNil(
+            snapshot.sourceByID[VaultGallerySelection.Item.photo(sharedSourceID)]
+        )
+        XCTAssertNotNil(
+            snapshot.sourceByID[VaultGallerySelection.Item.generalFile(sharedSourceID)]
+        )
+    }
+
     func testSharedTileGeometryIsFixedForEveryItemKind() {
+        XCTAssertEqual(VaultGalleryTileMetrics.columnCount, 3)
+        XCTAssertEqual(VaultGalleryTileMetrics.gridSpacing, 3)
         XCTAssertEqual(VaultGalleryTileMetrics.mediaAspectRatio, 1)
         XCTAssertEqual(VaultGalleryTileMetrics.footerHeight, 56)
         XCTAssertEqual(VaultGalleryTileMetrics.selectionInset, 8)

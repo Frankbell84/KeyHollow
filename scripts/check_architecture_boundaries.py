@@ -450,6 +450,32 @@ def main() -> int:
                 "project.yml: KeyHollowSecurePreviewAddOn must remain dependency-free"
             )
 
+    secure_preview_source = (
+        SOURCE_ROOT / "AddOns" / "SecurePreview" / "VaultSecureImagePreview.swift"
+    ).read_text(encoding="utf-8")
+    for required in (
+        "public actor VaultSecureImageProcessor",
+        "kCGImageSourceShouldCacheImmediately: true",
+        "preview?.displayImage.image",
+        "fileprivate init(image: UIImage)",
+    ):
+        if required not in secure_preview_source:
+            violations.append(
+                "KeyHollow/AddOns/SecurePreview/VaultSecureImagePreview.swift: "
+                f"prepared-image performance boundary is missing {required!r}"
+            )
+    for obsolete in (
+        "UIImage(data: preview.originalData)",
+        "UIImage(data: preview?.originalData)",
+        "public init(image: UIImage)",
+        "public init(id: UUID, displayName: String, originalData: Data)",
+    ):
+        if obsolete in secure_preview_source:
+            violations.append(
+                "KeyHollow/AddOns/SecurePreview/VaultSecureImagePreview.swift: "
+                "full-resolution image decoding returned to the SwiftUI view body"
+            )
+
     gallery_grid_source = (
         SOURCE_ROOT / "UI" / "VaultGalleryGridView.swift"
     ).read_text(encoding="utf-8")
@@ -476,6 +502,45 @@ def main() -> int:
                 "KeyHollow/UI/VaultGalleryGridView.swift: storage-model bypass "
                 f"entered the grid contract ({bypass})"
             )
+
+    for required in (
+        "spacing: VaultGalleryTileMetrics.gridSpacing",
+        "alignment: .top",
+        "count: VaultGalleryTileMetrics.columnCount",
+    ):
+        if required not in gallery_grid_source:
+            violations.append(
+                "KeyHollow/UI/VaultGalleryGridView.swift: normalized top-aligned "
+                f"grid contract is missing {required!r}"
+            )
+
+    folder_tile_source = (
+        SOURCE_ROOT / "UI" / "VaultFolderPresentationViews.swift"
+    ).read_text(encoding="utf-8")
+    if "VaultGalleryTileSurface(" not in folder_tile_source:
+        violations.append(
+            "KeyHollow/UI/VaultFolderPresentationViews.swift: folder tiles must "
+            "use the shared normalized gallery tile surface"
+        )
+    if "GeometryReader" in folder_tile_source:
+        violations.append(
+            "KeyHollow/UI/VaultFolderPresentationViews.swift: variable folder "
+            "geometry returned"
+        )
+
+    gallery_tile_source = (
+        SOURCE_ROOT / "UI" / "VaultGalleryTilePresentation.swift"
+    ).read_text(encoding="utf-8")
+    if ".background(Color(uiColor: .secondarySystemBackground))" not in gallery_tile_source:
+        violations.append(
+            "KeyHollow/UI/VaultGalleryTilePresentation.swift: tile metadata must "
+            "retain its non-blurring system background"
+        )
+    if ".background(.ultraThinMaterial)" in gallery_tile_source:
+        violations.append(
+            "KeyHollow/UI/VaultGalleryTilePresentation.swift: per-tile live blur "
+            "returned to the scrolling grid"
+        )
 
     for file in swift_files:
         path = relative(file)
@@ -691,15 +756,71 @@ def main() -> int:
         "GeneralFileShareSheet(urls: prepared.urls)",
         'Label("Export to Files", systemImage: "square.and.arrow.up")',
         'Label("Export Files", systemImage: "square.and.arrow.up")',
-        "visibleGalleryContentItems.map(\\.presentationItem)",
+        'Label("Move", systemImage: "folder")',
+        "presentationStore.move(items, to: folderID)",
+        "selectedPresentedReferences",
+        "let snapshot = makeVisibleGallerySnapshot()",
+        "VaultGalleryContentSnapshot",
+        "sourceByID: snapshot.sourceByID",
         "folders: visibleGalleryFolders",
-        "items: visibleGalleryItems",
+        "items: snapshot.presentations",
+        "priority: .utility",
+        "private actor VaultGeneralFileThumbnailPipeline",
+        "private var waiters: [CheckedContinuation<Void, Never>]",
+        "@State private var thumbnailImageProcessor = VaultSecureImageProcessor()",
+        "@State private var previewImageProcessor = VaultSecureImageProcessor()",
+        "@State private var generalFileThumbnailPipeline = VaultGeneralFileThumbnailPipeline()",
+        "let renderedImage = try await generalFileThumbnailPipeline.image(",
+        "cacheMissImageProcessor.prepareThumbnail(",
+        "previewImageProcessor.preparePreview(",
+        "session.cancelSensitiveTask(previewTaskID)",
     ):
         if required not in gallery_source:
             violations.append(
                 f"KeyHollow/Photos/VaultGalleryView.swift: unified gallery "
                 f"composition is missing {required!r}"
             )
+
+    pipeline_start = gallery_source.find(
+        "private actor VaultGeneralFileThumbnailPipeline"
+    )
+    pipeline_end = gallery_source.find(
+        "/// Application composition coordinator", pipeline_start
+    )
+    pipeline_source = gallery_source[pipeline_start:pipeline_end]
+    cache_check = "if let cachedImage = try await loadCachedThumbnail("
+    cache_checks = [
+        match.start() for match in re.finditer(re.escape(cache_check), pipeline_source)
+    ]
+    permit_position = pipeline_source.find("await acquire()")
+    original_load_position = pipeline_source.find(
+        "generalFileStore.loadFile(record)"
+    )
+    miss_prepare_position = pipeline_source.find(
+        "cacheMissImageProcessor.prepareThumbnail("
+    )
+    for required in (
+        "private let cachedThumbnailDecoder = VaultSecureImageProcessor()",
+        "private let cacheMissImageProcessor = VaultSecureImageProcessor()",
+        "cachedThumbnailDecoder.decodeThumbnail(",
+        "catch let cancellation as CancellationError",
+    ):
+        if required not in pipeline_source:
+            violations.append(
+                "KeyHollow/Photos/VaultGalleryView.swift: general-file "
+                f"thumbnail cache/miss isolation is missing {required!r}"
+            )
+    if not (
+        len(cache_checks) == 2
+        and cache_checks[0] < permit_position < cache_checks[1]
+        and cache_checks[1] < original_load_position < miss_prepare_position
+    ):
+        violations.append(
+            "KeyHollow/Photos/VaultGalleryView.swift: encrypted thumbnail "
+            "cache hits must bypass the full-payload permit, queued misses "
+            "must recheck the cache, and original preparation must remain "
+            "inside the bounded miss lane"
+        )
     for obsolete in (
         "LazyVGrid(columns:",
         "ForEach(visibleFolders)",
@@ -707,6 +828,9 @@ def main() -> int:
         "VaultGeneralFileTileView(",
         "thumbnailCell(",
         "DecryptedPhotoView(",
+        "visibleGalleryContentItems.first(where:",
+        "private let thumbnailImageProcessor = VaultSecureImageProcessor()",
+        "private let previewImageProcessor = VaultSecureImageProcessor()",
     ):
         if obsolete in gallery_source:
             violations.append(

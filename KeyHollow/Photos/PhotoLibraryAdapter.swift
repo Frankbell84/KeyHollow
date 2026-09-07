@@ -92,7 +92,10 @@ public enum ApplePhotoPickerItemLoader {
 
         let scale = min(1, maxDimension / max(source.width, source.height))
         let size = CGSize(width: source.width * scale, height: source.height * scale)
-        let renderer = UIGraphicsImageRenderer(size: size)
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        format.opaque = true
+        let renderer = UIGraphicsImageRenderer(size: size, format: format)
         let thumbnail = renderer.image { _ in
             image.draw(in: CGRect(origin: .zero, size: size))
         }
