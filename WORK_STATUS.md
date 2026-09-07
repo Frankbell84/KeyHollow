@@ -62,6 +62,17 @@ merge state, or App Store review state.
   `b4928b82d967a56c696c2cbcd365f55325b02c4deb487873b1e48c46caae4ed4`.
 - Security-test artifact `10013814113` was recorded with SHA-256 digest
   `13d9c769bdca1635bc324fbd2cb8caa15279b767d6698b6aa5613751d3e2e45f`.
+- Exact documentation-head reproducibility run
+  [#280](https://github.com/Frankbell84/KeyHollow/actions/runs/34111719875)
+  passed every mandatory gate at commit `74c44d4`.
+- Reproducibility Mac simulator build, complete regression/security and launch
+  suites, release hygiene, architecture enforcement, build-number guard, and
+  packaged-thumbnail verification passed in 7m56s.
+- Reproducibility Swift CodeQL passed in 26m30s with no failed security gate.
+- Simulator artifact `10014857665` was recorded with SHA-256 digest
+  `cfa52b51c9a5e4424c2e4eeaaeeb68714f76207cee71b5d9e21ca95b4db0097e`.
+- Security-test artifact `10014860871` was recorded with SHA-256 digest
+  `b29f44e593cc440711e8a1a50370957b095af25f059c27b6c2d99c21070645fc`.
 - Frank's physical-device report confirmed that selected gallery items cannot
   currently be moved to an existing folder; screenshots show the selection
   count is correct while the toolbar omits a folder action.
@@ -736,18 +747,16 @@ merge state, or App Store review state.
 ## Blockers
 
 - No known protected-data, folder-move, build, security-scan, upload, or tester-
-  assignment blocker. The exact implementation commit is green; the evidence
-  and roadmap documentation checkpoint must be pushed and reproduced cleanly
-  before a signed device build is proposed. Physical-device visual acceptance
-  remains required before merge or wider rollout.
+  assignment blocker. The exact implementation and documentation heads are
+  both green. Physical-device visual acceptance remains required before merge
+  or wider rollout.
 
 ## Next action
 
-Commit and push this evidence/roadmap checkpoint, rerun exact-head Mac
-build/tests and Swift CodeQL, and record reproducible green evidence. If that
-documentation head is also green, prepare the next unused Internal-only device
-build for visual acceptance. Do not dispatch a signed upload or alter `Family`,
-merge, or App Store review state without its separate approval.
+Prepare the next unused Internal-only release source, verify its build number
+against App Store Connect, and require exact-source Mac build/tests and Swift
+CodeQL. Stop before dispatching the signed TestFlight upload for explicit
+approval. Do not alter `Family`, merge, or App Store review state.
 
 ## Frank's decision required
 
