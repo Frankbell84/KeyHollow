@@ -6,13 +6,24 @@ Parent validation head: `8e356b8` (green gallery-performance evidence head)
 
 ## Current task
 
-Hand the exact physical-device acceptance matrix for processed Build 38 to
-Frank and collect performance/interaction results. Build 38 is available only
-to `KeyHollow Internal`; do not alter `Family`, merge state, or App Store review
-state without separate explicit approval and physical-device acceptance.
+Commit and validate the accepted Build 38 `Family` rollout checkpoint, then
+merge draft PR #48 only after that exact updated head reproduces green. Frank
+explicitly authorized both actions; App Store review state remains out of scope.
 
 ## Completed work
 
+- Frank completed all seven Build 38 physical-device acceptance checks and
+  reported the gallery is now "smooth as butter." Warm/cold mixed-content
+  scrolling, Files-origin thumbnail fill, first/repeat image opening,
+  dismiss/lock recovery, folder navigation and mixed moves, non-image routing,
+  and the largest representative image all passed without reported lag, stale
+  state, overheating, or crash.
+- Added Build 38 to the `Family` TestFlight group with automatic tester
+  notification and focused guidance covering mixed-gallery scrolling, image
+  opening across both import routes, folder moves, non-image routing, thumbnail
+  and label correctness, stale previews, heat, and crashes. App Store Connect
+  now authoritatively reports Build 38 as `Testing` in both `KeyHollow Internal`
+  and `Family`.
 - Frank reported that a mixed vault containing only 26 images/files is slow to
   scroll and slower than before when opening images. This count is far below a
   reasonable scale limit, so the report is classified as a presentation/loading
@@ -703,8 +714,23 @@ state without separate explicit approval and physical-device acceptance.
 
 ## Test and build status
 
-- App Store Connect verification: Build 38 upload processing is `Complete`, the
-  build is `Ready to Submit`, and its sole tester group is `KeyHollow Internal`.
+- App Store Connect rollout verification: Build 38 is `Testing` in both
+  `KeyHollow Internal` and `Family`; automatic tester notification was enabled.
+- Build 38 physical-device acceptance: all seven required performance and
+  interaction scenarios passed.
+- Documentation-head validation run
+  [#293](https://github.com/Frankbell84/KeyHollow/actions/runs/34152694773)
+  at exact commit `024d144`: Mac simulator build, packaged-thumbnail check,
+  complete regression/security suite, and both artifact uploads passed in
+  6m52s with zero Mac-job annotations. Swift CodeQL build and analysis also
+  passed, leaving every mandatory gate green.
+- Run #293 simulator artifact `10030072987` recorded SHA-256 digest
+  `ba76f8ae4da750b3e58dc193062a4d6726e4d2d3816d435b8222a625a46c043d`;
+  security-test artifact `10030074902` recorded SHA-256 digest
+  `13edeb1c512c3b40510b2a370914eaa5de8dda812e32791f3dc893274f11daf9`.
+- App Store Connect processing verification: Build 38 upload processing is
+  `Complete`; after the authorized rollout its testing groups are `KeyHollow
+  Internal` and `Family`.
 - General-file export parity architecture gate: passed locally.
 - Release hygiene and TestFlight build-number guard self-test: passed locally.
 - Diff whitespace validation: passed locally.
@@ -1012,26 +1038,20 @@ state without separate explicit approval and physical-device acceptance.
 
 ## Blockers
 
-- Build 37 is not eligible for merge or `Family` rollout because physical-device
-  acceptance exposed reproducible scrolling and image-opening lag at 26 items.
-- Windows cannot compile or profile the UIKit/iOS paths locally. Deterministic
-  structural tests and local policy gates must pass first, followed by the
-  required exact Build 38 release-source Mac build/test and Swift CodeQL gates.
-  Final performance acceptance must occur on Frank's physical device.
-- Feature-head runs #288/#289, Build 38 release-source run #290, and final-head
-  run #291 are fully green. Authorized upload workflow #48 also succeeded, and
-  Apple processing/Internal-only availability are confirmed. The sole remaining
-  blocker is Frank's physical-device performance and interaction acceptance;
-  there is no known code or delivery defect.
+- Build 37 remains rejected for wider rollout because it reproduced scrolling
+  and image-opening lag at 26 items; accepted Build 38 supersedes it.
+- Feature-head runs #288/#289, Build 38 release-source run #290, final release
+  head #291, guarded upload #48, Apple processing/Internal availability, and all
+  seven physical-device checks are complete. Documentation-head run #293 also
+  passed its Mac and Swift CodeQL jobs. There is no known code, performance,
+  security, or delivery defect. `Family` rollout is complete; only the
+  authorized merge checkpoint remains.
 
 ## Next action
 
-Frank installs Build 38 from `KeyHollow Internal` and completes physical
-acceptance covering warm and cold 26-item scrolling; first and repeat opens for
-Photos- and Files-origin images; dismiss/lock during preview loading; root/folder
-navigation and mixed moves; non-image routing; and the largest representative
-image. Record the result before considering any `Family`, merge, or App Store
-review action.
+Commit and push the complete physical-acceptance and `Family` rollout evidence,
+wait for that exact branch head to pass all mandatory checks, then merge PR #48
+and verify the resulting `main` state. Do not change App Store review state.
 
 ## Frank's decision required
 
@@ -1042,12 +1062,13 @@ review action.
   metadata, and lightweight cross-vault references should remain separate later
   modules. They must not expand the current performance correction or rewrite
   the encrypted stores.
-- Frank's 26-item device report rejects Build 37 for wider rollout on performance
-  grounds. The isolated correction now has green implementation and
-  release-source evidence. Frank explicitly authorized the Internal-only signed
-  Build 38 upload after the final evidence head reproduced green; that upload
-  succeeded. Physical acceptance remains required before any merge or wider
-  tester rollout.
+- Frank's 26-item device report rejected Build 37 for wider rollout on
+  performance grounds. Build 38's isolated correction, release-source evidence,
+  guarded upload, Apple processing, and all seven physical-device acceptance
+  scenarios now pass. Frank explicitly authorized adding Build 38 to `Family`
+  and merging PR #48 after the exact acceptance head is green. The `Family`
+  rollout is complete; the merge remains pending its updated-head gates. App
+  Store review remains a separate decision.
 - Historical delivery branches may be permanently retired or protected later
   to remove their manually runnable historical workflow copies. Their consumed
   build numbers already fail closed before signing/upload; deleting branches or
