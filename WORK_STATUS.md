@@ -1,21 +1,25 @@
 # KeyHollow Work Status
 
 Updated: 2026-09-07
-Branch: `fix/gallery-grid-normalization`
-Parent release head: `cce34d4` (Build 36 Internal availability checkpoint)
+Branch: `delivery/gallery-grid-normalization`
+Parent validation head: `85e8d9e` (closed gallery-grid validation checkpoint)
 
 ## Current task
 
-Correct the remaining unified-gallery grid normalization defect reported during
-Build 36 physical-device testing. Folder movement is accepted and working, but
-folders and content tiles do not yet share one fixed geometry: mixed intrinsic
-heights cause vertical centering, staggered row tops, and inconsistent selection
-indicator positions. Make a narrow presentation-only correction without changing
-protected content, folder membership, import/export, `.khvault`, tester groups,
-merge state, or App Store review state.
+Prepare the twice-validated unified-gallery grid correction as the next isolated
+Internal-only TestFlight release candidate. Reserve the next unused Apple build
+number, synchronize both app targets, restrict production upload permission to
+the exact delivery branch, and complete all exact-source release gates. Stop
+before the signed upload; do not alter `Family`, merge state, or App Store review
+state.
 
 ## Completed work
 
+- App Store Connect authoritatively shows Build 36 as the latest completed
+  upload; Build 37 is unused and available for this release candidate.
+- Created isolated release branch `delivery/gallery-grid-normalization` from the
+  closed validated correction head `85e8d9e`. No build-number or production-
+  workflow source has been changed yet.
 - Frank physically confirmed that Build 36 folders work and selected photos and
   files can be moved successfully.
 - Build 36 screenshots exposed one remaining presentation defect: folders,
