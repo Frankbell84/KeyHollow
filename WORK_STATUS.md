@@ -6,15 +6,29 @@ Parent review head: `6117aa2` (twice-validated folder-move correction)
 
 ## Current task
 
-Deliver the validated multi-select folder move to an isolated Internal testing
-build before any new add-on begins. The correction is implemented and its exact
-source commit has passed the complete Mac build/test and Swift CodeQL gates.
-Prepare the next unused app/extension build number and an exact delivery branch
-without changing protected content, `.khvault`, tester groups, merge state, or
-App Store review state.
+Correct the remaining unified-gallery grid normalization defect reported during
+Build 36 physical-device testing. Folder movement is accepted and working, but
+folders and content tiles do not yet share one fixed geometry: mixed intrinsic
+heights cause vertical centering, staggered row tops, and inconsistent selection
+indicator positions. Make a narrow presentation-only correction without changing
+protected content, folder membership, import/export, `.khvault`, tester groups,
+merge state, or App Store review state.
 
 ## Completed work
 
+- Frank physically confirmed that Build 36 folders work and selected photos and
+  files can be moved successfully.
+- Build 36 screenshots exposed one remaining presentation defect: folders,
+  screenshots, photos, and non-photo files can produce unequal tile heights;
+  the grid centers shorter cells within the row, making row tops and selection
+  indicators appear staggered.
+- Confirmed the correction belongs entirely to the independently compiled
+  `KeyHollowGalleryUI` module. Protected storage, encryption, authenticated
+  folder membership, and the accepted batch-move operation do not need changes.
+- Approved visual contract: every item uses the same fixed media viewport and
+  metadata footer. Images preserve their original aspect ratio with aspect-fill
+  cropping inside that viewport; the underlying full image is never resized or
+  altered.
 - Frank's physical-device report confirmed that selected gallery items cannot
   currently be moved to an existing folder; screenshots show the selection
   count is correct while the toolbar omits a folder action.
@@ -669,19 +683,23 @@ App Store review state.
 
 ## Blockers
 
-- No known engineering, upload, processing, or tester-assignment blocker.
-  Physical-iPhone folder-move validation remains required before merge or any
-  wider rollout.
+- No known protected-data, folder-move, upload, or tester-assignment blocker.
+  Build 36 physical testing found a presentation-only grid normalization defect
+  that must be corrected and device-validated before merge or wider rollout.
 
 ## Next action
 
-Frank should install Build 36 from `KeyHollow Internal` and validate mixed
-photo/file moves to a folder, persistence after lock/reopen, and movement back
-to the vault root. Record the result before requesting any merge or wider
-rollout. Do not alter `Family` or App Store review state.
+Create an isolated gallery-normalization correction from the accepted Build 36
+source. Give folders and every content kind one shared fixed tile geometry,
+top-align all grid rows, lock the behavior into presentation/architecture tests,
+and pass the complete local and remote gates before preparing another Internal
+device build. Do not alter `Family` or App Store review state.
 
 ## Frank's decision required
 
+- Frank approved the isolated gallery-normalization correction after confirming
+  that the fixed thumbnail viewport will crop with preserved aspect ratio rather
+  than stretch or alter images.
 - Frank approved creating draft correction PR #43 and proceeding through the
   full review gates. Those gates are complete and green.
 - Frank requested completion for testing. The isolated release source may be
