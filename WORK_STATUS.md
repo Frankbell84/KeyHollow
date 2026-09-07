@@ -49,6 +49,31 @@ approval and renewed physical-device acceptance.
 - Snapshot-phase diff checks, release hygiene, architecture enforcement, and
   build-number guard self-test pass locally. UIKit compilation and the complete
   test suite remain pending on the required Mac CI runner.
+- Reworked secure image preparation so encrypted thumbnails and full previews
+  are bounded and eagerly decoded through a dedicated non-main actor before
+  SwiftUI receives one immutable display image. The preview sheet now appears
+  immediately with the existing encrypted thumbnail, shows honest opening
+  progress, and replaces the placeholder only after the original authenticates
+  and its bounded preview is ready.
+- Removed full-resolution `UIImage` construction from the SwiftUI preview body,
+  normalized future Photo-library thumbnail rendering to an explicit 1x scale,
+  moved cell work to utility priority, and replaced the per-tile live blur with
+  an opaque adaptive system background to reduce scrolling GPU work.
+- Added stable processor identities across SwiftUI recomposition and a FIFO
+  Files-origin thumbnail pipeline that holds the complete authenticated load,
+  decode, resize, JPEG encode, and encrypted-cache write behind one permit.
+  At most one full decrypted Files-origin image can now be resident in that
+  miss path; duplicate tasks recheck the encrypted cache after the first write.
+- Added lifecycle-scoped preview-task cancellation without removing the task
+  from the session registry prematurely, so dismissal releases work promptly
+  while lock-and-wait can still observe in-flight cryptographic or ImageIO
+  cleanup.
+- Added processor dimension and targeted sensitive-task cancellation tests.
+  The architecture gate now rejects main-view full-image decoding, ephemeral
+  processor actors, an unbounded Files-origin miss path, and per-tile live blur.
+- Performance-phase architecture enforcement, release hygiene, build-number
+  guard self-test, and whitespace/diff checks pass locally. Exact-source Mac
+  compilation, complete tests, and Swift CodeQL remain pending.
 
 - App Store Connect authoritatively shows Build 36 as the latest completed
   upload; Build 37 is unused and available for this release candidate.
@@ -870,18 +895,21 @@ approval and renewed physical-device acceptance.
 
 ## Next action
 
-Checkpoint the gallery-snapshot correction, then move thumbnail and secure-
-preview image preparation off the main actor and retain one prepared display
-image. Add a structural gate forbidding image decoding inside a SwiftUI view
-body and normalize future Photo-library thumbnail scale. Validate locally, then
-open an isolated draft review and obtain exact-source Mac build/test and CodeQL
-evidence. Do not alter `Family`, merge, signed upload, or App Store review state.
+Checkpoint and push the completed image-pipeline performance correction, open
+an isolated draft review, and obtain exact-source Mac build/test and Swift
+CodeQL evidence. After green automation, prepare an Internal-only device build
+only at a separately authorized signed-upload boundary. Do not alter `Family`,
+merge, signed upload, or App Store review state.
 
 ## Frank's decision required
 
 - Frank accepted the recommendation to keep full `.khvault` payloads from being
   nested inside vaults. A separately managed cross-vault reference may be
   designed later; recursive archive embedding remains intentionally blocked.
+- Frank agreed that authenticated catalog search/sort, cycle-safe nested folder
+  metadata, and lightweight cross-vault references should remain separate later
+  modules. They must not expand the current performance correction or rewrite
+  the encrypted stores.
 - Frank's 26-item device report rejects Build 37 for wider rollout on performance
   grounds. No routine implementation decision is required for the isolated
   correction; a new explicit signed-upload decision will be required only after

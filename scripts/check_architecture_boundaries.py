@@ -450,6 +450,32 @@ def main() -> int:
                 "project.yml: KeyHollowSecurePreviewAddOn must remain dependency-free"
             )
 
+    secure_preview_source = (
+        SOURCE_ROOT / "AddOns" / "SecurePreview" / "VaultSecureImagePreview.swift"
+    ).read_text(encoding="utf-8")
+    for required in (
+        "public actor VaultSecureImageProcessor",
+        "kCGImageSourceShouldCacheImmediately: true",
+        "preview?.displayImage.image",
+        "fileprivate init(image: UIImage)",
+    ):
+        if required not in secure_preview_source:
+            violations.append(
+                "KeyHollow/AddOns/SecurePreview/VaultSecureImagePreview.swift: "
+                f"prepared-image performance boundary is missing {required!r}"
+            )
+    for obsolete in (
+        "UIImage(data: preview.originalData)",
+        "UIImage(data: preview?.originalData)",
+        "public init(image: UIImage)",
+        "public init(id: UUID, displayName: String, originalData: Data)",
+    ):
+        if obsolete in secure_preview_source:
+            violations.append(
+                "KeyHollow/AddOns/SecurePreview/VaultSecureImagePreview.swift: "
+                "full-resolution image decoding returned to the SwiftUI view body"
+            )
+
     gallery_grid_source = (
         SOURCE_ROOT / "UI" / "VaultGalleryGridView.swift"
     ).read_text(encoding="utf-8")
@@ -500,6 +526,20 @@ def main() -> int:
         violations.append(
             "KeyHollow/UI/VaultFolderPresentationViews.swift: variable folder "
             "geometry returned"
+        )
+
+    gallery_tile_source = (
+        SOURCE_ROOT / "UI" / "VaultGalleryTilePresentation.swift"
+    ).read_text(encoding="utf-8")
+    if ".background(Color(uiColor: .secondarySystemBackground))" not in gallery_tile_source:
+        violations.append(
+            "KeyHollow/UI/VaultGalleryTilePresentation.swift: tile metadata must "
+            "retain its non-blurring system background"
+        )
+    if ".background(.ultraThinMaterial)" in gallery_tile_source:
+        violations.append(
+            "KeyHollow/UI/VaultGalleryTilePresentation.swift: per-tile live blur "
+            "returned to the scrolling grid"
         )
 
     for file in swift_files:
@@ -724,6 +764,16 @@ def main() -> int:
         "sourceByID: snapshot.sourceByID",
         "folders: visibleGalleryFolders",
         "items: snapshot.presentations",
+        "priority: .utility",
+        "private actor VaultGeneralFileThumbnailPipeline",
+        "private var waiters: [CheckedContinuation<Void, Never>]",
+        "@State private var thumbnailImageProcessor = VaultSecureImageProcessor()",
+        "@State private var previewImageProcessor = VaultSecureImageProcessor()",
+        "@State private var generalFileThumbnailPipeline = VaultGeneralFileThumbnailPipeline()",
+        "let renderedImage = try await generalFileThumbnailPipeline.image(",
+        "imageProcessor.prepareThumbnail(",
+        "previewImageProcessor.preparePreview(",
+        "session.cancelSensitiveTask(previewTaskID)",
     ):
         if required not in gallery_source:
             violations.append(
@@ -738,6 +788,8 @@ def main() -> int:
         "thumbnailCell(",
         "DecryptedPhotoView(",
         "visibleGalleryContentItems.first(where:",
+        "private let thumbnailImageProcessor = VaultSecureImageProcessor()",
+        "private let previewImageProcessor = VaultSecureImageProcessor()",
     ):
         if obsolete in gallery_source:
             violations.append(

@@ -149,9 +149,67 @@ struct VaultGalleryContentSnapshot {
 
 private struct ActiveVaultImagePreview: Identifiable {
     let source: VaultGalleryContentItem
-    let preview: VaultSecureImagePreview
+    let placeholder: UIImage?
 
-    var id: UUID { preview.id }
+    var id: UUID { source.sourceID }
+}
+
+/// Bounds the complete Files-origin thumbnail miss path to one full plaintext
+/// payload at a time. The permit intentionally covers authenticated loading,
+/// bounded ImageIO preparation, and encrypted cache persistence so cell tasks
+/// cannot queue multiple large decrypted files between otherwise independent
+/// actors. Queued duplicate requests recheck the encrypted cache after the
+/// first request completes.
+private actor VaultGeneralFileThumbnailPipeline {
+    private let imageProcessor = VaultSecureImageProcessor()
+    private var isOccupied = false
+    private var waiters: [CheckedContinuation<Void, Never>] = []
+
+    func image(
+        for record: VaultGeneralFileRecord,
+        generalFileStore: VaultGeneralFileStore,
+        presentationStore: VaultFolderPresentationStore
+    ) async throws -> VaultSecureRenderedImage {
+        await acquire()
+        defer { release() }
+        try Task.checkCancellation()
+
+        let reference = VaultPresentedContentReference(kind: .generalFile, id: record.id)
+        if let cachedData = try await presentationStore.loadThumbnail(for: reference) {
+            try Task.checkCancellation()
+            if let cachedImage = try? await imageProcessor.decodeThumbnail(from: cachedData) {
+                try Task.checkCancellation()
+                return cachedImage
+            }
+            try Task.checkCancellation()
+        }
+
+        let originalData = try await generalFileStore.loadFile(record)
+        try Task.checkCancellation()
+        let thumbnail = try await imageProcessor.prepareThumbnail(from: originalData)
+        try Task.checkCancellation()
+        try await presentationStore.storeThumbnail(thumbnail.encodedData, for: reference)
+        try Task.checkCancellation()
+        return thumbnail.renderedImage
+    }
+
+    private func acquire() async {
+        if !isOccupied {
+            isOccupied = true
+            return
+        }
+        await withCheckedContinuation { continuation in
+            waiters.append(continuation)
+        }
+    }
+
+    private func release() {
+        if waiters.isEmpty {
+            isOccupied = false
+        } else {
+            waiters.removeFirst().resume()
+        }
+    }
 }
 
 /// Application composition coordinator. Visible folder/gallery layout,
@@ -173,6 +231,8 @@ struct VaultGalleryView: View {
     @State private var thumbnails: [UUID: UIImage] = [:]
     @State private var generalFileThumbnails: [UUID: UIImage] = [:]
     @State private var activeImagePreview: ActiveVaultImagePreview?
+    @State private var preparedImagePreview: VaultSecureImagePreview?
+    @State private var previewTaskID: UUID?
     @State private var generalFileExport: PreparedGeneralFileExport?
     @State private var isSavingPreview = false
     @State private var previewMessage: String?
@@ -195,6 +255,12 @@ struct VaultGalleryView: View {
     @State private var isWorking = false
     @State private var message: String?
     @State private var importProgress: VaultImportProgress?
+
+    // SwiftUI recreates View values freely. State preserves these actor
+    // identities so decoding and full-payload bounds survive recomposition.
+    @State private var thumbnailImageProcessor = VaultSecureImageProcessor()
+    @State private var previewImageProcessor = VaultSecureImageProcessor()
+    @State private var generalFileThumbnailPipeline = VaultGeneralFileThumbnailPipeline()
 
     private let maximumCachedThumbnails = 48
 
@@ -291,11 +357,18 @@ struct VaultGalleryView: View {
         }
         .sheet(item: $activeImagePreview, onDismiss: clearActiveImagePreview) { active in
             VaultSecureImagePreviewView(
-                preview: active.preview,
+                preview: $preparedImagePreview,
+                placeholder: active.placeholder,
+                displayName: active.source.presentationItem.title,
+                isLoading: isWorking && preparedImagePreview == nil,
                 isSaving: isSavingPreview,
                 message: $previewMessage,
                 onDismiss: clearActiveImagePreview,
-                onSave: { savePreviewToPhotos(active.preview) },
+                onSave: {
+                    if let preparedImagePreview {
+                        savePreviewToPhotos(preparedImagePreview)
+                    }
+                },
                 onDelete: { deletePreviewSource(active.source) }
             )
         }
@@ -709,7 +782,7 @@ struct VaultGalleryView: View {
             .contextMenu {
                 galleryItemContextMenu(item)
             }
-            .task(id: item.id) {
+            .task(id: item.id, priority: .utility) {
                 await loadThumbnailIfNeeded(for: item)
             }
         }
@@ -1175,13 +1248,14 @@ struct VaultGalleryView: View {
               session.isUnlocked else { return }
         guard let data = try? await store.loadThumbnail(record),
               !Task.isCancelled,
-              let image = UIImage(data: data) else { return }
+              let rendered = try? await thumbnailImageProcessor.decodeThumbnail(from: data),
+              !Task.isCancelled else { return }
 
         if thumbnails.count >= maximumCachedThumbnails,
            let eviction = thumbnails.keys.first(where: { $0 != record.id }) {
             thumbnails.removeValue(forKey: eviction)
         }
-        thumbnails[record.id] = image
+        thumbnails[record.id] = rendered.image
     }
 
     @MainActor
@@ -1202,27 +1276,14 @@ struct VaultGalleryView: View {
             return
         }
 
-        let reference = VaultPresentedContentReference(kind: .generalFile, id: record.id)
         do {
-            if let cachedData = try await presentationStore.loadThumbnail(for: reference),
-               !Task.isCancelled,
-               let cachedImage = UIImage(data: cachedData) {
-                cacheGeneralFileThumbnail(cachedImage, id: record.id)
-                return
-            }
-
-            let originalData = try await generalFileStore.loadFile(record)
-            guard !Task.isCancelled,
-                  let originalImage = UIImage(data: originalData),
-                  let thumbnailData = VaultGalleryThumbnailRenderer.jpegData(
-                      from: originalImage
-                  ),
-                  let thumbnailImage = UIImage(data: thumbnailData) else {
-                return
-            }
-            try await presentationStore.storeThumbnail(thumbnailData, for: reference)
+            let renderedImage = try await generalFileThumbnailPipeline.image(
+                for: record,
+                generalFileStore: generalFileStore,
+                presentationStore: presentationStore
+            )
             guard !Task.isCancelled else { return }
-            cacheGeneralFileThumbnail(thumbnailImage, id: record.id)
+            cacheGeneralFileThumbnail(renderedImage.image, id: record.id)
         } catch is CancellationError {
             return
         } catch {
@@ -1256,10 +1317,19 @@ struct VaultGalleryView: View {
 
     private func openImage(_ item: VaultGalleryContentItem) {
         guard item.openRoute == .imagePreview, !isWorking else { return }
+        preparedImagePreview = nil
+        previewMessage = nil
+        activeImagePreview = ActiveVaultImagePreview(
+            source: item,
+            placeholder: thumbnail(for: item)
+        )
         isWorking = true
 
         let taskID = session.startSensitiveTask { _ in
-            defer { isWorking = false }
+            defer {
+                previewTaskID = nil
+                isWorking = false
+            }
             do {
                 let data: Data
                 switch item {
@@ -1277,24 +1347,26 @@ struct VaultGalleryView: View {
                     data = try await generalFileStore.loadFile(record)
                 }
                 guard !Task.isCancelled else { return }
-                let preview = try VaultSecureImagePreview(
+                let preview = try await previewImageProcessor.preparePreview(
                     id: item.sourceID,
                     displayName: item.presentationItem.title,
                     originalData: data
                 )
-                guard !Task.isCancelled else { return }
-                previewMessage = nil
-                activeImagePreview = ActiveVaultImagePreview(
-                    source: item,
-                    preview: preview
-                )
+                guard !Task.isCancelled,
+                      activeImagePreview?.source.id == item.id else { return }
+                preparedImagePreview = preview
             } catch is CancellationError {
                 return
             } catch {
-                message = "The image could not be authenticated, validated, and opened."
+                guard activeImagePreview?.source.id == item.id else { return }
+                previewMessage = "The image could not be authenticated, validated, and opened."
             }
         }
-        if taskID == nil { isWorking = false }
+        previewTaskID = taskID
+        if taskID == nil {
+            isWorking = false
+            clearActiveImagePreview()
+        }
     }
 
     private func delete(_ record: VaultPhotoRecord) {
@@ -1370,7 +1442,12 @@ struct VaultGalleryView: View {
     }
 
     private func clearActiveImagePreview() {
+        if let previewTaskID {
+            session.cancelSensitiveTask(previewTaskID)
+            self.previewTaskID = nil
+        }
         activeImagePreview = nil
+        preparedImagePreview = nil
         previewMessage = nil
         if !session.isUnlocked { isSavingPreview = false }
     }

@@ -194,7 +194,7 @@ struct VaultGalleryTileSurface<Media: View>: View {
                 maxHeight: VaultGalleryTileMetrics.footerHeight,
                 alignment: .topLeading
             )
-            .background(.ultraThinMaterial)
+            .background(Color(uiColor: .secondarySystemBackground))
         }
         .frame(maxWidth: .infinity, alignment: .top)
     }

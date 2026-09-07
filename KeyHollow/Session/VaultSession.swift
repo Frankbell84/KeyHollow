@@ -170,6 +170,13 @@ final class VaultSession: ObservableObject {
         return id
     }
 
+    /// Cancels one lifecycle-owned sensitive operation without affecting other
+    /// vault work. The operation remains responsible for cancellation checks
+    /// around any in-flight synchronous cryptographic or decoding boundary.
+    func cancelSensitiveTask(_ id: UUID) {
+        sensitiveTasks[id]?.cancel()
+    }
+
     /// Tracks cryptographic work that does not use the currently unlocked
     /// vault capability, such as authenticating an encrypted portable vault.
     /// Background locking cancels this work even when the keypad is showing.

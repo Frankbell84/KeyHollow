@@ -105,6 +105,32 @@ final class PhaseTwoSecurityTests: XCTestCase {
     }
 
     @MainActor
+    func testOneSensitiveTaskCanBeCancelledWithoutLockingVault() async throws {
+        let session = VaultSession()
+        session.unlock(vaultID: UUID(), key: SymmetricKey(size: .bits256))
+
+        let started = expectation(description: "preview work started")
+        let finished = expectation(description: "preview work cancelled")
+        var sawCancellation = false
+        let taskID = try XCTUnwrap(session.startSensitiveTask { _ in
+            started.fulfill()
+            do {
+                try await Task.sleep(for: .seconds(30))
+            } catch {}
+            sawCancellation = Task.isCancelled
+            finished.fulfill()
+        })
+        await fulfillment(of: [started])
+
+        session.cancelSensitiveTask(taskID)
+        await fulfillment(of: [finished])
+
+        XCTAssertTrue(sawCancellation)
+        XCTAssertTrue(session.isUnlocked)
+        XCTAssertTrue(session.hasActiveAccess)
+    }
+
+    @MainActor
     func testPhotoBatchProcessorNeverHasMoreThanOneFullSizeItemResident() async {
         let inputs = Array(0..<25)
         var activeLoads = 0

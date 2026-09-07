@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 import XCTest
 @testable import KeyHollowSecurePreviewAddOn
 
@@ -81,5 +82,29 @@ final class VaultSecurePreviewAddOnTests: XCTestCase {
         XCTAssertEqual(preview.id, id)
         XCTAssertEqual(preview.displayName, "Evidence")
         XCTAssertEqual(preview.originalData, onePixelPNG)
+        XCTAssertEqual(preview.displayImage.image.cgImage?.width, 1)
+        XCTAssertEqual(preview.displayImage.image.cgImage?.height, 1)
+    }
+
+    @MainActor
+    func testProcessorBoundsAndPreparesGalleryThumbnailOffViewPath() async throws {
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        format.opaque = true
+        let source = UIGraphicsImageRenderer(
+            size: CGSize(width: 800, height: 400),
+            format: format
+        ).image { context in
+            UIColor.systemBlue.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 800, height: 400))
+        }
+        let sourceData = try XCTUnwrap(source.jpegData(compressionQuality: 0.9))
+        let processor = VaultSecureImageProcessor()
+
+        let prepared = try await processor.prepareThumbnail(from: sourceData)
+
+        XCTAssertEqual(prepared.renderedImage.image.cgImage?.width, 512)
+        XCTAssertEqual(prepared.renderedImage.image.cgImage?.height, 256)
+        XCTAssertFalse(prepared.encodedData.isEmpty)
     }
 }
