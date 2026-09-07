@@ -9,11 +9,11 @@ Parent validation head: `85e8d9e` (closed gallery-grid validation checkpoint)
 Correct the gallery scrolling and image-opening performance regression exposed
 by Frank's 26-item physical-device vault. Preserve the accepted normalized grid,
 encrypted stores, folder membership, transfer format, and revocable access
-boundary. Finalize the warm-cache/miss-lane hardening on draft PR #47, obtain
-exact-source Mac and Swift CodeQL evidence, and then stop at the separately
-authorized signed-upload boundary. Build 37 remains an Internal-only diagnostic
-release; do not alter `Family`, merge state, or App Store review state without
-separate explicit approval and renewed physical-device acceptance.
+boundary. Seal the green exact-source evidence for draft PR #47, reproduce the
+documentation-only final head, and then stop at the separately authorized
+signed-upload boundary. Build 37 remains an Internal-only diagnostic release;
+do not alter `Family`, merge state, or App Store review state without separate
+explicit approval and renewed physical-device acceptance.
 
 ## Completed work
 
@@ -114,6 +114,21 @@ separate explicit approval and renewed physical-device acceptance.
 - Final-hardening architecture enforcement, release hygiene, build-number guard
   self-test, and whitespace/diff checks pass locally. A new exact-source Mac
   build/test and Swift CodeQL run is required after this checkpoint is pushed.
+- Final-hardening run
+  [#288](https://github.com/Frankbell84/KeyHollow/actions/runs/34140799578)
+  completed successfully at exact commit
+  `1de12cecc2271833889675fc6f707b5010d199b6` in 26m09s.
+- Run #288's complete Mac simulator build/test job passed in 9m28s, including
+  the complete regression/security suite. Swift CodeQL passed in 25m17s with no
+  failed security gate or unresolved finding.
+- Run #288 produced simulator artifact `10026093697` with SHA-256 digest
+  `fabb457740faabf03ed79bd547d6e1d10c75b4f9d785d3b6ca6fef62a9473ffd`
+  and security-test artifact `10026098390` with SHA-256 digest
+  `5c15d231bba730b827e4b62886628363cfe16ef495242eb361a3bfb6ee6844cb`.
+- Final branch-wide modular/security and Swift concurrency reviews passed with
+  no concrete blocker, format migration, scope creep, or protected-boundary
+  change. Physical-device performance and interaction acceptance remain
+  mandatory because launch UI automation does not exercise the gallery.
 
 - App Store Connect authoritatively shows Build 36 as the latest completed
   upload; Build 37 is unused and available for this release candidate.
@@ -932,18 +947,22 @@ separate explicit approval and renewed physical-device acceptance.
   structural tests and local policy gates will be run first, followed by the
   required exact-source Mac build/test and Swift CodeQL gates. Final performance
   acceptance must occur on Frank's physical device.
-- The first test-only compiler failure is resolved: replacement run #287's Mac
-  build/test job is green. The final cache-lane hardening changes the exact head,
-  so one fresh complete Mac build/test and Swift CodeQL run remains mandatory
-  before any device build is considered.
+- The first test-only compiler failure is resolved and final run #288 is fully
+  green at the exact implementation head. The remaining blocker is process,
+  not code: the evidence-only final head must reproduce cleanly, then signed
+  upload requires a separate explicit authorization and performance acceptance
+  requires Frank's physical device.
 
 ## Next action
 
-Checkpoint and push the audited warm-cache hardening to draft PR #47, then
-obtain fresh exact-source Mac build/test and Swift CodeQL evidence at that exact
-head. After green automation, request the separate signed-upload authorization
-for an Internal-only device build. Do not alter `Family`, merge, signed upload,
-or App Store review state.
+Commit and push this evidence-only status checkpoint, reproduce its exact head
+through the complete Mac build/test and Swift CodeQL gates, and then request the
+separate signed-upload authorization for an Internal-only device build.
+Physical acceptance will cover warm and cold 26-item scrolling; first and
+repeat opens for Photos- and Files-origin images; dismiss/lock during preview
+loading; root/folder navigation and mixed moves; non-image routing; and the
+largest representative image. Do not alter `Family`, merge, signed upload, or
+App Store review state.
 
 ## Frank's decision required
 
