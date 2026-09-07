@@ -112,6 +112,11 @@ App Store review state.
   successfully archived, signed, validated, and uploaded Build 36 from exact
   green head `9b3d353` in 3m52s.
 - No `Family` assignment, merge, or App Store review action was performed.
+- App Store Connect completed processing Build 36 and lists it as `Ready to
+  Submit` in exactly the `KeyHollow Internal` group. `Family` is not attached.
+- Frank confirmed that unified swipe navigation across Photo-library images and
+  image files belongs in a separate later build; Build 36 remains limited to
+  the folder-move correction.
 
 - Created `feature/general-file-export-parity` directly from merged Build 34
   baseline `ec25031`; no release branch or production state is being changed.
@@ -664,16 +669,16 @@ App Store review state.
 
 ## Blockers
 
-- No known engineering or upload blocker. App Store Connect signed the browser
-  session out after upload, so Frank must complete the account login before
-  Build 36 processing and Internal-only assignment can be verified.
+- No known engineering, upload, processing, or tester-assignment blocker.
+  Physical-iPhone folder-move validation remains required before merge or any
+  wider rollout.
 
 ## Next action
 
-After Frank restores the App Store Connect session, verify that Build 36 has
-finished processing and is assigned only to `KeyHollow Internal`. Then request
-physical-iPhone validation of mixed photo/file moves to a folder and back to the
-vault root. Do not alter `Family`, merge state, or App Store review state.
+Frank should install Build 36 from `KeyHollow Internal` and validate mixed
+photo/file moves to a folder, persistence after lock/reopen, and movement back
+to the vault root. Record the result before requesting any merge or wider
+rollout. Do not alter `Family` or App Store review state.
 
 ## Frank's decision required
 
@@ -688,6 +693,11 @@ vault root. Do not alter `Family`, merge state, or App Store review state.
 - Frank explicitly authorized the signed Build 36 upload to `KeyHollow
   Internal`; guarded workflow #46 succeeded. `Family` rollout, merge, and App
   Store review remain separate decisions.
+- Build 36 processing and Internal-only assignment are complete. Frank's
+  physical-device acceptance is now required before merge; `Family` remains a
+  separate later decision.
+- Frank confirmed the missing image-swipe behavior should be corrected in a
+  separate build rather than expanding Build 36.
 
 - Frank explicitly approved creating draft Build 35 release PR #41. That review
   is open and its exact release-source CI is green.
