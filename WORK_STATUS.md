@@ -1,6 +1,6 @@
 # KeyHollow Work Status
 
-Updated: 2026-09-06
+Updated: 2026-09-07
 Branch: `delivery/batch-move-to-folder`
 Parent review head: `6117aa2` (twice-validated folder-move correction)
 
@@ -82,6 +82,22 @@ App Store review state.
 - Replaced the obsolete Build 35 delivery exception with only the exact
   `delivery/batch-move-to-folder` branch. Feature and unrelated delivery
   branches remain unable to invoke the signed upload workflow.
+- Opened isolated draft release review
+  [#44](https://github.com/Frankbell84/KeyHollow/pull/44) from the exact Build 36
+  delivery branch. The review remains non-mergeable and no tester group or App
+  Store review state was changed.
+- Exact Build 36 release-source validation run
+  [#275](https://github.com/Frankbell84/KeyHollow/actions/runs/34100902710)
+  passed every mandatory gate at commit `2668da4`.
+- Build 36 project generation, simulator compilation, release hygiene,
+  architecture enforcement, build-number guard, packaged-thumbnail check, and
+  the complete unit/launch/security suite passed in 8m37s.
+- Swift CodeQL passed in 24m27s with no failed security gate or unresolved
+  finding.
+- Build 36 security-test artifact `10010697401` recorded SHA-256 digest
+  `5186b6404be7215e9853fd3c41cfde527f3f637433dbec74646d47755ec5ca77`.
+- Build 36 simulator artifact `10010694262` recorded SHA-256 digest
+  `b5014f949890dd2d5bf1c201abc94c112d23f41d8e5bd4beae315c878302b180`.
 
 - Created `feature/general-file-export-parity` directly from merged Build 34
   baseline `ec25031`; no release branch or production state is being changed.
@@ -634,14 +650,14 @@ App Store review state.
 
 ## Blockers
 
-- No known engineering blocker. The exact correction and final review head are
-  green. Build 36 release-source validation is required before the signed
-  TestFlight upload decision.
+- No known engineering blocker. The exact correction, final review head, and
+  Build 36 release source are green. The evidence-only checkpoint must pass the
+  same exact-head CI gates before the signed TestFlight upload decision.
 
 ## Next action
 
-Run local release-source gates, commit and push the isolated Build 36 checkpoint,
-and require its exact CI build/tests and Swift CodeQL to pass. Then request
+Commit and push this Build 36 evidence checkpoint and require its exact final
+head to pass the complete build/tests and Swift CodeQL gates. Then request
 permission at the final external-action boundary before dispatching the guarded
 signed TestFlight upload. Do not alter tester groups, merge state, or App Store
 review state.
@@ -653,6 +669,9 @@ review state.
 - Frank requested completion for testing. The isolated release source may be
   prepared and validated; dispatching the signed TestFlight upload will be
   confirmed at the final external-action boundary.
+- Frank explicitly approved creating draft Build 36 release PR #44. The review
+  exists and exact release-source CI is green. The signed upload, tester-group
+  assignment, merge, and App Store review remain separate decisions.
 
 - Frank explicitly approved creating draft Build 35 release PR #41. That review
   is open and its exact release-source CI is green.
