@@ -6,11 +6,10 @@ Parent validation head: `8e356b8` (green gallery-performance evidence head)
 
 ## Current task
 
-Confirm Apple processing and automatic `KeyHollow Internal` availability for
-the successfully uploaded Build 38, then hand the exact physical-device
-acceptance matrix to Frank. Build 37 remains an Internal-only diagnostic
-release; do not alter `Family`, merge state, or App Store review state without
-separate explicit approval and renewed physical-device acceptance.
+Hand the exact physical-device acceptance matrix for processed Build 38 to
+Frank and collect performance/interaction results. Build 38 is available only
+to `KeyHollow Internal`; do not alter `Family`, merge state, or App Store review
+state without separate explicit approval and physical-device acceptance.
 
 ## Completed work
 
@@ -183,9 +182,11 @@ separate explicit approval and renewed physical-device acceptance.
   with zero GitHub annotations.
 - Signed IPA artifact `10029499203` recorded SHA-256 digest
   `b3ee94e163daba0ed990de394a5eab9ac87aba75ca327b20b5fbd60916db96c6`.
-- Apple's upload transaction accepted the binary. Build 38 processing and its
-  automatic `KeyHollow Internal` listing remain to be confirmed; no `Family`,
-  merge, or App Store review action occurred.
+- Apple's upload transaction accepted the binary. App Store Connect now
+  authoritatively shows Build 38 upload processing `Complete`, build status
+  `Ready to Submit`, and automatic assignment only to `KeyHollow Internal`.
+  `Family` is not attached; no tester-group, merge, or App Store review action
+  occurred.
 - Final release-source audit confirmed that only the two synchronized build
   values, current delivery allowlist/comment, and status documentation changed
   from green feature head `8e356b8`. Application source, protected modules,
@@ -702,6 +703,8 @@ separate explicit approval and renewed physical-device acceptance.
 
 ## Test and build status
 
+- App Store Connect verification: Build 38 upload processing is `Complete`, the
+  build is `Ready to Submit`, and its sole tester group is `KeyHollow Internal`.
 - General-file export parity architecture gate: passed locally.
 - Release hygiene and TestFlight build-number guard self-test: passed locally.
 - Diff whitespace validation: passed locally.
@@ -1016,22 +1019,19 @@ separate explicit approval and renewed physical-device acceptance.
   required exact Build 38 release-source Mac build/test and Swift CodeQL gates.
   Final performance acceptance must occur on Frank's physical device.
 - Feature-head runs #288/#289, Build 38 release-source run #290, and final-head
-  run #291 are fully green. Authorized upload workflow #48 also succeeded. The
-  remaining blockers are process gates, not known code defects: Apple processing
-  confirmation and Frank's physical-device acceptance.
-- App Store Connect signed out while processing was being checked. Apple account
-  authentication cannot be automated; Frank must sign in before Build 38's
-  processed status and automatic Internal assignment can be confirmed.
+  run #291 are fully green. Authorized upload workflow #48 also succeeded, and
+  Apple processing/Internal-only availability are confirmed. The sole remaining
+  blocker is Frank's physical-device performance and interaction acceptance;
+  there is no known code or delivery defect.
 
 ## Next action
 
-Commit and push the completed Build 38 upload evidence. After Frank restores the
-App Store Connect session, verify Build 38 processing and automatic
-`KeyHollow Internal` availability without changing tester groups. Physical
-acceptance will then cover warm and cold 26-item scrolling; first and repeat
-opens for Photos- and Files-origin images; dismiss/lock during preview loading;
-root/folder navigation and mixed moves; non-image routing; and the largest
-representative image. Do not alter `Family`, merge, or App Store review state.
+Frank installs Build 38 from `KeyHollow Internal` and completes physical
+acceptance covering warm and cold 26-item scrolling; first and repeat opens for
+Photos- and Files-origin images; dismiss/lock during preview loading; root/folder
+navigation and mixed moves; non-image routing; and the largest representative
+image. Record the result before considering any `Family`, merge, or App Store
+review action.
 
 ## Frank's decision required
 
