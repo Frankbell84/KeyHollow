@@ -6,13 +6,11 @@ Parent validation head: `8e356b8` (green gallery-performance evidence head)
 
 ## Current task
 
-Prepare isolated Build 38 release source from the exact green gallery-performance
-head. Synchronize only the app/extension build number and guarded delivery-branch
-exception, obtain complete release-source Mac and Swift CodeQL evidence, and
-stop at the separately authorized signed-upload boundary. Build 37 remains an
-Internal-only diagnostic release; do not alter `Family`, merge state, or App
-Store review state without separate explicit approval and renewed physical-
-device acceptance.
+Seal the green Build 38 release-source evidence on the isolated delivery branch,
+reproduce the documentation-only final head, and stop at the separately
+authorized signed-upload boundary. Build 37 remains an Internal-only diagnostic
+release; do not alter `Family`, merge state, or App Store review state without
+separate explicit approval and renewed physical-device acceptance.
 
 ## Completed work
 
@@ -146,7 +144,34 @@ device acceptance.
   and embedded thumbnail extension. Marketing version remains 1.0.
 - Replaced the retired Build 37 gallery-grid delivery exception with only
   `delivery/gallery-file-performance`. `main` remains the other permitted
-  source; feature branches and old delivery branches cannot upload.
+  source in the current workflow; feature branches cannot upload.
+- Opened cumulative draft Build 38 release review
+  [#48](https://github.com/Frankbell84/KeyHollow/pull/48) against `main` from
+  exact release commit `69a7bf4`. It remains draft, clean, mergeable, and
+  unmerged; no upload, tester-group, or App Store review state changed.
+- Exact Build 38 release-source validation run
+  [#290](https://github.com/Frankbell84/KeyHollow/actions/runs/34145561538)
+  passed every mandatory gate at commit
+  `69a7bf45d079986a9c741555f2ef680acbeb97c8` in 24m00s.
+- Build 38 Mac simulator build, complete regression/security and launch suite,
+  release hygiene, architecture enforcement, build-number guard, and packaged-
+  thumbnail verification passed in 9m22s. Swift CodeQL passed in 23m47s with no
+  failed gate or unresolved finding.
+- Build 38 simulator artifact `10027733201` recorded SHA-256 digest
+  `35dfc44774e6606ddacba51a64ba9d76c7525b30ed3014d50b6b131124d47eb6`;
+  security-test artifact `10027736511` recorded SHA-256 digest
+  `61cc5f66a92bd718cdc35a6222943dbeede143c65843e7f0e7d7b7339fc15647`.
+- Final release-source audit confirmed that only the two synchronized build
+  values, current delivery allowlist/comment, and status documentation changed
+  from green feature head `8e356b8`. Application source, protected modules,
+  product identity, signing/provisioning, pinned actions, and other workflows
+  are unchanged.
+- Repository-wide hardening caveat: historical remote delivery branches retain
+  historical copies of their self-allowing manual upload workflow. Their build
+  numbers are already consumed, so the App Store build-number guard rejects
+  them before signing or upload. Strict retirement would require an explicit
+  destructive branch-cleanup or protected-environment decision; it is not a
+  Build 38 source defect.
 
 - App Store Connect authoritatively shows Build 36 as the latest completed
   upload; Build 37 is unused and available for this release candidate.
@@ -965,22 +990,21 @@ device acceptance.
   structural tests and local policy gates must pass first, followed by the
   required exact Build 38 release-source Mac build/test and Swift CodeQL gates.
   Final performance acceptance must occur on Frank's physical device.
-- Feature-head implementation and reproducibility runs #288 and #289 are fully
-  green. The remaining blockers are release-process gates, not known code
-  defects: exact Build 38 source validation, separate signed-upload
+- Feature-head runs #288/#289 and exact Build 38 release-source run #290 are
+  fully green. The remaining blockers are process gates, not known code
+  defects: final evidence-head reproducibility, separate signed-upload
   authorization, Apple processing, and Frank's physical-device acceptance.
 
 ## Next action
 
-Run all local release gates, checkpoint and push isolated Build 38 source, open
-a draft cumulative release review, and obtain complete exact-source Mac
-build/test and Swift CodeQL evidence. After green release-source validation,
-request the separate signed-upload authorization for an Internal-only device
-build. Physical acceptance will cover warm and cold 26-item scrolling; first
-and repeat opens for Photos- and Files-origin images; dismiss/lock during
-preview loading; root/folder navigation and mixed moves; non-image routing; and
-the largest representative image. Do not alter `Family`, merge, signed upload,
-or App Store review state.
+Commit and push this evidence-only status checkpoint and reproduce that exact
+head through the complete Mac build/test and Swift CodeQL gates. After green
+final-head validation, request the separate signed-upload authorization for an
+Internal-only Build 38 device release. Physical acceptance will cover warm and
+cold 26-item scrolling; first and repeat opens for Photos- and Files-origin
+images; dismiss/lock during preview loading; root/folder navigation and mixed
+moves; non-image routing; and the largest representative image. Do not alter
+`Family`, merge, signed upload, or App Store review state.
 
 ## Frank's decision required
 
@@ -993,8 +1017,13 @@ or App Store review state.
   the encrypted stores.
 - Frank's 26-item device report rejects Build 37 for wider rollout on performance
   grounds. The isolated correction now has green implementation and
-  reproducibility evidence; a new explicit signed-upload decision will be
-  required only after the isolated Build 38 release-source gates pass.
+  release-source evidence; a new explicit signed-upload decision will be
+  required only after the final Build 38 evidence head reproduces green.
+- Historical delivery branches may be permanently retired or protected later
+  to remove their manually runnable historical workflow copies. Their consumed
+  build numbers already fail closed before signing/upload; deleting branches or
+  changing repository deployment controls requires Frank's separate decision
+  and is not authorized by Build 38 preparation.
 - Frank explicitly confirmed creation of draft performance PR #47. That
   confirmation authorized only the draft review and its validation gates; it
   did not authorize a signed upload, `Family` assignment, merge, or App Store
