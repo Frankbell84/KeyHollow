@@ -1,8 +1,8 @@
 # KeyHollow Work Status
 
 Updated: 2026-09-06
-Branch: `fix/batch-move-to-folder`
-Parent baseline: `3dc0f4a` (hardened Build 35 source on `main`)
+Branch: `delivery/batch-move-to-folder`
+Parent review head: `6117aa2` (twice-validated folder-move correction)
 
 ## Current task
 
@@ -65,6 +65,23 @@ App Store review state.
   `5e61cf7f1785147b5272d9179e8948c36e0852f4e8ca1780999fa35f250c0efe`.
 - Simulator artifact `10001822388` recorded SHA-256 digest
   `4120a1d0a2b9e5ca0d9bb2c51de1fa869deb9dd65932ee2e14911aa0e78f6286`.
+- Final documentation-head reproducibility run
+  [#274](https://github.com/Frankbell84/KeyHollow/actions/runs/34076597749)
+  passed every mandatory gate at exact branch head `6117aa2`.
+- The repeated simulator build, complete unit/launch/security suite, release
+  hygiene, architecture enforcement, build-number guard, and packaged-thumbnail
+  check passed in 9m44s. Swift CodeQL passed in 23m27s with no failed gate.
+- Reproducibility security-test artifact `10002441788` recorded SHA-256 digest
+  `3fda0124213ddb613d268fb607e1c7ec5edd494ed13b0d44dc264ce13354b924`.
+- Reproducibility simulator artifact `10002439591` recorded SHA-256 digest
+  `da7ce041dd25837f5b106fcbeead41ff15e74c76984163ca152bfe197d1c461a`.
+- Created `delivery/batch-move-to-folder` directly from that exact green head;
+  no implementation source changed during the branch transition.
+- Reserved Build 36 and synchronized `CURRENT_PROJECT_VERSION` for both the app
+  and embedded vault-thumbnail extension.
+- Replaced the obsolete Build 35 delivery exception with only the exact
+  `delivery/batch-move-to-folder` branch. Feature and unrelated delivery
+  branches remain unable to invoke the signed upload workflow.
 
 - Created `feature/general-file-export-parity` directly from merged Build 34
   baseline `ec25031`; no release branch or production state is being changed.
@@ -617,18 +634,17 @@ App Store review state.
 
 ## Blockers
 
-- No known engineering blocker. The exact correction source is green. A signed
-  TestFlight upload remains an explicit external delivery gate after the
-  isolated Build 36 source is prepared and validated.
+- No known engineering blocker. The exact correction and final review head are
+  green. Build 36 release-source validation is required before the signed
+  TestFlight upload decision.
 
 ## Next action
 
-Commit and push this exact green evidence checkpoint, then create an isolated
-Build 36 delivery branch from it. Synchronize the app and embedded thumbnail
-extension build numbers, restrict the signed-upload workflow to that exact
-branch, and require the release-source CI gates before requesting permission to
-dispatch the TestFlight upload. Do not alter tester groups, merge state, or App
-Store review state.
+Run local release-source gates, commit and push the isolated Build 36 checkpoint,
+and require its exact CI build/tests and Swift CodeQL to pass. Then request
+permission at the final external-action boundary before dispatching the guarded
+signed TestFlight upload. Do not alter tester groups, merge state, or App Store
+review state.
 
 ## Frank's decision required
 
