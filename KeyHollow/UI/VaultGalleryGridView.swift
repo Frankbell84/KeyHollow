@@ -18,8 +18,12 @@ public struct VaultGalleryGridView<
     private let itemContent: (VaultGalleryPresentationItem) -> ItemContent
 
     private let columns = Array(
-        repeating: GridItem(.flexible(), spacing: 3),
-        count: 3
+        repeating: GridItem(
+            .flexible(),
+            spacing: VaultGalleryTileMetrics.gridSpacing,
+            alignment: .top
+        ),
+        count: VaultGalleryTileMetrics.columnCount
     )
 
     public init(
@@ -56,7 +60,11 @@ public struct VaultGalleryGridView<
                 )
             } else {
                 ScrollView {
-                    LazyVGrid(columns: columns, spacing: 3) {
+                    LazyVGrid(
+                        columns: columns,
+                        alignment: .center,
+                        spacing: VaultGalleryTileMetrics.gridSpacing
+                    ) {
                         ForEach(folders) { folder in
                             folderContent(folder)
                         }
@@ -65,8 +73,8 @@ public struct VaultGalleryGridView<
                             itemContent(item)
                         }
                     }
-                    .padding(.horizontal, 3)
-                    .padding(.vertical, 3)
+                    .padding(.horizontal, VaultGalleryTileMetrics.gridSpacing)
+                    .padding(.vertical, VaultGalleryTileMetrics.gridSpacing)
                 }
             }
         }

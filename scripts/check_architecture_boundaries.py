@@ -477,6 +477,31 @@ def main() -> int:
                 f"entered the grid contract ({bypass})"
             )
 
+    for required in (
+        "spacing: VaultGalleryTileMetrics.gridSpacing",
+        "alignment: .top",
+        "count: VaultGalleryTileMetrics.columnCount",
+    ):
+        if required not in gallery_grid_source:
+            violations.append(
+                "KeyHollow/UI/VaultGalleryGridView.swift: normalized top-aligned "
+                f"grid contract is missing {required!r}"
+            )
+
+    folder_tile_source = (
+        SOURCE_ROOT / "UI" / "VaultFolderPresentationViews.swift"
+    ).read_text(encoding="utf-8")
+    if "VaultGalleryTileSurface(" not in folder_tile_source:
+        violations.append(
+            "KeyHollow/UI/VaultFolderPresentationViews.swift: folder tiles must "
+            "use the shared normalized gallery tile surface"
+        )
+    if "GeometryReader" in folder_tile_source:
+        violations.append(
+            "KeyHollow/UI/VaultFolderPresentationViews.swift: variable folder "
+            "geometry returned"
+        )
+
     for file in swift_files:
         path = relative(file)
         source = file.read_text(encoding="utf-8")

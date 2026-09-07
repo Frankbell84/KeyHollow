@@ -29,6 +29,24 @@ merge state, or App Store review state.
   metadata footer. Images preserve their original aspect ratio with aspect-fill
   cropping inside that viewport; the underlying full image is never resized or
   altered.
+- Created and pushed isolated branch `fix/gallery-grid-normalization` from the
+  exact Build 36 delivery head before modifying implementation source.
+- Rebuilt the shared tile surface around a neutral square viewport whose size
+  cannot be influenced by a portrait, landscape, screenshot, or placeholder's
+  intrinsic dimensions. Image content remains aspect-fill and clipped only for
+  its thumbnail presentation.
+- Removed the folder-only `GeometryReader` layout and routed folders through
+  the same shared media viewport and fixed 56-point metadata footer used by
+  every photo and general-file tile.
+- Set all three grid columns to explicit top alignment and centralized column
+  count and spacing with the existing tile metrics, eliminating implicit
+  vertical centering of shorter cells.
+- Extended gallery regression coverage for the centralized three-column
+  geometry and strengthened the architecture gate to reject a return to
+  variable folder geometry or a non-top-aligned grid.
+- Local release hygiene, architecture enforcement, build-number guard self-
+  test, and whitespace/diff checks passed. Exact-source Mac compilation, full
+  regression/security tests, and Swift CodeQL remain required remotely.
 - Frank's physical-device report confirmed that selected gallery items cannot
   currently be moved to an existing folder; screenshots show the selection
   count is correct while the toolbar omits a folder action.
@@ -684,16 +702,16 @@ merge state, or App Store review state.
 ## Blockers
 
 - No known protected-data, folder-move, upload, or tester-assignment blocker.
-  Build 36 physical testing found a presentation-only grid normalization defect
-  that must be corrected and device-validated before merge or wider rollout.
+  The presentation-only correction is implemented locally; exact-source remote
+  build/tests and physical-device validation remain required before merge or
+  wider rollout.
 
 ## Next action
 
-Create an isolated gallery-normalization correction from the accepted Build 36
-source. Give folders and every content kind one shared fixed tile geometry,
-top-align all grid rows, lock the behavior into presentation/architecture tests,
-and pass the complete local and remote gates before preparing another Internal
-device build. Do not alter `Family` or App Store review state.
+Push the implementation checkpoint, run exact-source Mac build/tests and Swift
+CodeQL, and record immutable evidence. If both remote gates pass, prepare the
+next unused Internal-only device build for visual acceptance. Do not alter
+`Family`, merge, or App Store review state.
 
 ## Frank's decision required
 

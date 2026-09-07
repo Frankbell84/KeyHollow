@@ -258,6 +258,8 @@ final class VaultGalleryPresentationTests: XCTestCase {
     }
 
     func testSharedTileGeometryIsFixedForEveryItemKind() {
+        XCTAssertEqual(VaultGalleryTileMetrics.columnCount, 3)
+        XCTAssertEqual(VaultGalleryTileMetrics.gridSpacing, 3)
         XCTAssertEqual(VaultGalleryTileMetrics.mediaAspectRatio, 1)
         XCTAssertEqual(VaultGalleryTileMetrics.footerHeight, 56)
         XCTAssertEqual(VaultGalleryTileMetrics.selectionInset, 8)

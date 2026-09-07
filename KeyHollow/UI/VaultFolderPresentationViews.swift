@@ -40,30 +40,15 @@ public struct VaultFolderTileView: View {
 
     public var body: some View {
         Button(action: open) {
-            GeometryReader { proxy in
-                VStack(spacing: 0) {
-                    Image(systemName: "folder.fill")
-                        .font(.system(size: 46, weight: .regular))
-                        .foregroundStyle(.tint)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(folder.name)
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.primary)
-                            .lineLimit(2)
-                        Text(itemDescription)
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(8)
-                    .background(.ultraThinMaterial)
-                }
-                .frame(width: proxy.size.width, height: proxy.size.height)
-                .background(.secondary.opacity(0.12))
+            VaultGalleryTileSurface(
+                title: folder.name,
+                detail: itemDescription,
+                selectionState: nil
+            ) {
+                Image(systemName: "folder.fill")
+                    .font(.system(size: 46, weight: .regular))
+                    .foregroundStyle(.tint)
             }
-            .aspectRatio(1, contentMode: .fit)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
