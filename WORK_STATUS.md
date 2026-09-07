@@ -38,6 +38,17 @@ approval and renewed physical-device acceptance.
   vault keys, blob formats, folder membership, portable archives, or security
   gates. Created isolated branch `fix/gallery-file-performance` from the exact
   Build 37 documentation head before implementation changes.
+- Replaced the per-cell mixed-content rebuild and linear source search with one
+  immutable gallery snapshot per state revision. Each source-neutral
+  presentation value is constructed once, sorted once, and paired with a
+  constant-time typed source lookup while the compiled gallery module still
+  receives no store, key, capability, or plaintext payload.
+- Added deterministic 26-item mixed-gallery coverage, including the valid case
+  where a photo and general file share the same UUID, and strengthened the
+  architecture gate to reject a return to per-cell full-list recovery.
+- Snapshot-phase diff checks, release hygiene, architecture enforcement, and
+  build-number guard self-test pass locally. UIKit compilation and the complete
+  test suite remain pending on the required Mac CI runner.
 
 - App Store Connect authoritatively shows Build 36 as the latest completed
   upload; Build 37 is unused and available for this release candidate.
@@ -859,13 +870,12 @@ approval and renewed physical-device acceptance.
 
 ## Next action
 
-Implement one immutable gallery snapshot per state revision with constant-time
-source lookup, then move thumbnail and secure-preview image preparation off the
-main actor and retain one prepared display image. Add structural regression
-gates for the 26-item composition path and forbid image decoding inside a SwiftUI
-view body. Validate locally, then open an isolated draft review and obtain exact-
-source Mac build/test and CodeQL evidence. Do not alter `Family`, merge, signed
-upload, or App Store review state.
+Checkpoint the gallery-snapshot correction, then move thumbnail and secure-
+preview image preparation off the main actor and retain one prepared display
+image. Add a structural gate forbidding image decoding inside a SwiftUI view
+body and normalize future Photo-library thumbnail scale. Validate locally, then
+open an isolated draft review and obtain exact-source Mac build/test and CodeQL
+evidence. Do not alter `Family`, merge, signed upload, or App Store review state.
 
 ## Frank's decision required
 

@@ -719,9 +719,11 @@ def main() -> int:
         'Label("Move", systemImage: "folder")',
         "presentationStore.move(items, to: folderID)",
         "selectedPresentedReferences",
-        "visibleGalleryContentItems.map(\\.presentationItem)",
+        "let snapshot = makeVisibleGallerySnapshot()",
+        "VaultGalleryContentSnapshot",
+        "sourceByID: snapshot.sourceByID",
         "folders: visibleGalleryFolders",
-        "items: visibleGalleryItems",
+        "items: snapshot.presentations",
     ):
         if required not in gallery_source:
             violations.append(
@@ -735,6 +737,7 @@ def main() -> int:
         "VaultGeneralFileTileView(",
         "thumbnailCell(",
         "DecryptedPhotoView(",
+        "visibleGalleryContentItems.first(where:",
     ):
         if obsolete in gallery_source:
             violations.append(

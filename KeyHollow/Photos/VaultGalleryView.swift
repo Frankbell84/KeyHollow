@@ -116,6 +116,37 @@ enum VaultGalleryOpenRoute: Equatable {
     case fileManagement
 }
 
+/// One immutable bridge between protected source records and the compiled,
+/// source-neutral gallery UI. Presentation values are built and sorted once;
+/// a tile recovers its source record with a constant-time lookup instead of
+/// rebuilding the complete mixed gallery during every cell evaluation.
+struct VaultGalleryContentSnapshot {
+    let orderedSources: [VaultGalleryContentItem]
+    let presentations: [VaultGalleryPresentationItem]
+    let sourceByID: [VaultGallerySelection.Item: VaultGalleryContentItem]
+
+    init(items: [VaultGalleryContentItem]) {
+        let entries = items.map { source in
+            (source: source, presentation: source.presentationItem)
+        }.sorted {
+            VaultGalleryPresentationItem.sourceNeutralOrder(
+                $0.presentation,
+                $1.presentation
+            )
+        }
+
+        orderedSources = entries.map(\.source)
+        presentations = entries.map(\.presentation)
+        sourceByID = Dictionary(
+            uniqueKeysWithValues: entries.map { ($0.presentation.id, $0.source) }
+        )
+    }
+
+    var selectableItems: [VaultGallerySelection.Item] {
+        presentations.map(\.id)
+    }
+}
+
 private struct ActiveVaultImagePreview: Identifiable {
     let source: VaultGalleryContentItem
     let preview: VaultSecureImagePreview
@@ -168,8 +199,10 @@ struct VaultGalleryView: View {
     private let maximumCachedThumbnails = 48
 
     var body: some View {
+        let snapshot = makeVisibleGallerySnapshot()
+
         VStack(spacing: 0) {
-            galleryHeader
+            galleryHeader(visibleItemIDs: snapshot.selectableItems)
             Divider()
 
             VaultGalleryGridView(
@@ -181,7 +214,7 @@ struct VaultGalleryView: View {
                     ? "photo.on.rectangle.angled"
                     : "folder",
                 folders: visibleGalleryFolders,
-                items: visibleGalleryItems
+                items: snapshot.presentations
             ) { folder in
                 VaultFolderTileView(
                     folder: folder,
@@ -191,7 +224,7 @@ struct VaultGalleryView: View {
                     delete: { requestFolderDeletion(id: folder.id) }
                 )
             } itemContent: { item in
-                galleryItemCell(item)
+                galleryItemCell(item, sourceByID: snapshot.sourceByID)
             }
 
             if isSelecting {
@@ -337,17 +370,21 @@ struct VaultGalleryView: View {
         }
     }
 
-    private var galleryHeader: some View {
+    private func galleryHeader(
+        visibleItemIDs: [VaultGallerySelection.Item]
+    ) -> some View {
         HStack(spacing: 18) {
             if isSelecting {
                 Button("Cancel") { leaveSelectionMode() }
 
                 Spacer()
 
-                Button(allVisibleItemsSelected ? "Deselect All" : "Select All") {
-                    toggleSelectAll()
+                Button(
+                    selection.containsAll(visibleItemIDs) ? "Deselect All" : "Select All"
+                ) {
+                    toggleSelectAll(visibleItemIDs)
                 }
-                .disabled(visibleSelectableItems.isEmpty || isWorking)
+                .disabled(visibleItemIDs.isEmpty || isWorking)
             } else {
                 if activeFolderID == nil {
                     Button("Lock") { session.lock() }
@@ -365,7 +402,7 @@ struct VaultGalleryView: View {
                 Button("Select") {
                     isSelecting = true
                 }
-                .disabled(visibleSelectableItems.isEmpty || isWorking)
+                .disabled(visibleItemIDs.isEmpty || isWorking)
 
                 if activeFolderID == nil {
                     Button {
@@ -545,32 +582,41 @@ struct VaultGalleryView: View {
         }
     }
 
+    private func makeVisibleGallerySnapshot() -> VaultGalleryContentSnapshot {
+        var folderIDByItem: [VaultPresentedContentReference: UUID] = [:]
+        folderIDByItem.reserveCapacity(folderManifest.memberships.count)
+        for membership in folderManifest.memberships {
+            folderIDByItem[membership.item] = membership.folderID
+        }
+
+        var items: [VaultGalleryContentItem] = []
+        items.reserveCapacity(records.count + generalFileRecords.count)
+        for record in records where folderIDByItem[
+            VaultPresentedContentReference(kind: .photo, id: record.id)
+        ] == activeFolderID {
+            items.append(.photo(record))
+        }
+        for record in generalFileRecords where folderIDByItem[
+            VaultPresentedContentReference(kind: .generalFile, id: record.id)
+        ] == activeFolderID {
+            items.append(.generalFile(record))
+        }
+
+        return VaultGalleryContentSnapshot(items: items)
+    }
+
     private var visiblePhotoRecords: [VaultPhotoRecord] {
-        records.filter {
-            assignedFolderID(
-                for: VaultPresentedContentReference(kind: .photo, id: $0.id)
-            ) == activeFolderID
+        makeVisibleGallerySnapshot().orderedSources.compactMap {
+            guard case .photo(let record) = $0 else { return nil }
+            return record
         }
     }
 
     private var visibleGeneralFileRecords: [VaultGeneralFileRecord] {
-        generalFileRecords.filter {
-            assignedFolderID(
-                for: VaultPresentedContentReference(kind: .generalFile, id: $0.id)
-            ) == activeFolderID
+        makeVisibleGallerySnapshot().orderedSources.compactMap {
+            guard case .generalFile(let record) = $0 else { return nil }
+            return record
         }
-    }
-
-    private var visibleGalleryContentItems: [VaultGalleryContentItem] {
-        let photos = visiblePhotoRecords.map { VaultGalleryContentItem.photo($0) }
-        let files = visibleGeneralFileRecords.map {
-            VaultGalleryContentItem.generalFile($0)
-        }
-        return (photos + files).sorted(by: VaultGalleryContentItem.sourceNeutralOrder)
-    }
-
-    private var visibleGalleryItems: [VaultGalleryPresentationItem] {
-        visibleGalleryContentItems.map(\.presentationItem)
     }
 
     private var activeFolder: VaultFolderRecord? {
@@ -650,11 +696,10 @@ struct VaultGalleryView: View {
 
     @ViewBuilder
     private func galleryItemCell(
-        _ presentationItem: VaultGalleryPresentationItem
+        _ presentationItem: VaultGalleryPresentationItem,
+        sourceByID: [VaultGallerySelection.Item: VaultGalleryContentItem]
     ) -> some View {
-        if let item = visibleGalleryContentItems.first(where: {
-            $0.id == presentationItem.id
-        }) {
+        if let item = sourceByID[presentationItem.id] {
             VaultGalleryItemTileView(
                 item: presentationItem,
                 thumbnail: thumbnail(for: item),
@@ -1349,7 +1394,7 @@ struct VaultGalleryView: View {
     }
 
     private var visibleSelectableItems: [VaultGallerySelection.Item] {
-        visibleGalleryItems.map(\.id)
+        makeVisibleGallerySnapshot().selectableItems
     }
 
     private var allValidSelectableItems: [VaultGallerySelection.Item] {
@@ -1357,17 +1402,13 @@ struct VaultGalleryView: View {
             + records.map { .photo($0.id) }
     }
 
-    private var allVisibleItemsSelected: Bool {
-        selection.containsAll(visibleSelectableItems)
-    }
-
     private var deleteSelectionButtonTitle: String {
         let noun = selection.count == 1 ? "Item" : "Items"
         return "Delete \(selection.count) \(noun) from Vault"
     }
 
-    private func toggleSelectAll() {
-        selection.toggleAll(visibleSelectableItems)
+    private func toggleSelectAll(_ visibleItemIDs: [VaultGallerySelection.Item]) {
+        selection.toggleAll(visibleItemIDs)
     }
 
     private func leaveSelectionMode() {
