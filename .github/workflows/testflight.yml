@@ -13,11 +13,11 @@ permissions:
 
 jobs:
   archive-and-upload:
-    # Production delivery may run from main or the exact isolated gallery-grid
+    # Production delivery may run from main or the exact isolated gallery-performance
     # delivery branch after its review gates pass. No feature branch can upload.
     if: >-
       github.ref == 'refs/heads/main' ||
-      github.ref == 'refs/heads/delivery/gallery-grid-normalization'
+      github.ref == 'refs/heads/delivery/gallery-file-performance'
     runs-on: macos-26
     timeout-minutes: 30
     env:

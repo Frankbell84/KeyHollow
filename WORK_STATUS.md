@@ -1,19 +1,18 @@
 # KeyHollow Work Status
 
 Updated: 2026-09-07
-Branch: `fix/gallery-file-performance`
-Parent validation head: `85e8d9e` (closed gallery-grid validation checkpoint)
+Branch: `delivery/gallery-file-performance`
+Parent validation head: `8e356b8` (green gallery-performance evidence head)
 
 ## Current task
 
-Correct the gallery scrolling and image-opening performance regression exposed
-by Frank's 26-item physical-device vault. Preserve the accepted normalized grid,
-encrypted stores, folder membership, transfer format, and revocable access
-boundary. Seal the green exact-source evidence for draft PR #47, reproduce the
-documentation-only final head, and then stop at the separately authorized
-signed-upload boundary. Build 37 remains an Internal-only diagnostic release;
-do not alter `Family`, merge state, or App Store review state without separate
-explicit approval and renewed physical-device acceptance.
+Prepare isolated Build 38 release source from the exact green gallery-performance
+head. Synchronize only the app/extension build number and guarded delivery-branch
+exception, obtain complete release-source Mac and Swift CodeQL evidence, and
+stop at the separately authorized signed-upload boundary. Build 37 remains an
+Internal-only diagnostic release; do not alter `Family`, merge state, or App
+Store review state without separate explicit approval and renewed physical-
+device acceptance.
 
 ## Completed work
 
@@ -129,6 +128,25 @@ explicit approval and renewed physical-device acceptance.
   no concrete blocker, format migration, scope creep, or protected-boundary
   change. Physical-device performance and interaction acceptance remain
   mandatory because launch UI automation does not exercise the gallery.
+- Final documentation-head reproducibility run
+  [#289](https://github.com/Frankbell84/KeyHollow/actions/runs/34143156772)
+  passed every mandatory gate at exact head
+  `8e356b8cec9ed71b5eb9e9aa605b72bc4e711813` in 24m04s.
+- Run #289's repeated complete Mac build/test job passed in 9m00s. Swift CodeQL
+  passed in 23m55s with no failed security gate or unresolved finding.
+- Reproducibility simulator artifact `10026889458` recorded SHA-256 digest
+  `e571107e700830315fa1742654a0b27b2f63e376521ee3efc39eb961ba1e178a`;
+  security-test artifact `10026891926` recorded SHA-256 digest
+  `b2797bc94c05c37c9147db9e745fa62853827cd3d0f227528395bf80287943c7`.
+- App Store Connect was refreshed directly and authoritatively shows Build 37
+  complete and assigned only to `KeyHollow Internal`; Build 38 is unused.
+- Created isolated `delivery/gallery-file-performance` directly from exact
+  green head `8e356b8`; no implementation source changed during the transition.
+- Reserved Build 38 and synchronized `CURRENT_PROJECT_VERSION` for both the app
+  and embedded thumbnail extension. Marketing version remains 1.0.
+- Replaced the retired Build 37 gallery-grid delivery exception with only
+  `delivery/gallery-file-performance`. `main` remains the other permitted
+  source; feature branches and old delivery branches cannot upload.
 
 - App Store Connect authoritatively shows Build 36 as the latest completed
   upload; Build 37 is unused and available for this release candidate.
@@ -944,25 +962,25 @@ explicit approval and renewed physical-device acceptance.
 - Build 37 is not eligible for merge or `Family` rollout because physical-device
   acceptance exposed reproducible scrolling and image-opening lag at 26 items.
 - Windows cannot compile or profile the UIKit/iOS paths locally. Deterministic
-  structural tests and local policy gates will be run first, followed by the
-  required exact-source Mac build/test and Swift CodeQL gates. Final performance
-  acceptance must occur on Frank's physical device.
-- The first test-only compiler failure is resolved and final run #288 is fully
-  green at the exact implementation head. The remaining blocker is process,
-  not code: the evidence-only final head must reproduce cleanly, then signed
-  upload requires a separate explicit authorization and performance acceptance
-  requires Frank's physical device.
+  structural tests and local policy gates must pass first, followed by the
+  required exact Build 38 release-source Mac build/test and Swift CodeQL gates.
+  Final performance acceptance must occur on Frank's physical device.
+- Feature-head implementation and reproducibility runs #288 and #289 are fully
+  green. The remaining blockers are release-process gates, not known code
+  defects: exact Build 38 source validation, separate signed-upload
+  authorization, Apple processing, and Frank's physical-device acceptance.
 
 ## Next action
 
-Commit and push this evidence-only status checkpoint, reproduce its exact head
-through the complete Mac build/test and Swift CodeQL gates, and then request the
-separate signed-upload authorization for an Internal-only device build.
-Physical acceptance will cover warm and cold 26-item scrolling; first and
-repeat opens for Photos- and Files-origin images; dismiss/lock during preview
-loading; root/folder navigation and mixed moves; non-image routing; and the
-largest representative image. Do not alter `Family`, merge, signed upload, or
-App Store review state.
+Run all local release gates, checkpoint and push isolated Build 38 source, open
+a draft cumulative release review, and obtain complete exact-source Mac
+build/test and Swift CodeQL evidence. After green release-source validation,
+request the separate signed-upload authorization for an Internal-only device
+build. Physical acceptance will cover warm and cold 26-item scrolling; first
+and repeat opens for Photos- and Files-origin images; dismiss/lock during
+preview loading; root/folder navigation and mixed moves; non-image routing; and
+the largest representative image. Do not alter `Family`, merge, signed upload,
+or App Store review state.
 
 ## Frank's decision required
 
@@ -974,9 +992,9 @@ App Store review state.
   modules. They must not expand the current performance correction or rewrite
   the encrypted stores.
 - Frank's 26-item device report rejects Build 37 for wider rollout on performance
-  grounds. No routine implementation decision is required for the isolated
-  correction; a new explicit signed-upload decision will be required only after
-  green validation evidence.
+  grounds. The isolated correction now has green implementation and
+  reproducibility evidence; a new explicit signed-upload decision will be
+  required only after the isolated Build 38 release-source gates pass.
 - Frank explicitly confirmed creation of draft performance PR #47. That
   confirmation authorized only the draft review and its validation gates; it
   did not authorize a signed upload, `Family` assignment, merge, or App Store
