@@ -6,9 +6,9 @@ Parent validation head: `8e356b8` (green gallery-performance evidence head)
 
 ## Current task
 
-Seal the green Build 38 release-source evidence on the isolated delivery branch,
-reproduce the documentation-only final head, and stop at the separately
-authorized signed-upload boundary. Build 37 remains an Internal-only diagnostic
+Confirm Apple processing and automatic `KeyHollow Internal` availability for
+the successfully uploaded Build 38, then hand the exact physical-device
+acceptance matrix to Frank. Build 37 remains an Internal-only diagnostic
 release; do not alter `Family`, merge state, or App Store review state without
 separate explicit approval and renewed physical-device acceptance.
 
@@ -161,6 +161,31 @@ separate explicit approval and renewed physical-device acceptance.
   `35dfc44774e6606ddacba51a64ba9d76c7525b30ed3014d50b6b131124d47eb6`;
   security-test artifact `10027736511` recorded SHA-256 digest
   `61cc5f66a92bd718cdc35a6222943dbeede143c65843e7f0e7d7b7339fc15647`.
+- Final Build 38 evidence-head run
+  [#291](https://github.com/Frankbell84/KeyHollow/actions/runs/34147583185)
+  passed every mandatory gate at exact branch head
+  `2a0d7b5a50ba444559b9419bdaa4b12d458eee8e` in 28m36s.
+- Run #291's repeated Mac build/test job passed in 9m08s. Swift CodeQL passed
+  in 28m25s with no failed security gate or unresolved finding.
+- Final-head simulator artifact `10028403863` recorded SHA-256 digest
+  `9bcc86a7dd5262364db26c57f8940f3d58112918da3da1dc8f56b541e714012a`;
+  security-test artifact `10028406356` recorded SHA-256 digest
+  `f494982f01bce7d07ceddf38faf95d744dee88358ffec026c8b04f1ea5a57036`.
+- Frank explicitly authorized a signed Build 38 upload to `KeyHollow Internal`
+  only after the final-head gates passed. That authorization did not include
+  `Family`, merge, or App Store review changes.
+- Guarded TestFlight workflow
+  [#48](https://github.com/Frankbell84/KeyHollow/actions/runs/34151277109)
+  completed successfully from exact green head `2a0d7b5` in 3m16s.
+- Release hygiene, production identity, unused Build 38 verification, project
+  generation, cloud signing, archive/module verification, signed IPA export,
+  Apple upload, artifact retention, and signing-material cleanup all passed
+  with zero GitHub annotations.
+- Signed IPA artifact `10029499203` recorded SHA-256 digest
+  `b3ee94e163daba0ed990de394a5eab9ac87aba75ca327b20b5fbd60916db96c6`.
+- Apple's upload transaction accepted the binary. Build 38 processing and its
+  automatic `KeyHollow Internal` listing remain to be confirmed; no `Family`,
+  merge, or App Store review action occurred.
 - Final release-source audit confirmed that only the two synchronized build
   values, current delivery allowlist/comment, and status documentation changed
   from green feature head `8e356b8`. Application source, protected modules,
@@ -990,21 +1015,23 @@ separate explicit approval and renewed physical-device acceptance.
   structural tests and local policy gates must pass first, followed by the
   required exact Build 38 release-source Mac build/test and Swift CodeQL gates.
   Final performance acceptance must occur on Frank's physical device.
-- Feature-head runs #288/#289 and exact Build 38 release-source run #290 are
-  fully green. The remaining blockers are process gates, not known code
-  defects: final evidence-head reproducibility, separate signed-upload
-  authorization, Apple processing, and Frank's physical-device acceptance.
+- Feature-head runs #288/#289, Build 38 release-source run #290, and final-head
+  run #291 are fully green. Authorized upload workflow #48 also succeeded. The
+  remaining blockers are process gates, not known code defects: Apple processing
+  confirmation and Frank's physical-device acceptance.
+- App Store Connect signed out while processing was being checked. Apple account
+  authentication cannot be automated; Frank must sign in before Build 38's
+  processed status and automatic Internal assignment can be confirmed.
 
 ## Next action
 
-Commit and push this evidence-only status checkpoint and reproduce that exact
-head through the complete Mac build/test and Swift CodeQL gates. After green
-final-head validation, request the separate signed-upload authorization for an
-Internal-only Build 38 device release. Physical acceptance will cover warm and
-cold 26-item scrolling; first and repeat opens for Photos- and Files-origin
-images; dismiss/lock during preview loading; root/folder navigation and mixed
-moves; non-image routing; and the largest representative image. Do not alter
-`Family`, merge, signed upload, or App Store review state.
+Commit and push the completed Build 38 upload evidence. After Frank restores the
+App Store Connect session, verify Build 38 processing and automatic
+`KeyHollow Internal` availability without changing tester groups. Physical
+acceptance will then cover warm and cold 26-item scrolling; first and repeat
+opens for Photos- and Files-origin images; dismiss/lock during preview loading;
+root/folder navigation and mixed moves; non-image routing; and the largest
+representative image. Do not alter `Family`, merge, or App Store review state.
 
 ## Frank's decision required
 
@@ -1017,8 +1044,10 @@ moves; non-image routing; and the largest representative image. Do not alter
   the encrypted stores.
 - Frank's 26-item device report rejects Build 37 for wider rollout on performance
   grounds. The isolated correction now has green implementation and
-  release-source evidence; a new explicit signed-upload decision will be
-  required only after the final Build 38 evidence head reproduces green.
+  release-source evidence. Frank explicitly authorized the Internal-only signed
+  Build 38 upload after the final evidence head reproduced green; that upload
+  succeeded. Physical acceptance remains required before any merge or wider
+  tester rollout.
 - Historical delivery branches may be permanently retired or protected later
   to remove their manually runnable historical workflow copies. Their consumed
   build numbers already fail closed before signing/upload; deleting branches or
