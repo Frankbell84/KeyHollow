@@ -17,8 +17,9 @@ boundary passed and its isolated playback integration entered validation.
 - Roadmap add-on #3, General File Support, is complete. Its encrypted import,
   `.khvault` round trip, unified gallery, secure image preview, selection, and
   individual general-file export behavior are hardened through Build 35.
-- Roadmap add-on #4, Encrypted Video Support, has a validated compiled boundary;
-  its first app-composed playback milestone is now in progress.
+- Roadmap add-on #4, Encrypted Video Support, has a validated compiled boundary
+  and validated app-composed playback. Bounded encrypted-at-rest video
+  thumbnails are the next isolated milestone.
 
 ## Numbering clarification
 
@@ -55,9 +56,10 @@ work and **Folder Presentation** for the completed historical phase.
   generation.
 - Encrypted-video boundary run #267 passed the complete Mac build/test job and
   Swift CodeQL at exact commit `1c02979f989d296eaadc52becec6b45dcdf29ff1`.
-- Feature branch `feature/encrypted-video-support` now contains isolated
-  playback integration on top of that validated boundary; no production or
-  TestFlight state has changed.
+- Encrypted-video playback run #268 passed the complete Mac build/test job and
+  Swift CodeQL at exact commit `37f0e2cc8e0a9842b4bce633e0410812fb738cf1`.
+- Feature branch `feature/encrypted-video-support` now has two exact validated
+  checkpoints; no production or TestFlight state has changed.
 
 ## Roadmap add-on #4 entry requirements
 
@@ -95,8 +97,8 @@ work and **Folder Presentation** for the completed historical phase.
 
 There is no modular or security blocker. Windows cannot run the Apple simulator,
 so exact-source Mac compilation and tests remain a required remote CI gate as
-before. The current action is to validate the video-only gallery route, native
-module player, app-owned temporary-file lifecycle, and new cleanup regression
-tests. Video thumbnail generation remains a later isolated milestone. Do not
-change TestFlight groups, production delivery, or App Store review state without
-the required later approvals.
+before. The current action is to add bounded video-thumbnail rendering inside
+the video module, encrypt only the generated thumbnail through Folder
+Presentation, and prove temporary plaintext cleanup and existing-gallery
+regressions. Do not change TestFlight groups, production delivery, or App Store
+review state without the required later approvals.

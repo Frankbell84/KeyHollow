@@ -9,13 +9,27 @@ Parent baseline: `3dc0f4a` (hardened Build 35 source on `main`)
 Roadmap add-on #4, Encrypted Video Support. Its first isolated milestone now
 defines the dependency-free video policy and validated local-file playback
 handoff, pins the module boundary in CI, and adds contract tests. Exact-source
-Mac build/test and Swift CodeQL gates have passed. The next isolated milestone
-now adds app-composed native playback with deterministic protected-temporary-
-file cleanup and is ready for exact-source Mac validation. Thumbnail decoding,
-storage migration, transfer changes, and App Store review state remain out of
-scope.
+Mac build/test and Swift CodeQL gates have passed. The second isolated milestone
+adds app-composed native playback with deterministic protected-temporary-file
+cleanup and has also passed its exact-source Mac build/tests and CodeQL. The
+next milestone is bounded, encrypted-at-rest video thumbnails; storage
+migration, transfer changes, and App Store review state remain out of scope.
 
 ## Completed work
+
+- Exact encrypted-video playback run
+  [#268](https://github.com/Frankbell84/KeyHollow/actions/runs/34068222542)
+  passed at commit `37f0e2cc8e0a9842b4bce633e0410812fb738cf1`.
+- The Mac simulator build and complete unit/launch/security suite passed in
+  7m02s, including video routing, cancellation, validation-failure cleanup,
+  dismissal cleanup, and idempotent teardown tests.
+- Swift CodeQL passed in 27m03s with no failed security gate.
+- Playback security-test artifact `9999720650` was retained with SHA-256 digest
+  `b9a752a69282595dc84c3326118dc517337ca5b21bf1c107c0c159969049bf15`.
+- Playback simulator artifact `9999719722` was retained with SHA-256 digest
+  `3c6dfd4758737555ad1525cc48ff062f71155217639bc250aa8939914fd10b9e`.
+- The playback milestone is now closed at an exact auditable source checkpoint;
+  no TestFlight, tester-group, production, merge, or App Store action occurred.
 
 - Added a native `VideoPlayer` surface inside the independently compiled
   `KeyHollowEncryptedVideoAddOn`; the module receives only its already-validated
@@ -660,8 +674,9 @@ scope.
   and whitespace checks: passed.
 - Playback integration local release hygiene, architecture enforcement,
   build-number guard self-test, and whitespace checks: passed.
-- Playback integration Mac compilation, full tests, and Swift CodeQL: pending
-  the pushed exact-source run.
+- Playback integration commit `37f0e2cc8e0a9842b4bce633e0410812fb738cf1`:
+  Mac compilation, full tests, retained evidence, and Swift CodeQL passed.
+- Video-thumbnail implementation: not yet started or submitted to CI.
 
 ## Blockers
 
@@ -669,10 +684,11 @@ scope.
 
 ## Next action
 
-Commit and push the isolated playback milestone, then require its exact source
-to pass the complete Mac build/test and Swift CodeQL gates. Correct any failure
-before video-thumbnail work begins. Do not alter TestFlight or App Store review
-state.
+Begin the isolated video-thumbnail milestone from the exact validated playback
+checkpoint. Keep thumbnail rendering bounded inside the video module, persist
+only its encrypted result through Folder Presentation, and delete every
+temporary playback/render file on all paths. Do not alter TestFlight or App
+Store review state.
 
 ## Frank's decision required
 
