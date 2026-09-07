@@ -6,12 +6,11 @@ Parent validation head: `85e8d9e` (closed gallery-grid validation checkpoint)
 
 ## Current task
 
-Prepare the twice-validated unified-gallery grid correction as the next isolated
-Internal-only TestFlight release candidate. Reserve the next unused Apple build
-number, synchronize both app targets, restrict production upload permission to
-the exact delivery branch, and complete all exact-source release gates. Stop
-before the signed upload; do not alter `Family`, merge state, or App Store review
-state.
+Hold the exact, fully verified Build 37 unified-gallery grid correction at the
+signed-upload approval boundary. The release source, draft review, Mac build and
+tests, Swift CodeQL, and retained artifacts are complete. Do not dispatch the
+signed upload or alter `Family`, merge state, or App Store review state without
+the applicable explicit approval and physical-device acceptance.
 
 ## Completed work
 
@@ -28,7 +27,24 @@ state.
   workflow. `main` remains the only other permitted source; feature branches
   remain unable to dispatch a production upload.
 - The signed TestFlight upload has not been dispatched. Exact Build 37 release-
-  source build/tests and Swift CodeQL are required before upload approval.
+  source build/tests and Swift CodeQL are now complete and green; explicit
+  upload authorization remains required.
+- Opened isolated draft Build 37 release review
+  [#46](https://github.com/Frankbell84/KeyHollow/pull/46) against `main` from
+  exact release commit `fac32b1`. The review is open, draft, mergeable, and
+  clean; it has not changed any tester group, merge, or App Store review state.
+- Exact Build 37 release-source validation run
+  [#282](https://github.com/Frankbell84/KeyHollow/actions/runs/34120940399)
+  passed every mandatory gate at commit
+  `fac32b1fe54653895a3ff51fc07f85af1938e0b8`.
+- Mac simulator build, complete regression/security and launch suites, release
+  hygiene, architecture enforcement, build-number guard, and packaged-
+  thumbnail verification passed in 5m11s.
+- Swift CodeQL passed in 25m39s with no failed security gate.
+- Simulator artifact `10018304873` was recorded with SHA-256 digest
+  `776d221a78bd47e8964c0e498a3e0397b374d18ebc86f898c074606ac87e5954`.
+- Security-test artifact `10018306713` was recorded with SHA-256 digest
+  `1c2b9ef81ca5cb5997bdbed999093b5230b903d3b787b165c95c8eb68d7f3e5c`.
 - Frank physically confirmed that Build 36 folders work and selected photos and
   files can be moved successfully.
 - Build 36 screenshots exposed one remaining presentation defect: folders,
@@ -759,17 +775,18 @@ state.
 
 ## Blockers
 
-- No known protected-data, folder-move, build-number, upload, or tester-
+- No known protected-data, folder-move, build-number, upload, CI, or tester-
   assignment blocker. Exact Build 37 release-source Mac build/tests and Swift
-  CodeQL remain required before the signed upload can be proposed. Physical-
-  device visual acceptance remains required before merge or wider rollout.
+  CodeQL are green. Explicit signed-upload authorization is the only release
+  boundary; physical-device visual acceptance remains required before merge or
+  wider rollout.
 
 ## Next action
 
-Commit and push the exact Build 37 release source, open an isolated draft release
-review, and require exact-source Mac build/tests and Swift CodeQL. Stop before
-dispatching the signed TestFlight upload for explicit approval. Do not alter
-`Family`, merge, or App Store review state.
+Commit and push this exact CI-evidence checkpoint, verify the documentation-only
+head reproducibly, then request explicit authorization for the guarded signed
+Build 37 upload to `KeyHollow Internal`. Do not alter `Family`, merge, or App
+Store review state.
 
 ## Frank's decision required
 
@@ -798,6 +815,9 @@ dispatching the signed TestFlight upload for explicit approval. Do not alter
   later decisions; none is authorized for the current release candidate.
 - Frank approved proceeding with Build 37 release preparation. The signed
   TestFlight upload remains a separate explicit approval boundary.
+- Draft Build 37 release PR #46 and exact-source CI run #282 are complete and
+  green. Frank's explicit authorization is now required before dispatching the
+  signed Build 37 upload to `KeyHollow Internal`.
 
 - Frank explicitly approved creating draft Build 35 release PR #41. That review
   is open and its exact release-source CI is green.
