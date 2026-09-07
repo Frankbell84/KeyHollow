@@ -9,9 +9,11 @@ Parent validation head: `85e8d9e` (closed gallery-grid validation checkpoint)
 Correct the gallery scrolling and image-opening performance regression exposed
 by Frank's 26-item physical-device vault. Preserve the accepted normalized grid,
 encrypted stores, folder membership, transfer format, and revocable access
-boundary. Build 37 remains an Internal-only diagnostic release; do not alter
-`Family`, merge state, or App Store review state without separate explicit
-approval and renewed physical-device acceptance.
+boundary. Finalize the warm-cache/miss-lane hardening on draft PR #47, obtain
+exact-source Mac and Swift CodeQL evidence, and then stop at the separately
+authorized signed-upload boundary. Build 37 remains an Internal-only diagnostic
+release; do not alter `Family`, merge state, or App Store review state without
+separate explicit approval and renewed physical-device acceptance.
 
 ## Completed work
 
@@ -89,6 +91,29 @@ approval and renewed physical-device acceptance.
   application, encrypted-store, folder, transfer, or image-pipeline behavior
   changed. Architecture enforcement, release hygiene, the build-number guard
   self-test, and whitespace/diff checks pass locally after the correction.
+- Replacement exact-source run
+  [#287](https://github.com/Frankbell84/KeyHollow/actions/runs/34139105084)
+  compiled the corrected test target and completed the full Mac build/test job
+  successfully in 6m51s at commit `3ff9870`.
+- Run #287 produced simulator artifact `10025392482` with SHA-256 digest
+  `ae2f0365dec01bfe3948d6c314ec022afe05a391894afefd11f099ba20819ffb`
+  and security-test artifact `10025394115` with SHA-256 digest
+  `c00df266484ae9c15bb87b3d9326d11b940098da7fb20e73ab778dd63661f8d0`.
+- A focused performance/concurrency audit identified one remaining source of
+  head-of-line blocking: encrypted general-file thumbnail cache hits acquired
+  the same permit as expensive full-original cache misses.
+- Added a dedicated warm encrypted-cache lane and retained a separate bounded
+  miss processor. Warm thumbnails now decode without waiting for full-original
+  work; queued misses recheck the cache after acquiring the single permit, and
+  at most one decrypted original still occupies the miss lane.
+- Preserved cancellation across both lanes, added a defense-in-depth check
+  immediately before loading an original, and strengthened the architecture
+  gate to enforce separate processors plus cache-check/permit/original-load
+  ordering. Independent Swift strict-concurrency and performance audits found
+  no remaining code blocker.
+- Final-hardening architecture enforcement, release hygiene, build-number guard
+  self-test, and whitespace/diff checks pass locally. A new exact-source Mac
+  build/test and Swift CodeQL run is required after this checkpoint is pushed.
 
 - App Store Connect authoritatively shows Build 36 as the latest completed
   upload; Build 37 is unused and available for this release candidate.
@@ -907,17 +932,17 @@ approval and renewed physical-device acceptance.
   structural tests and local policy gates will be run first, followed by the
   required exact-source Mac build/test and Swift CodeQL gates. Final performance
   acceptance must occur on Frank's physical device.
-- Draft PR #47's first Mac run exposed and localized a compile failure in the
-  new regression test only. The test has been simplified locally; a fresh
-  exact-source run must prove the correction before any device build is
-  considered.
+- The first test-only compiler failure is resolved: replacement run #287's Mac
+  build/test job is green. The final cache-lane hardening changes the exact head,
+  so one fresh complete Mac build/test and Swift CodeQL run remains mandatory
+  before any device build is considered.
 
 ## Next action
 
-Checkpoint and push the test-compiler correction to draft PR #47, then obtain
-fresh exact-source Mac build/test and Swift CodeQL evidence. After green
-automation, prepare an Internal-only device build only at a separately
-authorized signed-upload boundary. Do not alter `Family`, merge, signed upload,
+Checkpoint and push the audited warm-cache hardening to draft PR #47, then
+obtain fresh exact-source Mac build/test and Swift CodeQL evidence at that exact
+head. After green automation, request the separate signed-upload authorization
+for an Internal-only device build. Do not alter `Family`, merge, signed upload,
 or App Store review state.
 
 ## Frank's decision required

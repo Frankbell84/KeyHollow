@@ -154,14 +154,16 @@ private struct ActiveVaultImagePreview: Identifiable {
     var id: UUID { source.sourceID }
 }
 
-/// Bounds the complete Files-origin thumbnail miss path to one full plaintext
-/// payload at a time. The permit intentionally covers authenticated loading,
+/// Gives encrypted thumbnail cache hits a responsive lane while bounding the
+/// complete Files-origin cache-miss path to one full plaintext payload at a
+/// time. The permit intentionally covers authenticated original loading,
 /// bounded ImageIO preparation, and encrypted cache persistence so cell tasks
 /// cannot queue multiple large decrypted files between otherwise independent
-/// actors. Queued duplicate requests recheck the encrypted cache after the
-/// first request completes.
+/// actors. Queued duplicate misses recheck the encrypted cache after the first
+/// request completes.
 private actor VaultGeneralFileThumbnailPipeline {
-    private let imageProcessor = VaultSecureImageProcessor()
+    private let cachedThumbnailDecoder = VaultSecureImageProcessor()
+    private let cacheMissImageProcessor = VaultSecureImageProcessor()
     private var isOccupied = false
     private var waiters: [CheckedContinuation<Void, Never>] = []
 
@@ -170,27 +172,55 @@ private actor VaultGeneralFileThumbnailPipeline {
         generalFileStore: VaultGeneralFileStore,
         presentationStore: VaultFolderPresentationStore
     ) async throws -> VaultSecureRenderedImage {
+        let reference = VaultPresentedContentReference(kind: .generalFile, id: record.id)
+        if let cachedImage = try await loadCachedThumbnail(
+            for: reference,
+            presentationStore: presentationStore
+        ) {
+            return cachedImage
+        }
+
         await acquire()
         defer { release() }
         try Task.checkCancellation()
 
-        let reference = VaultPresentedContentReference(kind: .generalFile, id: record.id)
-        if let cachedData = try await presentationStore.loadThumbnail(for: reference) {
-            try Task.checkCancellation()
-            if let cachedImage = try? await imageProcessor.decodeThumbnail(from: cachedData) {
-                try Task.checkCancellation()
-                return cachedImage
-            }
-            try Task.checkCancellation()
+        if let cachedImage = try await loadCachedThumbnail(
+            for: reference,
+            presentationStore: presentationStore
+        ) {
+            return cachedImage
         }
 
+        try Task.checkCancellation()
         let originalData = try await generalFileStore.loadFile(record)
         try Task.checkCancellation()
-        let thumbnail = try await imageProcessor.prepareThumbnail(from: originalData)
+        let thumbnail = try await cacheMissImageProcessor.prepareThumbnail(from: originalData)
         try Task.checkCancellation()
         try await presentationStore.storeThumbnail(thumbnail.encodedData, for: reference)
         try Task.checkCancellation()
         return thumbnail.renderedImage
+    }
+
+    private func loadCachedThumbnail(
+        for reference: VaultPresentedContentReference,
+        presentationStore: VaultFolderPresentationStore
+    ) async throws -> VaultSecureRenderedImage? {
+        try Task.checkCancellation()
+        guard let cachedData = try await presentationStore.loadThumbnail(for: reference) else {
+            return nil
+        }
+        try Task.checkCancellation()
+
+        do {
+            let image = try await cachedThumbnailDecoder.decodeThumbnail(from: cachedData)
+            try Task.checkCancellation()
+            return image
+        } catch let cancellation as CancellationError {
+            throw cancellation
+        } catch {
+            // Invalid cache data is regenerated from the authenticated original.
+            return nil
+        }
     }
 
     private func acquire() async {
