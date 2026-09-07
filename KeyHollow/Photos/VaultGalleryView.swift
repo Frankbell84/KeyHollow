@@ -146,6 +146,7 @@ struct VaultGalleryView: View {
     let service: VaultUnlockService
 
     @StateObject private var videoPlayback = VaultVideoPlaybackCoordinator()
+    @StateObject private var videoThumbnails = VaultVideoThumbnailCoordinator()
 
     @State private var store: VaultPhotoStore?
     @State private var records: [VaultPhotoRecord] = []
@@ -1123,16 +1124,27 @@ struct VaultGalleryView: View {
         guard generalFileThumbnails[record.id] == nil,
               let generalFileStore,
               let presentationStore,
-              session.isUnlocked,
-              VaultSecurePreviewPolicy.kind(
-                  for: VaultSecurePreviewDescriptor(
-                      displayName: record.displayName,
-                      contentTypeIdentifier: record.contentTypeIdentifier,
-                      originalByteCount: record.originalByteCount
-                  )
-              ) == .image else {
+              session.isUnlocked else {
             return
         }
+
+        let securePreviewDescriptor = VaultSecurePreviewDescriptor(
+            displayName: record.displayName,
+            contentTypeIdentifier: record.contentTypeIdentifier,
+            originalByteCount: record.originalByteCount
+        )
+        let videoDescriptor = VaultEncryptedVideoDescriptor(
+            displayName: record.displayName,
+            contentTypeIdentifier: record.contentTypeIdentifier,
+            originalByteCount: record.originalByteCount
+        )
+        let isImage = VaultSecurePreviewPolicy.kind(
+            for: securePreviewDescriptor
+        ) == .image
+        let isVideo = VaultEncryptedVideoPolicy.kind(
+            for: videoDescriptor
+        ) == .video
+        guard isImage || isVideo else { return }
 
         let reference = VaultPresentedContentReference(kind: .generalFile, id: record.id)
         do {
@@ -1143,15 +1155,27 @@ struct VaultGalleryView: View {
                 return
             }
 
-            let originalData = try await generalFileStore.loadFile(record)
-            guard !Task.isCancelled,
-                  let originalImage = UIImage(data: originalData),
-                  let thumbnailData = VaultGalleryThumbnailRenderer.jpegData(
-                      from: originalImage
-                  ),
-                  let thumbnailImage = UIImage(data: thumbnailData) else {
-                return
+            let thumbnailData: Data
+            if isImage {
+                let originalData = try await generalFileStore.loadFile(record)
+                guard !Task.isCancelled,
+                      let originalImage = UIImage(data: originalData),
+                      let rendered = VaultGalleryThumbnailRenderer.jpegData(
+                          from: originalImage
+                      ) else {
+                    return
+                }
+                thumbnailData = rendered
+            } else {
+                let thumbnail = try await videoThumbnails.render(
+                    record,
+                    using: generalFileStore
+                )
+                thumbnailData = thumbnail.jpegData
             }
+
+            guard !Task.isCancelled,
+                  let thumbnailImage = UIImage(data: thumbnailData) else { return }
             try await presentationStore.storeThumbnail(thumbnailData, for: reference)
             guard !Task.isCancelled else { return }
             cacheGeneralFileThumbnail(thumbnailImage, id: record.id)

@@ -97,8 +97,8 @@ work and **Folder Presentation** for the completed historical phase.
 
 There is no modular or security blocker. Windows cannot run the Apple simulator,
 so exact-source Mac compilation and tests remain a required remote CI gate as
-before. The current action is to add bounded video-thumbnail rendering inside
-the video module, encrypt only the generated thumbnail through Folder
-Presentation, and prove temporary plaintext cleanup and existing-gallery
-regressions. Do not change TestFlight groups, production delivery, or App Store
+before. Bounded video-thumbnail rendering is now implemented inside the video
+module and reuses Folder Presentation for encrypted persistence. The current
+action is exact-source Mac compilation, full regression/security testing, and
+Swift CodeQL. Do not change TestFlight groups, production delivery, or App Store
 review state without the required later approvals.

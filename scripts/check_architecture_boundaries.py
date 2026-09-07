@@ -681,7 +681,9 @@ def main() -> int:
             unexpected = imported - {
                 "AVFoundation",
                 "AVKit",
+                "CoreGraphics",
                 "Foundation",
+                "ImageIO",
                 "SwiftUI",
                 "UniformTypeIdentifiers",
             }
@@ -710,6 +712,20 @@ def main() -> int:
                         f"{path}: encrypted-video add-on directly references protected "
                         f"capability {forbidden_symbol}"
                     )
+
+            if path.endswith("VaultEncryptedVideoThumbnailRenderer.swift"):
+                for required in (
+                    "maximumPixelDimension = 512",
+                    "maximumEncodedByteCount = 2 * 1_024 * 1_024",
+                    "appliesPreferredTrackTransform = true",
+                    "maximumSize = CGSize(",
+                    "withTaskCancellationHandler",
+                    "cancelAllCGImageGeneration()",
+                ):
+                    if required not in source:
+                        violations.append(
+                            f"{path}: bounded thumbnail renderer is missing {required!r}"
+                        )
 
         leaked_ui = imported & UI_FRAMEWORKS
         if leaked_ui and not is_presentation(path) and path not in PHOTOS_ADAPTER_FILES:
@@ -762,6 +778,7 @@ def main() -> int:
         "case .fileManagement:",
         "VaultEncryptedVideoPlayerView(",
         "videoPlayback.dismissAndWait()",
+        "videoThumbnails.render(",
         "data = try await generalFileStore.loadFile(record)",
         "generalFileStore.prepareExport(files)",
         "GeneralFileShareSheet(urls: prepared.urls)",
@@ -822,6 +839,42 @@ def main() -> int:
                 violations.append(
                     "KeyHollow/Photos/VaultVideoPlaybackCoordinator.swift: "
                     f"playback coordinator bypasses its narrow boundary ({forbidden})"
+                )
+
+    video_thumbnail_coordinator_file = (
+        SOURCE_ROOT / "Photos" / "VaultVideoThumbnailCoordinator.swift"
+    )
+    if not video_thumbnail_coordinator_file.exists():
+        violations.append(
+            "KeyHollow/Photos/VaultVideoThumbnailCoordinator.swift: "
+            "bounded thumbnail lifecycle boundary is missing"
+        )
+    else:
+        video_thumbnail_coordinator_source = (
+            video_thumbnail_coordinator_file.read_text(encoding="utf-8")
+        )
+        for required in (
+            "await acquirePermit()",
+            "isRendering = true",
+            "let prepared = try await store.prepareExport([record])",
+            "VaultEncryptedVideoThumbnailRenderer.render(playback)",
+            "await store.discardExport(prepared)",
+        ):
+            if required not in video_thumbnail_coordinator_source:
+                violations.append(
+                    "KeyHollow/Photos/VaultVideoThumbnailCoordinator.swift: "
+                    f"bounded thumbnail boundary is missing {required!r}"
+                )
+        for forbidden in (
+            "FileManager",
+            "Data(contentsOf:",
+            "URLSession",
+            "SymmetricKey",
+        ):
+            if forbidden in video_thumbnail_coordinator_source:
+                violations.append(
+                    "KeyHollow/Photos/VaultVideoThumbnailCoordinator.swift: "
+                    f"thumbnail coordinator bypasses its narrow boundary ({forbidden})"
                 )
 
     if violations:

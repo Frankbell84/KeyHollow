@@ -11,7 +11,7 @@ change `.khvault`, or weaken the 100 MB bounded-ingress contract.
 - conservative video classification from immutable name/type/size metadata;
 - a validated local-file playback handoff;
 - native video player presentation and player-memory teardown;
-- later bounded video-thumbnail rendering behavior.
+- bounded, orientation-correct video-thumbnail rendering behavior.
 
 The add-on never receives a vault key, session capability, encrypted manifest,
 general-file record, protected-store location, transfer coordinator, network
@@ -42,6 +42,21 @@ The application composition layer owns:
 - Playback does not count as an external system interaction: normal background
   locking remains active and tears the playback session down.
 
+## Thumbnail integration
+
+- The video module extracts only one frame through `AVAssetImageGenerator`,
+  applies the track transform, and asks the platform decoder to bound both
+  dimensions to 512 pixels before returning any image.
+- The generated JPEG is rejected if either dimension escapes that bound or if
+  the encoded result exceeds the existing 2 MB presentation-thumbnail limit.
+- The app serializes video-frame decoding so a gallery scroll cannot create an
+  unbounded decoder or plaintext-file workload.
+- General File Support authenticates and prepares the source; the app deletes
+  that temporary plaintext before handing the bounded JPEG to Folder
+  Presentation for encrypted persistence.
+- A missing, malformed, canceled, or unsupported video yields the normal video
+  icon and never blocks access to the encrypted source record.
+
 ## Initial compatibility boundary
 
 - Existing encrypted video files remain ordinary `VaultGeneralFileRecord`
@@ -62,6 +77,7 @@ The application composition layer owns:
 4. Temporary plaintext cleanup on success, failure, cancellation, dismissal,
    vault lock, and background transition.
 5. Malformed or unplayable media failure without gallery or vault corruption.
-6. Bounded thumbnail generation with encrypted-at-rest thumbnail persistence.
+6. Bounded, serialized thumbnail generation with encrypted-at-rest thumbnail
+   persistence and malformed-media cleanup.
 7. Existing photo, image-file, non-video-file, selection, folder, export, and
    `.khvault` regression coverage.

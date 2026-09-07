@@ -12,10 +12,32 @@ handoff, pins the module boundary in CI, and adds contract tests. Exact-source
 Mac build/test and Swift CodeQL gates have passed. The second isolated milestone
 adds app-composed native playback with deterministic protected-temporary-file
 cleanup and has also passed its exact-source Mac build/tests and CodeQL. The
-next milestone is bounded, encrypted-at-rest video thumbnails; storage
-migration, transfer changes, and App Store review state remain out of scope.
+next milestone adds bounded, encrypted-at-rest video thumbnails and is ready
+for exact-source Mac validation. Storage migration, transfer changes, and App
+Store review state remain out of scope.
 
 ## Completed work
+
+- Added a bounded video-frame renderer to `KeyHollowEncryptedVideoAddOn` using
+  Apple's native media generator with preferred-orientation transforms, a
+  512-pixel maximum dimension, a 2 MB encoded ceiling, and explicit decoder
+  cancellation.
+- Added one app-owned thumbnail coordinator that serializes decoder work,
+  prepares only one authenticated general-file export at a time, and removes
+  the temporary plaintext on success, cancellation, malformed media, or any
+  other failure.
+- Reused Folder Presentation's existing encrypted thumbnail store. The bounded
+  JPEG is persisted only after its source video plaintext has been removed; no
+  second thumbnail store or transfer field was introduced.
+- Extended the unified gallery thumbnail path to video records while preserving
+  the existing image-file path and ordinary icon fallback when rendering fails.
+- Added tests for encrypted-store size-limit parity, bounded JPEG generation,
+  oversized decoded-frame rejection, missing/malformed media failure, and
+  temporary-file cleanup after decoder failure.
+- Strengthened the architecture gate to require serialized rendering,
+  AVFoundation cancellation, bounded output, and cleanup while continuing to
+  reject keys, sessions, stores, transfer types, direct file reads, and network
+  access inside the video module.
 
 - Exact encrypted-video playback run
   [#268](https://github.com/Frankbell84/KeyHollow/actions/runs/34068222542)
@@ -676,7 +698,10 @@ migration, transfer changes, and App Store review state remain out of scope.
   build-number guard self-test, and whitespace checks: passed.
 - Playback integration commit `37f0e2cc8e0a9842b4bce633e0410812fb738cf1`:
   Mac compilation, full tests, retained evidence, and Swift CodeQL passed.
-- Video-thumbnail implementation: not yet started or submitted to CI.
+- Video-thumbnail local release hygiene, architecture enforcement, build-number
+  guard self-test, and whitespace checks: passed.
+- Video-thumbnail Mac compilation, full tests, and Swift CodeQL: pending the
+  pushed exact-source run.
 
 ## Blockers
 
@@ -684,11 +709,10 @@ migration, transfer changes, and App Store review state remain out of scope.
 
 ## Next action
 
-Begin the isolated video-thumbnail milestone from the exact validated playback
-checkpoint. Keep thumbnail rendering bounded inside the video module, persist
-only its encrypted result through Folder Presentation, and delete every
-temporary playback/render file on all paths. Do not alter TestFlight or App
-Store review state.
+Commit and push the isolated video-thumbnail milestone, then require its exact
+source to pass the complete Mac build/test and Swift CodeQL gates. Correct any
+failure before preparing a TestFlight delivery candidate. Do not alter
+TestFlight or App Store review state.
 
 ## Frank's decision required
 

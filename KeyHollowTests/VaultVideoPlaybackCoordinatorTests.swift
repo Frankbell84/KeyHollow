@@ -77,6 +77,22 @@ final class VaultVideoPlaybackCoordinatorTests: XCTestCase {
         XCTAssertNil(coordinator.active)
         XCTAssertTrue(fixture.preparedPlaintextFiles().isEmpty)
     }
+
+    func testFailedVideoThumbnailDecodeRemovesPreparedPlaintext() async throws {
+        let fixture = try VideoPlaybackFixture()
+        defer { fixture.cleanup() }
+        let record = try await fixture.importFile(named: "Malformed.mp4")
+        let coordinator = VaultVideoThumbnailCoordinator()
+
+        do {
+            _ = try await coordinator.render(record, using: fixture.store)
+            XCTFail("Expected malformed media to fail thumbnail decoding")
+        } catch {
+            // AVFoundation owns the concrete malformed-media error.
+        }
+
+        XCTAssertTrue(fixture.preparedPlaintextFiles().isEmpty)
+    }
 }
 
 private struct VideoPlaybackFixture {

@@ -1,5 +1,7 @@
+import CoreGraphics
 import Foundation
 import XCTest
+import KeyHollowFolderPresentationAddOn
 import KeyHollowGeneralFileSupportAddOn
 @testable import KeyHollowEncryptedVideoAddOn
 
@@ -104,5 +106,83 @@ final class VaultEncryptedVideoAddOnTests: XCTestCase {
         ) { error in
             XCTAssertEqual(error as? VaultPreparedVideoPlaybackError, .unsupportedVideo)
         }
+    }
+
+    func testThumbnailEnvelopeMatchesEncryptedPresentationStoreLimit() {
+        XCTAssertEqual(
+            VaultEncryptedVideoThumbnailRenderer.maximumEncodedByteCount,
+            VaultFolderPresentationStore.maximumThumbnailByteCount
+        )
+        XCTAssertEqual(VaultEncryptedVideoThumbnailRenderer.maximumPixelDimension, 512)
+    }
+
+    func testThumbnailEncodingProducesBoundedJPEG() throws {
+        let image = try makeTestImage(width: 32, height: 20)
+
+        let thumbnail = try VaultEncryptedVideoThumbnailRenderer.encodedThumbnail(
+            from: image
+        )
+
+        XCTAssertEqual(thumbnail.pixelWidth, 32)
+        XCTAssertEqual(thumbnail.pixelHeight, 20)
+        XCTAssertFalse(thumbnail.jpegData.isEmpty)
+        XCTAssertLessThanOrEqual(
+            thumbnail.jpegData.count,
+            VaultEncryptedVideoThumbnailRenderer.maximumEncodedByteCount
+        )
+    }
+
+    func testOversizedDecodedThumbnailIsRejected() throws {
+        let image = try makeTestImage(
+            width: VaultEncryptedVideoThumbnailRenderer.maximumPixelDimension + 1,
+            height: 8
+        )
+
+        XCTAssertThrowsError(
+            try VaultEncryptedVideoThumbnailRenderer.encodedThumbnail(from: image)
+        ) { error in
+            XCTAssertEqual(
+                error as? VaultEncryptedVideoThumbnailError,
+                .dimensionsTooLarge
+            )
+        }
+    }
+
+    func testMissingLocalVideoFailsThumbnailRendering() async throws {
+        let descriptor = VaultEncryptedVideoDescriptor(
+            displayName: "missing.mp4",
+            contentTypeIdentifier: "public.mpeg-4",
+            originalByteCount: 1_024
+        )
+        let playback = try VaultPreparedVideoPlayback(
+            id: UUID(),
+            descriptor: descriptor,
+            fileURL: FileManager.default.temporaryDirectory.appendingPathComponent(
+                "MissingVideo-\(UUID().uuidString).mp4"
+            )
+        )
+
+        do {
+            _ = try await VaultEncryptedVideoThumbnailRenderer.render(playback)
+            XCTFail("Expected a missing local video to fail thumbnail rendering")
+        } catch {
+            // AVFoundation owns the concrete media-decoder error.
+        }
+    }
+
+    private func makeTestImage(width: Int, height: Int) throws -> CGImage {
+        let colorSpace = CGColorSpaceCreateDeviceRGB()
+        let context = try XCTUnwrap(CGContext(
+            data: nil,
+            width: width,
+            height: height,
+            bitsPerComponent: 8,
+            bytesPerRow: width * 4,
+            space: colorSpace,
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ))
+        context.setFillColor(red: 0.1, green: 0.3, blue: 0.8, alpha: 1)
+        context.fill(CGRect(x: 0, y: 0, width: width, height: height))
+        return try XCTUnwrap(context.makeImage())
     }
 }
