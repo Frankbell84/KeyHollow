@@ -1,8 +1,8 @@
 # KeyHollow Work Status
 
 Updated: 2026-09-07
-Branch: `delivery/batch-move-to-folder`
-Parent review head: `6117aa2` (twice-validated folder-move correction)
+Branch: `fix/gallery-grid-normalization`
+Parent release head: `cce34d4` (Build 36 Internal availability checkpoint)
 
 ## Current task
 
@@ -46,7 +46,22 @@ merge state, or App Store review state.
   variable folder geometry or a non-top-aligned grid.
 - Local release hygiene, architecture enforcement, build-number guard self-
   test, and whitespace/diff checks passed. Exact-source Mac compilation, full
-  regression/security tests, and Swift CodeQL remain required remotely.
+  regression/security tests, and Swift CodeQL were then required remotely.
+- Opened isolated draft review
+  [#45](https://github.com/Frankbell84/KeyHollow/pull/45) against `main` for the
+  presentation-only correction; it remains unmerged and has not changed any
+  TestFlight group or App Store review state.
+- Exact implementation-source validation run
+  [#279](https://github.com/Frankbell84/KeyHollow/actions/runs/34108714858)
+  passed every mandatory gate at commit `5036c8b`.
+- Mac simulator build, complete regression/security and launch suites, release
+  hygiene, architecture enforcement, build-number guard, and packaged-
+  thumbnail verification passed in 11m24s.
+- Swift CodeQL passed in 30m50s with no failed security gate.
+- Simulator artifact `10013806986` was recorded with SHA-256 digest
+  `b4928b82d967a56c696c2cbcd365f55325b02c4deb487873b1e48c46caae4ed4`.
+- Security-test artifact `10013814113` was recorded with SHA-256 digest
+  `13d9c769bdca1635bc324fbd2cb8caa15279b767d6698b6aa5613751d3e2e45f`.
 - Frank's physical-device report confirmed that selected gallery items cannot
   currently be moved to an existing folder; screenshots show the selection
   count is correct while the toolbar omits a folder action.
@@ -699,19 +714,40 @@ merge state, or App Store review state.
   limited production upload permission to the exact immutable branch
   `delivery/mixed-gallery-selection`.
 
+## Deferred roadmap additions
+
+- **Break-in Reports / Intruder Capture:** optional, local-only records of
+  failed access attempts. Design must avoid creating a plaintext vault-existence
+  signal, must have bounded retention, and must not weaken lockout behavior.
+- **App Icon Camouflage:** optional alternate icons such as calculator, notes,
+  or stock-tracker styles. Before implementation, verify current App Store
+  policy, make the setting reversible, and preserve an unambiguous recovery
+  path for the owner.
+- **Vault Escape Hatch migration:** an isolated iOS Share Extension that accepts
+  only files the user explicitly shares from another app and hands them to a
+  protected KeyHollow import path for immediate encryption. The extension must
+  not enumerate vaults, retain plaintext, or possess a general vault-unlock
+  capability. Competitor-specific three-step migration guides may be added as
+  onboarding after each supported app's current export behavior is verified.
+- These roadmap items begin only after the current gallery normalization,
+  separate swipe-navigation correction, and already-planned security/backup
+  work. None is part of the present release candidate.
+
 ## Blockers
 
-- No known protected-data, folder-move, upload, or tester-assignment blocker.
-  The presentation-only correction is implemented locally; exact-source remote
-  build/tests and physical-device validation remain required before merge or
-  wider rollout.
+- No known protected-data, folder-move, build, security-scan, upload, or tester-
+  assignment blocker. The exact implementation commit is green; the evidence
+  and roadmap documentation checkpoint must be pushed and reproduced cleanly
+  before a signed device build is proposed. Physical-device visual acceptance
+  remains required before merge or wider rollout.
 
 ## Next action
 
-Push the implementation checkpoint, run exact-source Mac build/tests and Swift
-CodeQL, and record immutable evidence. If both remote gates pass, prepare the
-next unused Internal-only device build for visual acceptance. Do not alter
-`Family`, merge, or App Store review state.
+Commit and push this evidence/roadmap checkpoint, rerun exact-head Mac
+build/tests and Swift CodeQL, and record reproducible green evidence. If that
+documentation head is also green, prepare the next unused Internal-only device
+build for visual acceptance. Do not dispatch a signed upload or alter `Family`,
+merge, or App Store review state without its separate approval.
 
 ## Frank's decision required
 
@@ -734,6 +770,10 @@ next unused Internal-only device build for visual acceptance. Do not alter
   separate later decision.
 - Frank confirmed the missing image-swipe behavior should be corrected in a
   separate build rather than expanding Build 36.
+- Frank requested that Break-in Reports / Intruder Capture, App Icon Camouflage,
+  and the Vault Escape Hatch migration/share extension be retained as later
+  add-ons. Their implementation order and detailed privacy/product design remain
+  later decisions; none is authorized for the current release candidate.
 
 - Frank explicitly approved creating draft Build 35 release PR #41. That review
   is open and its exact release-source CI is green.
