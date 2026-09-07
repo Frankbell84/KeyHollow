@@ -12,11 +12,33 @@ handoff, pins the module boundary in CI, and adds contract tests. Exact-source
 Mac build/test and Swift CodeQL gates have passed. The second isolated milestone
 adds app-composed native playback with deterministic protected-temporary-file
 cleanup and has also passed its exact-source Mac build/tests and CodeQL. The
-next milestone adds bounded, encrypted-at-rest video thumbnails and is ready
-for exact-source Mac validation. Storage migration, transfer changes, and App
-Store review state remain out of scope.
+third isolated milestone adds bounded, encrypted-at-rest video thumbnails and
+has now passed its exact-source Mac build/tests and CodeQL. Physical-iPhone
+video, interruption, background-lock, low-storage, export/restore, and data-
+integrity validation remain required before delivery or merge. Storage
+migration, transfer changes, and App Store review state remain out of scope.
 
 ## Completed work
+
+- Exact encrypted-video thumbnail run
+  [#269](https://github.com/Frankbell84/KeyHollow/actions/runs/34070080085)
+  passed at commit `dcef6d5f090c13b8f90664b097b4de2db5104707`.
+- The Mac simulator build and complete unit/launch/security suite passed in
+  5m49s, including bounded-JPEG generation, oversized-frame rejection,
+  malformed-media cleanup, architecture enforcement, and existing regression
+  coverage.
+- Swift CodeQL passed in 31m39s with no failed security gate.
+- Thumbnail security-test artifact `10000256227` was retained with SHA-256
+  digest `65bba1a1f1dd527bf3a157fb869e11e428e012266b14c318bf719747546b806f`.
+- Thumbnail simulator artifact `10000255308` was retained with SHA-256 digest
+  `c1ec9cecf1db651652bef951449dc0cc39a01285835a30551f7d28f979ec4013`.
+- The thumbnail milestone is closed at an exact auditable source checkpoint;
+  no TestFlight, tester-group, production, merge, or App Store action occurred.
+- Frank confirmed that roadmap add-on #2, Backup Verification Center, is the
+  next feature after Encrypted Video Support closes. It must remain a separate
+  read-only phase and reuse the authenticated archive validator without
+  installing a vault, creating a second transfer path, or accepting a portable
+  recovery credential as a local unlock method.
 
 - Added a bounded video-frame renderer to `KeyHollowEncryptedVideoAddOn` using
   Apple's native media generator with preferred-orientation transforms, a

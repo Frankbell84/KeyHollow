@@ -1,8 +1,9 @@
 # KeyHollow Development Checkpoint
 
 **Updated:** September 6, 2026
-**Purpose:** Durable restart point for roadmap add-on #4 after its module
-boundary passed and its isolated playback integration entered validation.
+**Purpose:** Durable restart point for roadmap add-on #4 after its module,
+playback, and bounded encrypted-thumbnail milestones passed exact-source Mac
+build/tests and Swift CodeQL.
 
 ## Executive status
 
@@ -13,13 +14,15 @@ boundary passed and its isolated playback integration entered validation.
   rollback tag `checkpoint/post-build-35-export-parity` identifies the hardened
   baseline.
 - App Store review state was not changed.
-- Roadmap add-on #2, Backup Verification Center, remains intentionally deferred.
+- Roadmap add-on #2, Backup Verification Center, is confirmed as the next
+  isolated feature after Encrypted Video Support closes.
 - Roadmap add-on #3, General File Support, is complete. Its encrypted import,
   `.khvault` round trip, unified gallery, secure image preview, selection, and
   individual general-file export behavior are hardened through Build 35.
-- Roadmap add-on #4, Encrypted Video Support, has a validated compiled boundary
-  and validated app-composed playback. Bounded encrypted-at-rest video
-  thumbnails are the next isolated milestone.
+- Roadmap add-on #4, Encrypted Video Support, has a validated compiled boundary,
+  validated app-composed playback, and validated bounded encrypted-at-rest
+  video thumbnails. Physical-device validation remains required before
+  delivery or merge.
 
 ## Numbering clarification
 
@@ -58,7 +61,15 @@ work and **Folder Presentation** for the completed historical phase.
   Swift CodeQL at exact commit `1c02979f989d296eaadc52becec6b45dcdf29ff1`.
 - Encrypted-video playback run #268 passed the complete Mac build/test job and
   Swift CodeQL at exact commit `37f0e2cc8e0a9842b4bce633e0410812fb738cf1`.
-- Feature branch `feature/encrypted-video-support` now has two exact validated
+- Encrypted-video thumbnail run
+  [#269](https://github.com/Frankbell84/KeyHollow/actions/runs/34070080085)
+  passed the complete Mac build/test job in 5m49s and Swift CodeQL in 31m39s at
+  exact commit `dcef6d5f090c13b8f90664b097b4de2db5104707`.
+- Thumbnail security-test artifact `10000256227` retained SHA-256 digest
+  `65bba1a1f1dd527bf3a157fb869e11e428e012266b14c318bf719747546b806f`;
+  simulator artifact `10000255308` retained SHA-256 digest
+  `c1ec9cecf1db651652bef951449dc0cc39a01285835a30551f7d28f979ec4013`.
+- Feature branch `feature/encrypted-video-support` now has three exact validated
   checkpoints; no production or TestFlight state has changed.
 
 ## Roadmap add-on #4 entry requirements
@@ -97,8 +108,10 @@ work and **Folder Presentation** for the completed historical phase.
 
 There is no modular or security blocker. Windows cannot run the Apple simulator,
 so exact-source Mac compilation and tests remain a required remote CI gate as
-before. Bounded video-thumbnail rendering is now implemented inside the video
-module and reuses Folder Presentation for encrypted persistence. The current
-action is exact-source Mac compilation, full regression/security testing, and
-Swift CodeQL. Do not change TestFlight groups, production delivery, or App Store
+before; the current thumbnail source has passed that gate. The current action
+is physical-iPhone validation of video playback, interruption/background lock,
+thumbnail behavior, low-storage failure, `.khvault` export/restore, and data
+integrity. After Encrypted Video Support closes, create Backup Verification
+Center as a separate read-only phase over the existing authenticated archive
+validator. Do not change TestFlight groups, production delivery, or App Store
 review state without the required later approvals.
