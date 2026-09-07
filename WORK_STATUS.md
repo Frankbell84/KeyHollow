@@ -6,11 +6,12 @@ Parent validation head: `85e8d9e` (closed gallery-grid validation checkpoint)
 
 ## Current task
 
-Hold the exact, fully verified Build 37 unified-gallery grid correction at the
-signed-upload approval boundary. The release source, draft review, Mac build and
-tests, Swift CodeQL, and retained artifacts are complete. Do not dispatch the
-signed upload or alter `Family`, merge state, or App Store review state without
-the applicable explicit approval and physical-device acceptance.
+Monitor Apple's processing of the successfully uploaded, fully verified Build
+37 unified-gallery grid correction and confirm Internal-only availability. The
+release source, draft review, repeated Mac build/tests, Swift CodeQL, guarded
+signed upload, retained artifacts, and signing-material cleanup are complete.
+Do not alter `Family`, merge state, or App Store review state without separate
+explicit approval and physical-device acceptance.
 
 ## Completed work
 
@@ -26,9 +27,9 @@ the applicable explicit approval and physical-device acceptance.
   `delivery/gallery-grid-normalization` branch in the guarded production upload
   workflow. `main` remains the only other permitted source; feature branches
   remain unable to dispatch a production upload.
-- The signed TestFlight upload has not been dispatched. Exact Build 37 release-
-  source build/tests and Swift CodeQL are now complete and green; explicit
-  upload authorization remains required.
+- The signed TestFlight upload was dispatched only after exact Build 37 release-
+  source build/tests and Swift CodeQL completed green and Frank explicitly
+  authorized the external action.
 - Opened isolated draft Build 37 release review
   [#46](https://github.com/Frankbell84/KeyHollow/pull/46) against `main` from
   exact release commit `fac32b1`. The review is open, draft, mergeable, and
@@ -57,6 +58,28 @@ the applicable explicit approval and physical-device acceptance.
   `7328c2c0d9b30e3c434019a9854e8ca008bb96b43e9a0470b650b80c55fad09c`.
 - Security-test artifact `10019464923` was recorded with SHA-256 digest
   `7e7b0cf485b0ba503ecfb9a2b600b961f890b591cf9c260b1e894b39d75beafa`.
+- Final exact-head validation run
+  [#284](https://github.com/Frankbell84/KeyHollow/actions/runs/34126197160)
+  passed every mandatory gate at uploaded commit
+  `db4996e5cd63e4211f8f8d2c436f3eb4f5567afd`.
+- Final Mac simulator build, complete regression/security and launch suites,
+  release hygiene, architecture enforcement, build-number guard, and packaged-
+  thumbnail verification passed in 8m11s. Final Swift CodeQL passed in 26m22s.
+- Final simulator artifact `10020457996` was recorded with SHA-256 digest
+  `0b9126237a5d0c90cc6ba174a95f3d4023a1ab5d7905dc9086c92563265c81ee`.
+- Final security-test artifact `10020461739` was recorded with SHA-256 digest
+  `2f185d4ee013522dc8ce44d88c48f8914190df3a1f39dc98af4c6f4606a6df50`.
+- Guarded TestFlight workflow
+  [#47](https://github.com/Frankbell84/KeyHollow/actions/runs/34129257407)
+  completed successfully in 2m40s from exact commit `db4996e`.
+- Release hygiene, production identity, unused Build 37 verification, cloud
+  signing, archive/module hygiene, signed IPA export, Apple upload, artifact
+  retention, and signing-material cleanup all passed.
+- Signed IPA artifact `10021471622` was recorded with SHA-256 digest
+  `c8d598c4da341e52585457aa1171fb22d6645aeeb52e0d9170e030bad3dda1e8`.
+- Apple accepted the binary upload. Build 37 processing and confirmation of its
+  automatic `KeyHollow Internal` availability remain pending; `Family`, merge,
+  and App Store review state were not changed.
 - Frank physically confirmed that Build 36 folders work and selected photos and
   files can be moved successfully.
 - Build 36 screenshots exposed one remaining presentation defect: folders,
@@ -788,15 +811,15 @@ the applicable explicit approval and physical-device acceptance.
 ## Blockers
 
 - No known protected-data, folder-move, build-number, upload, CI, or tester-
-  assignment blocker. Exact Build 37 release-source Mac build/tests and Swift
-  CodeQL are green. Explicit signed-upload authorization is the only release
-  boundary; physical-device visual acceptance remains required before merge or
-  wider rollout.
+  assignment blocker. Exact Build 37 source validation and the signed upload are
+  green. Apple processing is the only current external wait; physical-device
+  visual acceptance remains required before merge or wider rollout.
 
 ## Next action
 
-Request explicit authorization for the guarded signed Build 37 upload to
-`KeyHollow Internal`. Do not alter `Family`, merge, or App Store review state.
+Wait for Apple to finish processing Build 37, confirm it is available to
+`KeyHollow Internal` only, then request Frank's physical-device acceptance. Do
+not alter `Family`, merge, or App Store review state.
 
 ## Frank's decision required
 
@@ -831,6 +854,10 @@ Request explicit authorization for the guarded signed Build 37 upload to
 - Documentation-head reproducibility run #283 is also complete and green. No
   automated release gate or known code issue remains before the explicit
   signed-upload decision.
+- Frank explicitly authorized proceeding with the signed Build 37 upload when
+  the final exact-head gate passed. That authorization was used only for guarded
+  upload workflow #47; the workflow succeeded. `Family`, merge, and App Store
+  review remain separate decisions after processing and device acceptance.
 
 - Frank explicitly approved creating draft Build 35 release PR #41. That review
   is open and its exact release-source CI is green.
