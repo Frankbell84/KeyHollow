@@ -32,6 +32,24 @@ App Store review state remain out of scope.
   gallery composition, not a storage migration or encrypted-content move.
 - Backup Verification Center remains next after this correction and Encrypted
   Video Support close; no work on that add-on has begun.
+- Added a visible multi-select Move menu alongside save/export and delete. At
+  the vault root it lists every folder; inside a folder it also offers Vault
+  Root and excludes the current destination.
+- Added a source-neutral selected-reference bridge so photo-only, file-only,
+  video-file, and mixed selections all use the same folder-membership path.
+- Added an atomic batch move to `KeyHollowFolderPresentationAddOn`. It validates
+  the destination first, removes prior memberships for the complete set, and
+  writes the new encrypted manifest once without touching protected content.
+- Preserved the existing single-item move surface by routing it through the
+  same batch operation, eliminating parallel implementations.
+- Added regression tests for mixed photo/file movement, return to the vault
+  root, and failure against a missing destination with an unchanged manifest.
+- Strengthened the architecture gate and durable behavior baseline so removal
+  of the selection Move action or reintroduction of content-moving behavior is
+  review-visible.
+- Local release hygiene, architecture enforcement, build-number guard self-
+  test, and whitespace/diff checks passed. Exact-source Mac compilation, full
+  regression/security tests, and Swift CodeQL are required next.
 
 - Created `feature/general-file-export-parity` directly from merged Build 34
   baseline `ec25031`; no release branch or production state is being changed.

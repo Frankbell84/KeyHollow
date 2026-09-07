@@ -445,6 +445,10 @@ struct VaultGalleryView: View {
 
             Spacer()
 
+            selectionMoveAction
+
+            Spacer()
+
             Button(role: .destructive) {
                 showingDeleteSelectionConfirmation = true
             } label: {
@@ -494,6 +498,31 @@ struct VaultGalleryView: View {
             }
             .disabled(isWorking)
         }
+    }
+
+    private var selectionMoveAction: some View {
+        Menu {
+            if activeFolderID != nil {
+                Button {
+                    moveSelectedItems(to: nil)
+                } label: {
+                    Label("Vault Root", systemImage: "rectangle.grid.3x2")
+                }
+            }
+
+            ForEach(sortedFolders) { folder in
+                if folder.id != activeFolderID {
+                    Button {
+                        moveSelectedItems(to: folder.id)
+                    } label: {
+                        Label(folder.name, systemImage: "folder")
+                    }
+                }
+            }
+        } label: {
+            Label("Move", systemImage: "folder")
+        }
+        .disabled(selection.isEmpty || !hasSelectionMoveDestination || isWorking)
     }
 
     private var sortedFolders: [VaultFolderRecord] {
@@ -557,7 +586,11 @@ struct VaultGalleryView: View {
         if activeFolderID == nil {
             return "Import photos or files to store encrypted copies inside this vault."
         }
-        return "Move photos or files here from an item's menu."
+        return "Move photos or files here from a selection or an item's menu."
+    }
+
+    private var hasSelectionMoveDestination: Bool {
+        activeFolderID != nil || sortedFolders.contains { $0.id != activeFolderID }
     }
 
     private var folderEditorTitle: String {
@@ -902,6 +935,33 @@ struct VaultGalleryView: View {
                 return
             } catch {
                 message = "The item could not be moved. Protected vault contents were not changed."
+            }
+        }
+        if taskID == nil { isWorking = false }
+    }
+
+    private func moveSelectedItems(to folderID: UUID?) {
+        let items = selectedPresentedReferences
+        guard let presentationStore, !items.isEmpty, !isWorking else { return }
+        let destinationName = folderID.flatMap { destinationID in
+            folderManifest.folders.first { $0.id == destinationID }?.name
+        } ?? "Vault Root"
+        isWorking = true
+
+        let taskID = session.startSensitiveTask { _ in
+            defer { isWorking = false }
+            do {
+                try await presentationStore.move(items, to: folderID)
+                folderManifest = try await presentationStore.loadManifest()
+                guard !Task.isCancelled else { return }
+                let movedCount = items.count
+                leaveSelectionMode()
+                let noun = movedCount == 1 ? "item" : "items"
+                message = "Moved \(movedCount) \(noun) to \(destinationName)."
+            } catch is CancellationError {
+                return
+            } catch {
+                message = "The selected items could not be moved. Protected vault contents were not changed."
             }
         }
         if taskID == nil { isWorking = false }
@@ -1276,6 +1336,16 @@ struct VaultGalleryView: View {
 
     private var selectedGeneralFileRecords: [VaultGeneralFileRecord] {
         visibleGeneralFileRecords.filter { selection.contains(.generalFile($0.id)) }
+    }
+
+    private var selectedPresentedReferences: Set<VaultPresentedContentReference> {
+        let photoReferences = selectedPhotoRecords.map {
+            VaultPresentedContentReference(kind: .photo, id: $0.id)
+        }
+        let fileReferences = selectedGeneralFileRecords.map {
+            VaultPresentedContentReference(kind: .generalFile, id: $0.id)
+        }
+        return Set(photoReferences + fileReferences)
     }
 
     private var visibleSelectableItems: [VaultGallerySelection.Item] {
