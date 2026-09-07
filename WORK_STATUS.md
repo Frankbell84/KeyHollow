@@ -1,19 +1,43 @@
 # KeyHollow Work Status
 
 Updated: 2026-09-07
-Branch: `delivery/gallery-grid-normalization`
+Branch: `fix/gallery-file-performance`
 Parent validation head: `85e8d9e` (closed gallery-grid validation checkpoint)
 
 ## Current task
 
-Monitor Apple's processing of the successfully uploaded, fully verified Build
-37 unified-gallery grid correction and confirm Internal-only availability. The
-release source, draft review, repeated Mac build/tests, Swift CodeQL, guarded
-signed upload, retained artifacts, and signing-material cleanup are complete.
-Do not alter `Family`, merge state, or App Store review state without separate
-explicit approval and physical-device acceptance.
+Correct the gallery scrolling and image-opening performance regression exposed
+by Frank's 26-item physical-device vault. Preserve the accepted normalized grid,
+encrypted stores, folder membership, transfer format, and revocable access
+boundary. Build 37 remains an Internal-only diagnostic release; do not alter
+`Family`, merge state, or App Store review state without separate explicit
+approval and renewed physical-device acceptance.
 
 ## Completed work
+
+- Frank reported that a mixed vault containing only 26 images/files is slow to
+  scroll and slower than before when opening images. This count is far below a
+  reasonable scale limit, so the report is classified as a presentation/loading
+  regression rather than excessive vault content.
+- A read-only history and code-path audit confirmed that Build 37 did not change
+  image opening. The secure preview path is identical to Build 34; Build 37's
+  grid-normalization work is not being rolled back.
+- Identified the primary scroll defect: each grid cell rebuilds, filters, sorts,
+  formats, and linearly searches the complete visible mixed-content list. Each
+  thumbnail completion changes parent state and repeats that work, producing
+  avoidable superlinear recomposition at ordinary item counts.
+- Identified a second UI-thread defect: photo thumbnail decoding and Files-origin
+  full-image decode, resizing, and JPEG thumbnail generation resume on the main
+  actor. Files-origin cache misses also serialize authenticated manifest and
+  blob work before publishing one parent-state update per tile.
+- Identified the image-open regression: the app waits for full authenticated
+  read/decryption and ImageIO validation before presenting, then constructs a
+  full-resolution `UIImage` inside the SwiftUI preview body. The prior viewer
+  retained one prepared image instead of recreating it during view evaluation.
+- Confirmed the correction requires no encrypted-data migration and no change to
+  vault keys, blob formats, folder membership, portable archives, or security
+  gates. Created isolated branch `fix/gallery-file-performance` from the exact
+  Build 37 documentation head before implementation changes.
 
 - App Store Connect authoritatively shows Build 36 as the latest completed
   upload; Build 37 is unused and available for this release candidate.
@@ -791,6 +815,22 @@ explicit approval and physical-device acceptance.
 
 ## Deferred roadmap additions
 
+- **Vault catalog search and sort:** add an authenticated presentation-only
+  catalog/index so name, type, size, date, and folder queries never decrypt or
+  scan full file payloads. Current fixed newest-first/name ordering remains until
+  that separately reviewed module is ready.
+- **Nested folders:** extend folder metadata with an optional parent reference,
+  cycle prevention, bounded depth, safe deletion behavior, and breadcrumb
+  navigation. This is a folder-presentation schema change, not a content-store
+  rewrite.
+- **Cross-vault links:** keep direct `.khvault` import/embedding blocked to avoid
+  recursive archives, ambiguous recovery, and unbounded exports. If needed,
+  design a lightweight authenticated reference to a separately managed vault
+  instead of nesting a complete portable vault payload.
+- **Import progress:** add honest item-level encrypted-import progress after the
+  gallery performance correction. True byte-level progress remains paired with
+  the later streaming/large-video storage path.
+
 - **Break-in Reports / Intruder Capture:** optional, local-only records of
   failed access attempts. Design must avoid creating a plaintext vault-existence
   signal, must have bounded retention, and must not weaken lockout behavior.
@@ -810,18 +850,32 @@ explicit approval and physical-device acceptance.
 
 ## Blockers
 
-- No known protected-data, folder-move, build-number, upload, CI, or tester-
-  assignment blocker. Exact Build 37 source validation and the signed upload are
-  green. Apple processing is the only current external wait; physical-device
-  visual acceptance remains required before merge or wider rollout.
+- Build 37 is not eligible for merge or `Family` rollout because physical-device
+  acceptance exposed reproducible scrolling and image-opening lag at 26 items.
+- Windows cannot compile or profile the UIKit/iOS paths locally. Deterministic
+  structural tests and local policy gates will be run first, followed by the
+  required exact-source Mac build/test and Swift CodeQL gates. Final performance
+  acceptance must occur on Frank's physical device.
 
 ## Next action
 
-Wait for Apple to finish processing Build 37, confirm it is available to
-`KeyHollow Internal` only, then request Frank's physical-device acceptance. Do
-not alter `Family`, merge, or App Store review state.
+Implement one immutable gallery snapshot per state revision with constant-time
+source lookup, then move thumbnail and secure-preview image preparation off the
+main actor and retain one prepared display image. Add structural regression
+gates for the 26-item composition path and forbid image decoding inside a SwiftUI
+view body. Validate locally, then open an isolated draft review and obtain exact-
+source Mac build/test and CodeQL evidence. Do not alter `Family`, merge, signed
+upload, or App Store review state.
 
 ## Frank's decision required
+
+- Frank accepted the recommendation to keep full `.khvault` payloads from being
+  nested inside vaults. A separately managed cross-vault reference may be
+  designed later; recursive archive embedding remains intentionally blocked.
+- Frank's 26-item device report rejects Build 37 for wider rollout on performance
+  grounds. No routine implementation decision is required for the isolated
+  correction; a new explicit signed-upload decision will be required only after
+  green validation evidence.
 
 - Frank approved the isolated gallery-normalization correction after confirming
   that the fixed thumbnail viewport will crop with preserved aspect ratio rather
