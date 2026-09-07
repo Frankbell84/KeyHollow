@@ -74,6 +74,21 @@ approval and renewed physical-device acceptance.
 - Performance-phase architecture enforcement, release hygiene, build-number
   guard self-test, and whitespace/diff checks pass locally. Exact-source Mac
   compilation, complete tests, and Swift CodeQL remain pending.
+- Opened isolated draft performance review
+  [#47](https://github.com/Frankbell84/KeyHollow/pull/47) against `main` from
+  implementation commit `d1cd0fc`. It remains a draft and did not trigger a
+  TestFlight workflow, tester-group change, merge, or App Store review action.
+- Initial exact-source validation run
+  [#286](https://github.com/Frankbell84/KeyHollow/actions/runs/34137635585)
+  compiled the app and packaged thumbnail successfully. Its security-test
+  target then found a test-only Swift compiler-inference blocker in the new
+  26-item snapshot regression: two dense record-construction expressions timed
+  out type checking, and shorthand key paths/enum cases lacked context.
+- Replaced those test-only expressions with explicit typed arrays, simple loop
+  construction, a typed date array, and fully qualified selection cases. No
+  application, encrypted-store, folder, transfer, or image-pipeline behavior
+  changed. Architecture enforcement, release hygiene, the build-number guard
+  self-test, and whitespace/diff checks pass locally after the correction.
 
 - App Store Connect authoritatively shows Build 36 as the latest completed
   upload; Build 37 is unused and available for this release candidate.
@@ -892,14 +907,18 @@ approval and renewed physical-device acceptance.
   structural tests and local policy gates will be run first, followed by the
   required exact-source Mac build/test and Swift CodeQL gates. Final performance
   acceptance must occur on Frank's physical device.
+- Draft PR #47's first Mac run exposed and localized a compile failure in the
+  new regression test only. The test has been simplified locally; a fresh
+  exact-source run must prove the correction before any device build is
+  considered.
 
 ## Next action
 
-Checkpoint and push the completed image-pipeline performance correction, open
-an isolated draft review, and obtain exact-source Mac build/test and Swift
-CodeQL evidence. After green automation, prepare an Internal-only device build
-only at a separately authorized signed-upload boundary. Do not alter `Family`,
-merge, signed upload, or App Store review state.
+Checkpoint and push the test-compiler correction to draft PR #47, then obtain
+fresh exact-source Mac build/test and Swift CodeQL evidence. After green
+automation, prepare an Internal-only device build only at a separately
+authorized signed-upload boundary. Do not alter `Family`, merge, signed upload,
+or App Store review state.
 
 ## Frank's decision required
 
@@ -914,6 +933,10 @@ merge, signed upload, or App Store review state.
   grounds. No routine implementation decision is required for the isolated
   correction; a new explicit signed-upload decision will be required only after
   green validation evidence.
+- Frank explicitly confirmed creation of draft performance PR #47. That
+  confirmation authorized only the draft review and its validation gates; it
+  did not authorize a signed upload, `Family` assignment, merge, or App Store
+  review change.
 
 - Frank approved the isolated gallery-normalization correction after confirming
   that the fixed thumbnail viewport will crop with preserved aspect ratio rather

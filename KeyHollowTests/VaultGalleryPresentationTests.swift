@@ -259,25 +259,36 @@ final class VaultGalleryPresentationTests: XCTestCase {
 
     func testGallerySnapshotMapsTwentySixMixedItemsOnceWithStableLookup() {
         let sharedSourceID = UUID()
-        let photos = (0..<13).map { index in
-            VaultPhotoRecord(
-                id: index == 0 ? sharedSourceID : UUID(),
-                importedAt: Date(timeIntervalSinceReferenceDate: TimeInterval(100 + index)),
+        var photos: [VaultPhotoRecord] = []
+        var files: [VaultGeneralFileRecord] = []
+        photos.reserveCapacity(13)
+        files.reserveCapacity(13)
+
+        for index in 0..<13 {
+            let sourceID = index == 0 ? sharedSourceID : UUID()
+            let photoImportedAt = Date(
+                timeIntervalSinceReferenceDate: TimeInterval(100 + index)
+            )
+            let fileImportedAt = Date(
+                timeIntervalSinceReferenceDate: TimeInterval(200 + index)
+            )
+
+            photos.append(VaultPhotoRecord(
+                id: sourceID,
+                importedAt: photoImportedAt,
                 blobName: "photo-\(index).khp",
                 thumbnailName: "photo-\(index).kht",
                 displayName: "Photo \(index).HEIC",
                 originalByteCount: UInt64(1_000 + index)
-            )
-        }
-        let files = (0..<13).map { index in
-            VaultGeneralFileRecord(
-                id: index == 0 ? sharedSourceID : UUID(),
-                importedAt: Date(timeIntervalSinceReferenceDate: TimeInterval(200 + index)),
+            ))
+            files.append(VaultGeneralFileRecord(
+                id: sourceID,
+                importedAt: fileImportedAt,
                 displayName: "File \(index).jpg",
                 contentTypeIdentifier: "public.jpeg",
                 originalByteCount: UInt64(2_000 + index),
                 blobName: "file-\(index).khg"
-            )
+            ))
         }
         let snapshot = VaultGalleryContentSnapshot(
             items: photos.map(VaultGalleryContentItem.photo)
@@ -288,15 +299,20 @@ final class VaultGalleryPresentationTests: XCTestCase {
         XCTAssertEqual(snapshot.orderedSources.count, 26)
         XCTAssertEqual(snapshot.sourceByID.count, 26)
         XCTAssertEqual(snapshot.selectableItems.count, 26)
+        let importedDates = snapshot.presentations.map { $0.importedAt }
         XCTAssertEqual(
-            snapshot.presentations.map(\.importedAt),
-            snapshot.presentations.map(\.importedAt).sorted(by: >)
+            importedDates,
+            importedDates.sorted(by: >)
         )
         for presentation in snapshot.presentations {
             XCTAssertEqual(snapshot.sourceByID[presentation.id]?.id, presentation.id)
         }
-        XCTAssertNotNil(snapshot.sourceByID[.photo(sharedSourceID)])
-        XCTAssertNotNil(snapshot.sourceByID[.generalFile(sharedSourceID)])
+        XCTAssertNotNil(
+            snapshot.sourceByID[VaultGallerySelection.Item.photo(sharedSourceID)]
+        )
+        XCTAssertNotNil(
+            snapshot.sourceByID[VaultGallerySelection.Item.generalFile(sharedSourceID)]
+        )
     }
 
     func testSharedTileGeometryIsFixedForEveryItemKind() {
