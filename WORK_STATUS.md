@@ -45,6 +45,18 @@ the applicable explicit approval and physical-device acceptance.
   `776d221a78bd47e8964c0e498a3e0397b374d18ebc86f898c074606ac87e5954`.
 - Security-test artifact `10018306713` was recorded with SHA-256 digest
   `1c2b9ef81ca5cb5997bdbed999093b5230b903d3b787b165c95c8eb68d7f3e5c`.
+- Exact documentation-head reproducibility run
+  [#283](https://github.com/Frankbell84/KeyHollow/actions/runs/34123533457)
+  passed every mandatory gate at commit
+  `4d715fdb30b893cf8f7de0c4c2edceb9e73b7438`.
+- Reproducibility Mac simulator build, complete regression/security and launch
+  suites, release hygiene, architecture enforcement, build-number guard, and
+  packaged-thumbnail verification passed in 9m30s.
+- Reproducibility Swift CodeQL passed in 26m07s with no failed security gate.
+- Simulator artifact `10019460121` was recorded with SHA-256 digest
+  `7328c2c0d9b30e3c434019a9854e8ca008bb96b43e9a0470b650b80c55fad09c`.
+- Security-test artifact `10019464923` was recorded with SHA-256 digest
+  `7e7b0cf485b0ba503ecfb9a2b600b961f890b591cf9c260b1e894b39d75beafa`.
 - Frank physically confirmed that Build 36 folders work and selected photos and
   files can be moved successfully.
 - Build 36 screenshots exposed one remaining presentation defect: folders,
@@ -783,10 +795,8 @@ the applicable explicit approval and physical-device acceptance.
 
 ## Next action
 
-Commit and push this exact CI-evidence checkpoint, verify the documentation-only
-head reproducibly, then request explicit authorization for the guarded signed
-Build 37 upload to `KeyHollow Internal`. Do not alter `Family`, merge, or App
-Store review state.
+Request explicit authorization for the guarded signed Build 37 upload to
+`KeyHollow Internal`. Do not alter `Family`, merge, or App Store review state.
 
 ## Frank's decision required
 
@@ -818,6 +828,9 @@ Store review state.
 - Draft Build 37 release PR #46 and exact-source CI run #282 are complete and
   green. Frank's explicit authorization is now required before dispatching the
   signed Build 37 upload to `KeyHollow Internal`.
+- Documentation-head reproducibility run #283 is also complete and green. No
+  automated release gate or known code issue remains before the explicit
+  signed-upload decision.
 
 - Frank explicitly approved creating draft Build 35 release PR #41. That review
   is open and its exact release-source CI is green.
