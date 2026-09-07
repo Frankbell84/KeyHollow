@@ -98,6 +98,20 @@ App Store review state.
   `5186b6404be7215e9853fd3c41cfde527f3f637433dbec74646d47755ec5ca77`.
 - Build 36 simulator artifact `10010694262` recorded SHA-256 digest
   `b5014f949890dd2d5bf1c201abc94c112d23f41d8e5bd4beae315c878302b180`.
+- Final Build 36 evidence-head reproducibility run
+  [#276](https://github.com/Frankbell84/KeyHollow/actions/runs/34103379382)
+  passed every mandatory gate at exact delivery head `9b3d353`.
+- The repeated complete build/test suite passed in 7m53s, and Swift CodeQL
+  passed in 18m11s with no failed security gate or unresolved finding.
+- Final-head security-test artifact `10011633718` recorded SHA-256 digest
+  `dacf08acc7c6b46a2087b81a5b1064aef349776d3c10fa5e0e3645956aae673b`.
+- Final-head simulator artifact `10011630800` recorded SHA-256 digest
+  `1886eead573fe4de0d9e24ad88ea932dc3a43b6db14455d0af7efd29b5a0fac6`.
+- After Frank's explicit authorization, guarded TestFlight workflow
+  [#46](https://github.com/Frankbell84/KeyHollow/actions/runs/34105375436)
+  successfully archived, signed, validated, and uploaded Build 36 from exact
+  green head `9b3d353` in 3m52s.
+- No `Family` assignment, merge, or App Store review action was performed.
 
 - Created `feature/general-file-export-parity` directly from merged Build 34
   baseline `ec25031`; no release branch or production state is being changed.
@@ -650,17 +664,16 @@ App Store review state.
 
 ## Blockers
 
-- No known engineering blocker. The exact correction, final review head, and
-  Build 36 release source are green. The evidence-only checkpoint must pass the
-  same exact-head CI gates before the signed TestFlight upload decision.
+- No known engineering or upload blocker. App Store Connect signed the browser
+  session out after upload, so Frank must complete the account login before
+  Build 36 processing and Internal-only assignment can be verified.
 
 ## Next action
 
-Commit and push this Build 36 evidence checkpoint and require its exact final
-head to pass the complete build/tests and Swift CodeQL gates. Then request
-permission at the final external-action boundary before dispatching the guarded
-signed TestFlight upload. Do not alter tester groups, merge state, or App Store
-review state.
+After Frank restores the App Store Connect session, verify that Build 36 has
+finished processing and is assigned only to `KeyHollow Internal`. Then request
+physical-iPhone validation of mixed photo/file moves to a folder and back to the
+vault root. Do not alter `Family`, merge state, or App Store review state.
 
 ## Frank's decision required
 
@@ -672,6 +685,9 @@ review state.
 - Frank explicitly approved creating draft Build 36 release PR #44. The review
   exists and exact release-source CI is green. The signed upload, tester-group
   assignment, merge, and App Store review remain separate decisions.
+- Frank explicitly authorized the signed Build 36 upload to `KeyHollow
+  Internal`; guarded workflow #46 succeeded. `Family` rollout, merge, and App
+  Store review remain separate decisions.
 
 - Frank explicitly approved creating draft Build 35 release PR #41. That review
   is open and its exact release-source CI is green.
