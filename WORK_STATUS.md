@@ -1,17 +1,27 @@
 # KeyHollow Work Status
 
 Updated: 2026-09-07
-Branch: `delivery/gallery-file-performance`
-Parent validation head: `8e356b8` (green gallery-performance evidence head)
+Branch: `chore/post-build-38-checkpoint`
+Parent validation head: `3df3e1c` (merged Build 38 baseline on `main`)
 
 ## Current task
 
-Commit and validate the accepted Build 38 `Family` rollout checkpoint, then
-merge draft PR #48 only after that exact updated head reproduces green. Frank
-explicitly authorized both actions; App Store review state remains out of scope.
+Record the accepted and merged Build 38 baseline, reconcile the add-on roadmap,
+and prepare a clean restart point for roadmap add-on #4, Encrypted Video
+Support. The older isolated video branch is reference material for a surgical
+adaptation onto current `main`; it must not be merged wholesale. App Store
+review state remains out of scope.
 
 ## Completed work
 
+- Merged release PR
+  [#48](https://github.com/Frankbell84/KeyHollow/pull/48) into `main` at
+  `3df3e1c`. The merge contains exact accepted head `d85c338`, and local ancestry
+  verification confirms that head is present on refreshed `origin/main`.
+- Closed the Build 38 correction cycle without changing vault keys, protected
+  stores, ciphertext formats, folder membership formats, or `.khvault`
+  compatibility. Build 37 remains superseded rather than rolled back into the
+  baseline.
 - Frank completed all seven Build 38 physical-device acceptance checks and
   reported the gallery is now "smooth as butter." Warm/cold mixed-content
   scrolling, Files-origin thumbnail fill, first/repeat image opening,
@@ -728,6 +738,21 @@ explicitly authorized both actions; App Store review state remains out of scope.
   `ba76f8ae4da750b3e58dc193062a4d6726e4d2d3816d435b8222a625a46c043d`;
   security-test artifact `10030074902` recorded SHA-256 digest
   `13edeb1c512c3b40510b2a370914eaa5de8dda812e32791f3dc893274f11daf9`.
+- Final acceptance-head run
+  [#294](https://github.com/Frankbell84/KeyHollow/actions/runs/34154622765)
+  at exact commit `d85c338`: passed in 28m55s. The Mac build, complete test
+  suite, packaged-thumbnail checks, Swift CodeQL, and both artifact uploads all
+  passed with zero annotations.
+- Run #294 simulator artifact `10030685984` recorded SHA-256 digest
+  `7bc3a46c027ddefe3e356f96095955022d868a178b7c97612cea7218864b4f96`;
+  security-test artifact `10030690480` recorded SHA-256 digest
+  `6086c720dfd8d0c32eb3a0b184f9c8e07b6ff2a0415a9b160790149ba0ea1488`.
+- Post-merge checkpoint changes are documentation-only. The architecture map
+  now names every currently compiled add-on/presentation target, and the
+  durable project checkpoint no longer misstates Folder Presentation as future
+  work.
+- Post-merge architecture-boundary and release-hygiene gates, TestFlight
+  build-number guard self-test, and diff-integrity check all pass locally.
 - App Store Connect processing verification: Build 38 upload processing is
   `Complete`; after the authorized rollout its testing groups are `KeyHollow
   Internal` and `Family`.
@@ -1001,6 +1026,28 @@ explicitly authorized both actions; App Store review state remains out of scope.
   limited production upload permission to the exact immutable branch
   `delivery/mixed-gallery-selection`.
 
+## Roadmap position
+
+1. **Protected modular foundation:** complete and continuously enforced by the
+   architecture, release-hygiene, build-number, simulator, security, and
+   CodeQL gates.
+2. **Roadmap add-on #3 — General File Support:** complete and hardened through
+   mixed `.khvault` round trips, unified selection, secure opening, individual
+   export, and folder moves.
+3. **Folder Presentation (historically called Phase 4):** complete. Folder
+   creation/navigation, mixed moves, normalized grid presentation, and the
+   Build 38 responsiveness correction are accepted on a physical iPhone. This
+   historical phase is not roadmap add-on #4.
+4. **Roadmap add-on #4 — Encrypted Video Support:** next. Its older isolated
+   branch contains validated module-boundary, secure-playback, and bounded
+   encrypted-thumbnail milestones, but it predates the accepted Build 38
+   gallery baseline. Reuse the concepts and focused changes through a new
+   branch from current `main`; do not merge that branch wholesale.
+5. **Roadmap add-on #2 — Backup Verification Center:** confirmed next after
+   Encrypted Video closes. It remains a read-only verification surface over the
+   authenticated archive validator, with no install path and no new unlock
+   path.
+
 ## Deferred roadmap additions
 
 - **Vault catalog search and sort:** add an authenticated presentation-only
@@ -1032,9 +1079,9 @@ explicitly authorized both actions; App Store review state remains out of scope.
   not enumerate vaults, retain plaintext, or possess a general vault-unlock
   capability. Competitor-specific three-step migration guides may be added as
   onboarding after each supported app's current export behavior is verified.
-- These roadmap items begin only after the current gallery normalization,
-  separate swipe-navigation correction, and already-planned security/backup
-  work. None is part of the present release candidate.
+- These roadmap items begin only after Encrypted Video, Backup Verification,
+  and the deliberately separate swipe-navigation correction. None is part of
+  the accepted Build 38 baseline or the next video integration.
 
 ## Blockers
 
@@ -1042,19 +1089,32 @@ explicitly authorized both actions; App Store review state remains out of scope.
   and image-opening lag at 26 items; accepted Build 38 supersedes it.
 - Feature-head runs #288/#289, Build 38 release-source run #290, final release
   head #291, guarded upload #48, Apple processing/Internal availability, and all
-  seven physical-device checks are complete. Documentation-head run #293 also
-  passed its Mac and Swift CodeQL jobs. There is no known code, performance,
-  security, or delivery defect. `Family` rollout is complete; only the
-  authorized merge checkpoint remains.
+  seven physical-device checks are complete. Documentation-head run #293 and
+  final acceptance-head run #294 also passed their Mac and Swift CodeQL jobs.
+  `Family` rollout and PR #48 merge are complete. There is no known code,
+  performance, security, delivery, or roadmap blocker.
+- The old `feature/encrypted-video-support` branch cannot be merged wholesale
+  because it predates the accepted gallery and performance architecture. This
+  is a controlled integration constraint, not a blocker: adapt its validated
+  video module, policies, coordinators, and tests onto a fresh branch from
+  `3df3e1c`, then wire the current gallery deliberately.
 
 ## Next action
 
-Commit and push the complete physical-acceptance and `Family` rollout evidence,
-wait for that exact branch head to pass all mandatory checks, then merge PR #48
-and verify the resulting `main` state. Do not change App Store review state.
+Land this documentation-only post-merge checkpoint, then create a fresh
+Encrypted Video branch from the resulting current `main`. Map the validated
+video milestones against the Build 38 gallery before transferring focused
+changes. Run architecture and release-hygiene gates before implementation, then
+repeat the full Mac/CodeQL and physical-device gates before any delivery or
+merge. Do not change TestFlight groups, perform a signed upload, merge the video
+feature, or change App Store review state without the required later approval.
 
 ## Frank's decision required
 
+- No decision is required to record this post-merge checkpoint or begin the
+  already-approved isolated Encrypted Video adaptation. A later signed upload,
+  tester-group change, video-feature merge, or App Store review action remains
+  a separate explicit decision.
 - Frank accepted the recommendation to keep full `.khvault` payloads from being
   nested inside vaults. A separately managed cross-vault reference may be
   designed later; recursive archive embedding remains intentionally blocked.
@@ -1066,9 +1126,9 @@ and verify the resulting `main` state. Do not change App Store review state.
   performance grounds. Build 38's isolated correction, release-source evidence,
   guarded upload, Apple processing, and all seven physical-device acceptance
   scenarios now pass. Frank explicitly authorized adding Build 38 to `Family`
-  and merging PR #48 after the exact acceptance head is green. The `Family`
-  rollout is complete; the merge remains pending its updated-head gates. App
-  Store review remains a separate decision.
+  and merging PR #48 after the exact acceptance head was green. The `Family`
+  rollout and PR #48 merge are complete. App Store review remains a separate
+  decision.
 - Historical delivery branches may be permanently retired or protected later
   to remove their manually runnable historical workflow copies. Their consumed
   build numbers already fail closed before signing/upload; deleting branches or

@@ -16,8 +16,11 @@ small local core with narrow adapters around it.
 | `Photos/SecurePhotoPicker` | The narrow Apple Photos adapter | Vault keys, archive format, credential persistence |
 | `UI` and gallery view | User interaction and presentation | Cryptographic algorithms or direct persistence formats |
 | `App` | Composition and lifecycle entry | Feature implementation details |
+| `AddOns/FileRecognition` | `.khvault` filename recognition and bounded ingress staging | Vault decryption, vault keys, protected content stores, application navigation |
 | `AddOns/GeneralFileSupport` | Encrypted general-file records, manifests, blobs, and protected ingress/egress staging | Vault keys, photo storage, SwiftUI/UIKit, portable archive formats |
 | `AddOns/FolderPresentation` | Folder metadata, neutral content references, and encrypted presentation thumbnails | Vault keys, protected photo/file content, SwiftUI/UIKit, portable archive formats |
+| `UI/VaultGallery*` | Source-neutral grid layout, tile metadata, folder presentation, and selection behavior | Vault keys, ciphertext, protected stores, decryption, portable archive formats |
+| `AddOns/SecurePreview` | Bounded image type/size policy, off-main image preparation, and secure preview presentation | Vault keys, encrypted persistence, session ownership, portable archive formats |
 
 ## Enforced rules
 
@@ -65,6 +68,11 @@ concrete vault service at `KeyHollowApp`, injects its factory into `RootView`,
 and keeps the gallery and navigation outside every core module and platform
 adapter.
 
+`KeyHollowFileRecognitionAddOn` recognizes the declared `.khvault` filename
+extension and creates a bounded, disposable ingress copy for the transfer
+coordinator. It does not authenticate or decrypt an archive, enumerate vaults,
+own a vault capability, or install content.
+
 `KeyHollowGeneralFileSupportAddOn` owns a separate encrypted data root and
 manifest. It receives domain-separated seal/open operations through a narrow
 revocable interface. The application layer presents Apple's Files and share
@@ -81,6 +89,18 @@ content. Single-item and mixed-selection moves update only the encrypted folder
 manifest; a batch is committed with one authenticated manifest write and never
 moves or rewrites photo or general-file ciphertext. Removing the add-on leaves
 the protected stores and existing `.khvault` format operational.
+
+`KeyHollowGalleryUI` owns the visible, source-neutral gallery grid. The app
+composition layer converts protected photo and general-file records into
+immutable tile values and supplies typed actions. The module never receives a
+store, vault key, ciphertext, decryption operation, or portable archive
+capability. Removing or replacing it cannot make protected content readable.
+
+`KeyHollowSecurePreviewAddOn` owns bounded image acceptance policy, eager image
+preparation away from the main actor, and the authenticated-session preview
+surface. The application retains storage access, task lifetime, navigation,
+and lock revocation. The add-on receives only the bytes and immutable metadata
+needed for the active operation and does not persist decrypted content.
 
 ## Change policy
 
