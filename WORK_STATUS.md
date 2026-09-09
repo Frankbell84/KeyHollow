@@ -1,19 +1,33 @@
 # KeyHollow Work Status
 
 Updated: 2026-09-09
-Branch: `chore/post-build-38-checkpoint`
-Parent validation head: `3df3e1c` (merged Build 38 baseline on `main`)
+Branch: `feature/encrypted-video-build38-integration`
+Parent validation head: `c0cb100` (recovered Build 38 checkpoint)
 
 ## Current task
 
-Complete the post-outage repository recovery and documentation reconciliation,
-then establish a clean branch point for roadmap add-on #4, Encrypted Video
-Support. The older isolated video branch is reference material for a surgical
-adaptation onto the accepted Build 38 architecture; it must not be merged
-wholesale. App Store review state remains out of scope.
+Implement roadmap add-on #4, Encrypted Video Support, on an isolated branch
+from the recovered Build 38 checkpoint. Begin with the independently compiled
+video policy, playback handoff/player, bounded frame renderer, architecture
+gate, and focused tests. Preserve existing general-file records, folders,
+selection/export behavior, and `.khvault` formats; the historical video branch
+is reference material and must not be merged wholesale.
 
 ## Completed work
 
+- Committed the recovered documentation baseline as `c0cb100`, pushed it to
+  `chore/post-build-38-checkpoint`, and verified local HEAD exactly matches its
+  upstream. Created `feature/encrypted-video-build38-integration` from that
+  exact clean commit before making implementation changes.
+- Completed independent integration and test audits against the historical
+  video branch. The reusable policy/player/renderer concepts are isolated, but
+  gallery wiring, thumbnail scheduling, media validation, and plaintext
+  lifecycle handling must be adapted to the accepted Build 38 architecture.
+- Fixed the phase contract before implementation: video remains an ordinary
+  general-file record with no migration; video and Files-origin image misses
+  must share one bounded full-payload lane; playback preparation and cleanup
+  must be tracked across dismiss, lock, background, disappearance, and vault
+  changes; malformed media must fail closed before active playback is exposed.
 - Completed a read-only recovery audit after the September 7 power loss. No
   merge, rebase, cherry-pick, revert, bisect, sequencer, or Git lock was left in
   progress; no reachable Git corruption was found. At recovery start, the
@@ -736,6 +750,10 @@ wholesale. App Store review state remains out of scope.
 
 ## Test and build status
 
+- Phase-entry architecture, release-hygiene, build-number guard, and
+  diff-integrity gates pass at exact parent `c0cb100`. Windows cannot compile
+  the iOS targets, so exact-source Mac build/test and Swift CodeQL remain
+  mandatory after each implementation milestone is pushed for review.
 - Post-outage repository integrity, operation-state, branch/upstream, and remote
   baseline checks pass. This checkpoint remains documentation-only; local
   architecture, release-hygiene, build-number, and diff-integrity gates pass on
@@ -1112,27 +1130,26 @@ wholesale. App Store review state remains out of scope.
 - The old `feature/encrypted-video-support` branch cannot be merged wholesale
   because it predates the accepted gallery and performance architecture. This
   is a controlled integration constraint, not a blocker: adapt its validated
-  video module, policies, coordinators, and tests onto a fresh branch from
-  `3df3e1c`, then wire the current gallery deliberately.
+  video module, policies, coordinators, and tests onto the fresh branch from
+  recovered checkpoint `c0cb100`, then wire the current gallery deliberately.
 
 ## Next action
 
-Validate and push the documentation-only recovery checkpoint, then create a
-fresh Encrypted Video integration branch from that exact clean Build 38-based
-commit. Port only the isolated module, policy, player, and bounded rendering
-concepts; deliberately rewrite current gallery integration so videos share the
-accepted single full-payload miss lane rather than introducing parallel
-decryption. Repeat the full Mac/CodeQL and physical-device gates before any
-delivery or merge. Do not change TestFlight groups, perform a signed upload,
-merge the video feature, or change App Store review state without the required
-later approval.
+Commit and push this phase-entry checkpoint, then implement the independently
+compiled video policy, validated local playback handoff/player, bounded frame
+renderer, target wiring, architecture enforcement, and focused unit tests.
+After that boundary is green, add lifecycle-safe playback coordination and a
+shared image/video cold-thumbnail lane before touching gallery routing. Repeat
+the full Mac/CodeQL and physical-device gates before delivery or merge. Do not
+change TestFlight groups, perform a signed upload, merge the video feature, or
+change App Store review state without the required later approval.
 
 ## Frank's decision required
 
-- No decision is required to record this post-merge checkpoint or begin the
-  already-approved isolated Encrypted Video adaptation. A later signed upload,
-  tester-group change, video-feature merge, or App Store review action remains
-  a separate explicit decision.
+- Frank approved proceeding with the best available path and beginning the
+  isolated Encrypted Video adaptation. No additional decision is required for
+  implementation and draft validation; signed upload, tester assignment, merge,
+  and App Store review remain later explicit boundaries.
 - Frank accepted the recommendation to keep full `.khvault` payloads from being
   nested inside vaults. A separately managed cross-vault reference may be
   designed later; recursive archive embedding remains intentionally blocked.
