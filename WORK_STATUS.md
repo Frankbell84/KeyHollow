@@ -1,19 +1,31 @@
 # KeyHollow Work Status
 
-Updated: 2026-09-07
+Updated: 2026-09-09
 Branch: `chore/post-build-38-checkpoint`
 Parent validation head: `3df3e1c` (merged Build 38 baseline on `main`)
 
 ## Current task
 
-Record the accepted and merged Build 38 baseline, reconcile the add-on roadmap,
-and prepare a clean restart point for roadmap add-on #4, Encrypted Video
+Complete the post-outage repository recovery and documentation reconciliation,
+then establish a clean branch point for roadmap add-on #4, Encrypted Video
 Support. The older isolated video branch is reference material for a surgical
-adaptation onto current `main`; it must not be merged wholesale. App Store
-review state remains out of scope.
+adaptation onto the accepted Build 38 architecture; it must not be merged
+wholesale. App Store review state remains out of scope.
 
 ## Completed work
 
+- Completed a read-only recovery audit after the September 7 power loss. No
+  merge, rebase, cherry-pick, revert, bisect, sequencer, or Git lock was left in
+  progress; no reachable Git corruption was found. At recovery start, the
+  checkpoint branch was clean and exactly aligned with pushed commit `635efae`.
+- Reconfirmed `origin/main` at merged Build 38 commit `3df3e1c`, containing the
+  accepted implementation head `d85c338`. Main CI run #295 passed its Mac
+  build/test, Swift CodeQL, and Pages jobs at that exact merge commit.
+- Reconciled stale product documentation: the README now describes the current
+  photo-and-general-file vault, unified gallery, and folder baseline, while the
+  General File Support guide now accurately records legacy photo-only catalog
+  v1 reads and authenticated mixed-content catalog v2 export/restore behavior
+  inside the unchanged outer `.khvault` container and payload framing.
 - Merged release PR
   [#48](https://github.com/Frankbell84/KeyHollow/pull/48) into `main` at
   `3df3e1c`. The merge contains exact accepted head `d85c338`, and local ancestry
@@ -724,6 +736,10 @@ review state remains out of scope.
 
 ## Test and build status
 
+- Post-outage repository integrity, operation-state, branch/upstream, and remote
+  baseline checks pass. This checkpoint remains documentation-only; local
+  architecture, release-hygiene, build-number, and diff-integrity gates pass on
+  the reconciled documentation head.
 - App Store Connect rollout verification: Build 38 is `Testing` in both
   `KeyHollow Internal` and `Family`; automatic tester notification was enabled.
 - Build 38 physical-device acceptance: all seven required performance and
@@ -1101,13 +1117,15 @@ review state remains out of scope.
 
 ## Next action
 
-Land this documentation-only post-merge checkpoint, then create a fresh
-Encrypted Video branch from the resulting current `main`. Map the validated
-video milestones against the Build 38 gallery before transferring focused
-changes. Run architecture and release-hygiene gates before implementation, then
-repeat the full Mac/CodeQL and physical-device gates before any delivery or
-merge. Do not change TestFlight groups, perform a signed upload, merge the video
-feature, or change App Store review state without the required later approval.
+Validate and push the documentation-only recovery checkpoint, then create a
+fresh Encrypted Video integration branch from that exact clean Build 38-based
+commit. Port only the isolated module, policy, player, and bounded rendering
+concepts; deliberately rewrite current gallery integration so videos share the
+accepted single full-payload miss lane rather than introducing parallel
+decryption. Repeat the full Mac/CodeQL and physical-device gates before any
+delivery or merge. Do not change TestFlight groups, perform a signed upload,
+merge the video feature, or change App Store review state without the required
+later approval.
 
 ## Frank's decision required
 

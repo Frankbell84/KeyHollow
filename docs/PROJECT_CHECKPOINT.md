@@ -1,11 +1,15 @@
 # KeyHollow Development Checkpoint
 
-**Updated:** September 7, 2026
+**Updated:** September 9, 2026
 **Purpose:** Durable restart point after the accepted Build 38 gallery
 performance release and before roadmap add-on #4, Encrypted Video Support.
 
 ## Executive status
 
+- A post-power-loss recovery audit found no interrupted Git operation, lock, or
+  reachable repository corruption. The checkpoint branch was aligned with its
+  pushed commit at recovery start, and the accepted Build 38 baseline remains
+  intact.
 - Current merged baseline is `main` at `3df3e1c`, which merged release PR #48
   and contains exact accepted head `d85c338`.
 - Build 38 passed all seven required physical-iPhone acceptance scenarios and
@@ -54,6 +58,10 @@ performance release and before roadmap add-on #4, Encrypted Video Support.
 
 ## Verified hardening evidence
 
+- Main CI run
+  [#295](https://github.com/Frankbell84/KeyHollow/actions/runs/34156666679)
+  passed its Mac build/test, Swift CodeQL, and Pages jobs at exact merged
+  baseline `3df3e1c` after the outage.
 - Final acceptance-head CI run
   [#294](https://github.com/Frankbell84/KeyHollow/actions/runs/34154622765)
   passed at exact commit `d85c338`.

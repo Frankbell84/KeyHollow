@@ -1,6 +1,6 @@
 # KeyHollow
 
-KeyHollow is a native iOS privacy application built around multiple independent encrypted photo vaults. A valid passcode opens only the vault associated with that passcode; the normal locked interface does not enumerate other vaults.
+KeyHollow is a native iOS privacy application built around multiple independent encrypted vaults for photos and general files. A valid passcode opens only the vault associated with that passcode; the normal locked interface does not enumerate other vaults.
 
 ## Product principle
 
@@ -9,9 +9,9 @@ KeyHollow is a native iOS privacy application built around multiple independent 
 ## Security-first V1
 
 - Native Swift / SwiftUI
-- Local-only encrypted photo storage
+- Local-only encrypted photo and general-file storage
 - Independent cryptographic key material per vault
-- Authenticated encryption for photo data and thumbnails
+- Authenticated encryption for stored content, metadata, and thumbnails
 - iOS Keychain and Data Protection where appropriate
 - Automatic lock when the app leaves the foreground
 - No Face ID, Touch ID, or Apple device-passcode fallback for vault unlock
@@ -19,6 +19,7 @@ KeyHollow is a native iOS privacy application built around multiple independent 
 - No analytics or advertising SDKs in the secure application path
 - No plaintext vault index exposed by the UI
 - Copy-to-vault and verified move-to-vault import modes
+- Unified three-column gallery with encrypted folder organization
 - No claims of absolute coercion or forensic resistance
 
 ## Engineering rule

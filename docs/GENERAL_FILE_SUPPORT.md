@@ -2,7 +2,8 @@
 
 General File Support is an independently compiled, local-only KeyHollow add-on.
 It expands a vault beyond photos without changing the existing photo manifest,
-photo blobs, credential envelopes, or `.khvault` version-one decoder.
+photo blobs, credential envelopes, or outer `.khvault` version-one container
+decoder.
 
 ## First release scope
 
@@ -12,28 +13,31 @@ photo blobs, credential envelopes, or `.khvault` version-one decoder.
 - Import the selected files immediately after Apple's picker closes, then
   refresh the same unified three-column Vault grid used by photos. There is no
   KeyHollow staging, review, or second confirmation screen.
-- Canceling Apple's picker leaves the vault unchanged. Opening `Vault Files`
-  intentionally remains the management path for stored-file export and
-  deletion, not an intermediate import destination.
+- Canceling Apple's picker leaves the vault unchanged. `Vault Files` remains
+  an alternate file-management path, not an intermediate import destination;
+  the unified gallery also supports mixed selection, export, and deletion.
 - Future metadata editing is intentionally decoupled from import and deferred
   to a post-import Vault Security/settings surface.
 - Accept common documents, PDFs, audio, archives, text, and other data files.
 - Encrypt the file bytes and authenticated metadata before committing the item
   to the add-on manifest.
-- Show only the authenticated display name, type, and size after unlock.
+- Show the authenticated display name, type, and size after unlock.
 - Compose authenticated general-file records into the primary Vault screen so a
   file-only vault never appears empty; the photo and general-file manifests
   remain independently stored and compiled behind the presentation layer.
-- Present photos and general files in one consistent square-tile grid; file
-  tiles retain a type icon, name, and size while opening the dedicated file
-  manager for file-specific actions.
+- Present photos and general files in one consistent square-tile grid with
+  names and sizes. Files-origin images use encrypted thumbnails and the same
+  secure image preview as photo imports; non-image files retain a type icon and
+  open the dedicated file manager for file-specific actions.
 - Select one or many files, export authenticated copies through the system share
   interface, or permanently delete their encrypted vault copies.
 - Keep every source file unchanged during import.
 
-The first release intentionally excludes folders, packages, executable formats,
-`.khvault` backups, empty files, and individual files larger than 100 MB. Video
-and streaming large-file encryption remain a separately reviewed add-on.
+The first release intentionally excludes packages, executable formats,
+`.khvault` backups, empty files, and individual files larger than 100 MB.
+Existing in-limit video files may be stored and transferred as ordinary
+general-file records, but purpose-built video thumbnails/playback and streaming
+large-file encryption remain a separately reviewed add-on.
 
 ## Security and architecture boundaries
 
@@ -60,12 +64,17 @@ and streaming large-file encryption remain a separately reviewed add-on.
 
 ## Transfer compatibility
 
-Existing `.khvault` exports and restores remain byte-format compatible and
-continue to transfer the existing encrypted photo store. General files are not
-silently inserted into version one. Adding general files to portable whole-vault
-transfer requires a separately reviewed, versioned catalog extension with old-
-archive decoding, hostile-input, interruption, rollback, and device tests.
+The outer `.khvault` container, public header, and payload framing remain
+version one. The authenticated inner payload catalog reader accepts legacy
+photo-only catalog version one archives, while current exports emit catalog
+version two. Catalog
+version two adds a validated supplemental manifest and encrypted blob entries
+for general files without changing existing photo records or the outer archive
+decoder. Mixed photo/file exports and restores therefore preserve general
+files, and legacy photo-only archives remain readable by current builds.
+Catalog-version-two exports are not readable by older builds that recognize
+only catalog version one.
 
-The add-on is not eligible to merge until its own CI, security analysis,
-production-identity TestFlight, physical-device, interruption, low-storage, and
-data-integrity gates have passed.
+The add-on remains subject to the independent gates in
+`ADDON_RELEASE_POLICY.md`; the current implementation is merged and recorded
+as complete and hardened.
