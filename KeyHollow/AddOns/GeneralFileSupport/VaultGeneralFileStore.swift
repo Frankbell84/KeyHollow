@@ -230,14 +230,17 @@ public actor VaultGeneralFileStore {
                     contentsOf: root.appendingPathComponent(record.blobName),
                     options: [.mappedIfSafe]
                 )
-                let plaintext = try access.open(ciphertext, for: .file(record.id))
-                guard UInt64(plaintext.count) == record.originalByteCount else {
-                    throw StoreError.verificationFailed
-                }
-
                 let name = uniqueName(for: record.displayName, usedNames: &usedNames)
                 let target = exportRoot.appendingPathComponent(name, isDirectory: false)
-                try secureWrite(plaintext, to: target)
+                try access.open(ciphertext, for: .file(record.id), consuming: { plaintext in
+                    try Task.checkCancellation()
+                    guard UInt64(plaintext.count) == record.originalByteCount else {
+                        throw StoreError.verificationFailed
+                    }
+                    try secureWrite(plaintext, to: target)
+                    try Task.checkCancellation()
+                })
+                try Task.checkCancellation()
                 urls.append(target)
             }
             return PreparedGeneralFileExport(id: exportID, urls: urls, rootURL: exportRoot)

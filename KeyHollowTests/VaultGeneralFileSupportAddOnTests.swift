@@ -121,6 +121,74 @@ final class VaultGeneralFileSupportAddOnTests: XCTestCase {
         await fixture.store.discardExport(export)
     }
 
+    func testExportWritesPlaintextInsideConsumingAccessBoundary() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        let original = Data("consumer-scoped export".utf8)
+        let source = try fixture.source(named: "scoped.txt", data: original)
+        let record = try await fixture.store.importFile(at: source)
+        fixture.access.requireConsumingOpenForFiles()
+
+        let export = try await fixture.store.prepareExport([record])
+
+        XCTAssertEqual(fixture.access.consumingFileOpenCount, 1)
+        XCTAssertEqual(try Data(contentsOf: export.urls[0]), original)
+        await fixture.store.discardExport(export)
+    }
+
+    func testSessionAccessRevocationWaitsForPlaintextConsumer() throws {
+        let capability = VaultAccessCapability(
+            vaultID: UUID(),
+            vaultKey: SymmetricKey(size: .bits256)
+        )
+        let access = SessionGeneralFileAccess(capability: capability)
+        let purpose = VaultGeneralFileKeyPurpose.file(UUID())
+        let original = Data("revocation-fenced export".utf8)
+        let ciphertext = try access.seal(original, for: purpose)
+        let consumerEntered = DispatchSemaphore(value: 0)
+        let receivedExpectedBytes = DispatchSemaphore(value: 0)
+        let releaseConsumer = DispatchSemaphore(value: 0)
+        let operationSucceeded = DispatchSemaphore(value: 0)
+        let operationFinished = DispatchSemaphore(value: 0)
+        let revokeStarted = DispatchSemaphore(value: 0)
+        let revokeFinished = DispatchSemaphore(value: 0)
+
+        DispatchQueue.global(qos: .userInitiated).async {
+            defer { operationFinished.signal() }
+            do {
+                try access.open(ciphertext, for: purpose, consuming: { plaintext in
+                    if plaintext == original {
+                        receivedExpectedBytes.signal()
+                    }
+                    consumerEntered.signal()
+                    _ = releaseConsumer.wait(timeout: .now() + 2)
+                })
+                operationSucceeded.signal()
+            } catch {
+                // The foreground assertions below expose any unexpected failure.
+            }
+        }
+
+        XCTAssertEqual(consumerEntered.wait(timeout: .now() + 1), .success)
+        XCTAssertEqual(receivedExpectedBytes.wait(timeout: .now() + 1), .success)
+
+        DispatchQueue.global(qos: .userInitiated).async {
+            revokeStarted.signal()
+            capability.revoke()
+            revokeFinished.signal()
+        }
+
+        XCTAssertEqual(revokeStarted.wait(timeout: .now() + 1), .success)
+        XCTAssertEqual(revokeFinished.wait(timeout: .now() + 0.1), .timedOut)
+
+        releaseConsumer.signal()
+
+        XCTAssertEqual(operationFinished.wait(timeout: .now() + 1), .success)
+        XCTAssertEqual(operationSucceeded.wait(timeout: .now() + 1), .success)
+        XCTAssertEqual(revokeFinished.wait(timeout: .now() + 1), .success)
+        XCTAssertTrue(capability.isRevoked)
+    }
+
     func testAuthenticatedReadReturnsOnlyPersistedRecordBytes() async throws {
         let fixture = try Fixture()
         defer { fixture.cleanup() }
@@ -279,6 +347,7 @@ private struct Fixture {
     let root: URL
     let sourceRoot: URL
     let storageRoot: URL
+    let access: TestAccess
     let store: VaultGeneralFileStore
 
     init() throws {
@@ -290,9 +359,10 @@ private struct Fixture {
         sourceRoot = root.appendingPathComponent("Source", isDirectory: true)
         storageRoot = root.appendingPathComponent("Store", isDirectory: true)
         try FileManager.default.createDirectory(at: sourceRoot, withIntermediateDirectories: true)
+        access = TestAccess(vaultID: vaultID)
         store = try VaultGeneralFileStore(
             vaultID: vaultID,
-            access: TestAccess(vaultID: vaultID),
+            access: access,
             storageRoot: storageRoot,
             temporaryRoot: root.appendingPathComponent("Temporary", isDirectory: true)
         )
@@ -312,6 +382,9 @@ private struct Fixture {
 private final class TestAccess: VaultGeneralFileCryptographicAccess, @unchecked Sendable {
     let vaultID: UUID
     private let key = SymmetricKey(size: .bits256)
+    private let lock = NSLock()
+    private var mustConsumeFileOpens = false
+    private var _consumingFileOpenCount = 0
 
     init(vaultID: UUID) {
         self.vaultID = vaultID
@@ -322,7 +395,39 @@ private final class TestAccess: VaultGeneralFileCryptographicAccess, @unchecked 
     }
 
     func open(_ ciphertext: Data, for purpose: VaultGeneralFileKeyPurpose) throws -> Data {
-        try CryptoBox.open(ciphertext, using: derivedKey(for: purpose))
+        lock.lock()
+        let rejectDirectOpen = mustConsumeFileOpens && purpose.isFilePurpose
+        lock.unlock()
+        if rejectDirectOpen {
+            throw TestAccessError.directFileOpenForbidden
+        }
+        return try CryptoBox.open(ciphertext, using: derivedKey(for: purpose))
+    }
+
+    func open(
+        _ ciphertext: Data,
+        for purpose: VaultGeneralFileKeyPurpose,
+        consuming consumer: (Data) throws -> Void
+    ) throws {
+        let plaintext = try CryptoBox.open(ciphertext, using: derivedKey(for: purpose))
+        if purpose.isFilePurpose {
+            lock.lock()
+            _consumingFileOpenCount += 1
+            lock.unlock()
+        }
+        try consumer(plaintext)
+    }
+
+    func requireConsumingOpenForFiles() {
+        lock.lock()
+        mustConsumeFileOpens = true
+        lock.unlock()
+    }
+
+    var consumingFileOpenCount: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return _consumingFileOpenCount
     }
 
     private func derivedKey(for purpose: VaultGeneralFileKeyPurpose) -> SymmetricKey {
@@ -339,6 +444,17 @@ private final class TestAccess: VaultGeneralFileCryptographicAccess, @unchecked 
             info: Data(),
             outputByteCount: 32
         )
+    }
+}
+
+private enum TestAccessError: Error {
+    case directFileOpenForbidden
+}
+
+private extension VaultGeneralFileKeyPurpose {
+    var isFilePurpose: Bool {
+        if case .file = self { return true }
+        return false
     }
 }
 

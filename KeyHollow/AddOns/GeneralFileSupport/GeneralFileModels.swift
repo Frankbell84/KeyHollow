@@ -90,6 +90,15 @@ public protocol VaultGeneralFileCryptographicAccess: Sendable {
 
     func seal(_ plaintext: Data, for purpose: VaultGeneralFileKeyPurpose) throws -> Data
     func open(_ ciphertext: Data, for purpose: VaultGeneralFileKeyPurpose) throws -> Data
+
+    /// Opens authenticated bytes and synchronously consumes them while a
+    /// revocable implementation still owns its access lifetime. The fixed
+    /// `Void` result avoids returning decrypted bytes across this boundary.
+    func open(
+        _ ciphertext: Data,
+        for purpose: VaultGeneralFileKeyPurpose,
+        consuming consumer: (Data) throws -> Void
+    ) throws
 }
 
 public struct PreparedGeneralFileExport: Identifiable, Sendable {

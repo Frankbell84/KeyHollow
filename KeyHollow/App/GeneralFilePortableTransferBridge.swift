@@ -93,6 +93,14 @@ private struct PortableGeneralFileAccess: VaultGeneralFileCryptographicAccess {
         try CryptoBox.open(ciphertext, using: derivedKey(for: purpose))
     }
 
+    func open(
+        _ ciphertext: Data,
+        for purpose: VaultGeneralFileKeyPurpose,
+        consuming consumer: (Data) throws -> Void
+    ) throws {
+        try consumer(open(ciphertext, for: purpose))
+    }
+
     private func derivedKey(for purpose: VaultGeneralFileKeyPurpose) -> SymmetricKey {
         let label = "keyhollow.addon.\(purpose.cryptographicDomain)"
         return HKDF<SHA256>.deriveKey(

@@ -6,15 +6,56 @@ Parent validation head: `c0cb100` (recovered Build 38 checkpoint)
 
 ## Current task
 
-Implement roadmap add-on #4, Encrypted Video Support, on an isolated branch
-from the recovered Build 38 checkpoint. Begin with the independently compiled
-video policy, playback handoff/player, bounded frame renderer, architecture
-gate, and focused tests. Preserve existing general-file records, folders,
-selection/export behavior, and `.khvault` formats; the historical video branch
-is reference material and must not be merged wholesale.
+Checkpoint the completed local implementation and final hardening of roadmap
+add-on #4, Encrypted Video Support, on the isolated
+`feature/encrypted-video-build38-integration` branch. Preserve existing
+general-file records, folders, selection/export behavior, and `.khvault`
+formats; the historical video branch remains reference material and was not
+merged wholesale.
+
+## Test/build status
+
+- Local architecture-boundary, release-hygiene, build-number-guard self-test,
+  and diff-integrity gates pass after final hardening.
+- Independent compile/API, security/lifecycle, and test-completeness reviews
+  found concrete issues during the audit; all identified blockers were fixed
+  and the post-fix reviews now report no remaining local code blocker.
+- Windows cannot compile the iOS targets. An exact-source Mac/Xcode 26 build,
+  complete simulator/security suite, and Swift CodeQL run remain the mandatory
+  next proof before any release preparation or device acceptance.
+- No signed upload, TestFlight assignment, merge, or App Store review action
+  has been performed for Encrypted Video.
 
 ## Completed work
 
+- Added the independently compiled, dependency-free
+  `KeyHollowEncryptedVideoAddOn` with conservative MOV/MP4/M4V classification,
+  reference-restricted local AVFoundation assets, real media validation,
+  source/coded-dimension limits, bounded orientation-correct thumbnails, and a
+  native player surface.
+- Integrated video routing into the accepted unified gallery without changing
+  encrypted records or folder metadata. Photo-compatible images still win the
+  image route; videos open the player; other files retain file-management
+  behavior. Files-origin image and video cold thumbnails share one
+  cancellation-aware full-payload permit while encrypted cache hits bypass it.
+- Kept video as an ordinary general-file record and added explicit mixed
+  `.khvault` video round-trip coverage. No vault key schedule, photo/general-
+  file ciphertext, manifest, folder, portable archive, or outer container
+  format changed.
+- Hardened temporary plaintext lifetimes: export writing remains inside the
+  capability-revocation fence; thumbnail and playback work are session
+  registered; lock returns an awaitable cleanup barrier; background locking
+  receives a protected iOS execution window; and player cleanup waits until AV
+  monitoring and file-handle ownership fully unwind.
+- Disabled AirPlay/external-screen playback and Picture in Picture for
+  protected video. Added deterministic regressions for both runtime failure
+  channels, terminal player release, actual lock-driven thumbnail cleanup,
+  cancellation/permit release, cache suppression, malformed media, dimension
+  limits, routing, and valid local MOV rendering.
+- Extended the checked-in architecture gate and canonical documentation so
+  future changes cannot silently remove module isolation, reference
+  restrictions, bounded decoding, terminal cleanup, shared-lane scheduling, or
+  production lock-barrier wiring.
 - Committed the recovered documentation baseline as `c0cb100`, pushed it to
   `chore/post-build-38-checkpoint`, and verified local HEAD exactly matches its
   upstream. Created `feature/encrypted-video-build38-integration` from that
@@ -1072,11 +1113,10 @@ is reference material and must not be merged wholesale.
    creation/navigation, mixed moves, normalized grid presentation, and the
    Build 38 responsiveness correction are accepted on a physical iPhone. This
    historical phase is not roadmap add-on #4.
-4. **Roadmap add-on #4 — Encrypted Video Support:** next. Its older isolated
-   branch contains validated module-boundary, secure-playback, and bounded
-   encrypted-thumbnail milestones, but it predates the accepted Build 38
-   gallery baseline. Reuse the concepts and focused changes through a new
-   branch from current `main`; do not merge that branch wholesale.
+4. **Roadmap add-on #4 — Encrypted Video Support:** implementation and local
+   hardening are complete on the isolated current-baseline branch. Exact-source
+   Mac CI, Swift CodeQL, and physical-device acceptance remain before delivery
+   or merge. The older branch was not merged wholesale.
 5. **Roadmap add-on #2 — Backup Verification Center:** confirmed next after
    Encrypted Video closes. It remains a read-only verification surface over the
    authenticated archive validator, with no install path and no new unlock
@@ -1119,33 +1159,37 @@ is reference material and must not be merged wholesale.
 
 ## Blockers
 
-- Build 37 remains rejected for wider rollout because it reproduced scrolling
-  and image-opening lag at 26 items; accepted Build 38 supersedes it.
-- Feature-head runs #288/#289, Build 38 release-source run #290, final release
-  head #291, guarded upload #48, Apple processing/Internal availability, and all
-  seven physical-device checks are complete. Documentation-head run #293 and
-  final acceptance-head run #294 also passed their Mac and Swift CodeQL jobs.
-  `Family` rollout and PR #48 merge are complete. There is no known code,
-  performance, security, delivery, or roadmap blocker.
-- The old `feature/encrypted-video-support` branch cannot be merged wholesale
-  because it predates the accepted gallery and performance architecture. This
-  is a controlled integration constraint, not a blocker: adapt its validated
-  video module, policies, coordinators, and tests onto the fresh branch from
-  recovered checkpoint `c0cb100`, then wire the current gallery deliberately.
+- No known local implementation, modularity, format-compatibility, security, or
+  test-design blocker remains after the final independent post-fix audits.
+- The mandatory Mac/Xcode compile, full simulator/security tests, and Swift
+  CodeQL have not yet run for this exact source revision. A failure there must
+  be corrected before physical-device or release work.
+- Physical-device video acceptance is pending and must cover MOV/MP4/M4V,
+  portrait/landscape orientation and audio, rapid mixed-gallery scrolling,
+  dismiss/lock/background cleanup, malformed media, and existing non-video
+  regressions.
+- The historical video branch remains intentionally non-mergeable as a whole;
+  the current implementation already adapted the useful concepts onto the
+  accepted Build 38 architecture, so this is no longer an active blocker.
 
 ## Next action
 
-Commit and push this phase-entry checkpoint, then implement the independently
-compiled video policy, validated local playback handoff/player, bounded frame
-renderer, target wiring, architecture enforcement, and focused unit tests.
-After that boundary is green, add lifecycle-safe playback coordination and a
-shared image/video cold-thumbnail lane before touching gallery routing. Repeat
-the full Mac/CodeQL and physical-device gates before delivery or merge. Do not
-change TestFlight groups, perform a signed upload, merge the video feature, or
-change App Store review state without the required later approval.
+Commit and push the completed local implementation checkpoint, create an
+isolated draft review against `main`, and run exact-source Mac/Xcode CI plus
+Swift CodeQL. Correct any CI finding on this feature branch. If those gates are
+green, prepare the focused physical-device acceptance checklist before any
+release branch or signed build. Do not change TestFlight groups, perform a
+signed upload, merge the video feature, or change App Store review state
+without the required later approval.
 
 ## Frank's decision required
 
+- No decision is currently required to create the implementation checkpoint,
+  push this assigned branch, open a draft review, or run validation; Frank has
+  already authorized continuing through those routine steps.
+- After exact-source CI and physical-device acceptance pass, signed upload,
+  tester-group assignment, merge, and App Store review remain separate explicit
+  decisions.
 - Frank approved proceeding with the best available path and beginning the
   isolated Encrypted Video adaptation. No additional decision is required for
   implementation and draft validation; signed upload, tester assignment, merge,

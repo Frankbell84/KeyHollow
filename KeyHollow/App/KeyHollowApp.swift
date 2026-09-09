@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import UIKit
 import KeyHollowFileRecognitionAddOn
 import KeyHollowFolderPresentationAddOn
 import KeyHollowGeneralFileSupportAddOn
@@ -66,7 +67,7 @@ struct KeyHollowApp: App {
                 for: newPhase,
                 systemInteractionActive: session.isSystemInteractionActive
             ) {
-                session.lock()
+                lockForLifecycleTransition()
             }
         }
         .onChange(of: session.isSystemInteractionActive) { _, operationActive in
@@ -78,9 +79,50 @@ struct KeyHollowApp: App {
                VaultLifecycleLockPolicy.shouldLockWhenSystemInteractionEnds(
                    scenePhase: scenePhase
                ) {
-                session.lock()
+                lockForLifecycleTransition()
             }
         }
+    }
+
+    private func lockForLifecycleTransition() {
+        let barrier = session.lock()
+        guard !barrier.isEmpty else { return }
+        VaultLifecycleCleanupBackgroundTask(barrier: barrier).start()
+    }
+}
+
+/// Gives cancellation cleanup a short protected execution window when iOS
+/// backgrounds the app. The vault locks and revokes keys before this object is
+/// created; it only waits for registered tasks to delete their temporary files.
+@MainActor
+private final class VaultLifecycleCleanupBackgroundTask {
+    private let barrier: VaultSessionLockBarrier
+    private var identifier: UIBackgroundTaskIdentifier = .invalid
+
+    init(barrier: VaultSessionLockBarrier) {
+        self.barrier = barrier
+    }
+
+    func start() {
+        identifier = UIApplication.shared.beginBackgroundTask(
+            withName: "KeyHollow sensitive cleanup"
+        ) { [weak self] in
+            Task { @MainActor in
+                self?.finish()
+            }
+        }
+
+        Task { @MainActor [self] in
+            await self.barrier.wait()
+            self.finish()
+        }
+    }
+
+    private func finish() {
+        guard identifier != .invalid else { return }
+        let endingIdentifier = identifier
+        identifier = .invalid
+        UIApplication.shared.endBackgroundTask(endingIdentifier)
     }
 }
 

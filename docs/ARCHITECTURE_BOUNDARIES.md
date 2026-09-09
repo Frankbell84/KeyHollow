@@ -21,6 +21,7 @@ small local core with narrow adapters around it.
 | `AddOns/FolderPresentation` | Folder metadata, neutral content references, and encrypted presentation thumbnails | Vault keys, protected photo/file content, SwiftUI/UIKit, portable archive formats |
 | `UI/VaultGallery*` | Source-neutral grid layout, tile metadata, folder presentation, and selection behavior | Vault keys, ciphertext, protected stores, decryption, portable archive formats |
 | `AddOns/SecurePreview` | Bounded image type/size policy, off-main image preparation, and secure preview presentation | Vault keys, encrypted persistence, session ownership, portable archive formats |
+| `AddOns/EncryptedVideo` | Conservative video classification, reference-restricted and source-bounded media validation, bounded thumbnail rendering, and local-only player presentation | Vault keys, encrypted persistence, temporary-file creation, session ownership, portable archive formats |
 
 ## Enforced rules
 
@@ -101,6 +102,18 @@ preparation away from the main actor, and the authenticated-session preview
 surface. The application retains storage access, task lifetime, navigation,
 and lock revocation. The add-on receives only the bytes and immutable metadata
 needed for the active operation and does not persist decrypted content.
+
+`KeyHollowEncryptedVideoAddOn` owns conservative MOV/MP4/M4V classification,
+local reference-restricted AVFoundation validation, coded/source dimension
+bounds, bounded one-frame thumbnail rendering, and native player presentation
+with external playback and Picture in Picture disabled. Videos remain ordinary
+encrypted general-file records. The application retains decryption, protected
+temporary exports, encrypted thumbnail persistence, session-task lifetime,
+routing, and cleanup. Its player-release lease is acknowledged only after AV
+monitoring references unwind, and production lock paths await captured cleanup
+tasks (with a short iOS background execution window when needed). The module
+receives only immutable metadata and an app-prepared local file URL; it cannot
+change storage, folders, selection, or `.khvault` formats.
 
 ## Change policy
 

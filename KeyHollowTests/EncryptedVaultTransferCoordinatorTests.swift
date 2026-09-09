@@ -112,6 +112,102 @@ final class EncryptedVaultTransferCoordinatorTests: XCTestCase {
         await installedGeneralStore.discardExport(prepared)
     }
 
+    func testVideoGeneralFileArchiveRoundTripPreservesRecordAndBytes() async throws {
+        let roots = try TestRoots.create()
+        defer { roots.remove() }
+
+        let vaultID = UUID()
+        let vaultKey = SymmetricKey(data: Data(repeating: 0x6b, count: 32))
+        let capability = VaultAccessCapability(vaultID: vaultID, vaultKey: vaultKey)
+        let photoStore = try VaultPhotoStore(
+            vaultID: vaultID,
+            vaultKey: vaultKey,
+            storageRoot: roots.source
+        )
+        _ = try await photoStore.importPhoto(
+            originalData: Data("video archive companion photo".utf8),
+            thumbnailData: Data("video archive companion thumbnail".utf8)
+        )
+
+        let generalAccess = SessionGeneralFileAccess(capability: capability)
+        let generalStore = try VaultGeneralFileStore(
+            vaultID: vaultID,
+            access: generalAccess,
+            storageRoot: roots.generalSource,
+            temporaryRoot: roots.parent
+        )
+        let expectedVideo = Data("opaque encrypted MP4 transfer payload".utf8)
+        let sourceVideo = roots.parent.appendingPathComponent("family-trip.mp4")
+        try expectedVideo.write(to: sourceVideo)
+        let videoRecord = try await generalStore.importFile(at: sourceVideo)
+        XCTAssertEqual(videoRecord.displayName, "family-trip.mp4")
+
+        let credential = PortableArchiveCredential.recoveryCode(
+            "0123-4567-89AB-CDEF-GHJK-MNPQ-RSTV-WXYZ"
+        )
+        let coordinator = EncryptedVaultTransferCoordinator()
+        _ = try await coordinator.exportVault(
+            vaultID: vaultID,
+            createdAt: Date(timeIntervalSince1970: 1_700_000_100),
+            access: capability,
+            credential: credential,
+            destinationURL: roots.archive,
+            sourceRootOverride: roots.source,
+            supplementalSourceRootOverride: roots.generalSource,
+            supplementalContent: GeneralFilePortableTransferBridge(access: generalAccess),
+            workingRootOverride: roots.working,
+            keyDeriver: TestTransferKeyDeriver()
+        )
+
+        let restore = try await coordinator.stageAndValidateRestore(
+            archiveURL: roots.archive,
+            credential: credential,
+            workingRootOverride: roots.working,
+            supplementalContent: GeneralFilePortableTransferBridge(),
+            keyDeriver: TestTransferKeyDeriver()
+        )
+        XCTAssertEqual(restore.supplementalItemCount, 1)
+
+        let installer = try PortableVaultRestoreInstaller(
+            credentialStore: TestPortableVaultCredentialStore(),
+            journalAuthenticationKey: testRestoreJournalKey,
+            journalRootOverride: roots.transactions,
+            photoDataRootOverride: roots.installed,
+            generalFileDataRootOverride: roots.generalInstalled
+        )
+        let installed = try await installer.install(
+            restore,
+            localUnlockKey: SymmetricKey(data: Data(repeating: 0x3d, count: 32))
+        )
+        let installedRoot = roots.generalInstalled.appendingPathComponent(
+            installed.vaultID.uuidString.lowercased(),
+            isDirectory: true
+        )
+        let installedStore = try VaultGeneralFileStore(
+            vaultID: installed.vaultID,
+            access: SessionGeneralFileAccess(
+                capability: VaultAccessCapability(
+                    vaultID: installed.vaultID,
+                    vaultKey: SymmetricKey(data: installed.vaultKey)
+                )
+            ),
+            storageRoot: installedRoot,
+            temporaryRoot: roots.parent
+        )
+        let installedManifest = try await installedStore.validateAllEncryptedFiles()
+        let restoredVideo = try XCTUnwrap(
+            installedManifest.files.first { $0.id == videoRecord.id }
+        )
+        XCTAssertEqual(restoredVideo, videoRecord)
+
+        let prepared = try await installedStore.prepareExport([restoredVideo])
+        XCTAssertEqual(
+            try Data(contentsOf: try XCTUnwrap(prepared.urls.first)),
+            expectedVideo
+        )
+        await installedStore.discardExport(prepared)
+    }
+
     func testWholeVaultExportIsVerifiedAndSourceRemainsUnchanged() async throws {
         let roots = try TestRoots.create()
         defer { roots.remove() }

@@ -35,9 +35,10 @@ decoder.
 
 The first release intentionally excludes packages, executable formats,
 `.khvault` backups, empty files, and individual files larger than 100 MB.
-Existing in-limit video files may be stored and transferred as ordinary
-general-file records, but purpose-built video thumbnails/playback and streaming
-large-file encryption remain a separately reviewed add-on.
+Existing in-limit video files remain ordinary general-file records. The
+separately compiled Encrypted Video add-on supplies bounded thumbnails and
+playback without changing those records or the transfer format. Streaming
+large-file encryption remains a later, separately reviewed storage design.
 
 ## Security and architecture boundaries
 
@@ -55,8 +56,12 @@ large-file encryption remain a separately reviewed add-on.
   storage before encryption. The protected copy is removed after import.
 - Blob names are random. File names, content types, sizes, and timestamps exist
   only inside the encrypted manifest.
-- Exports are authenticated before a protected temporary copy is shared, then
-  the temporary export directory is removed when the system sheet closes.
+- Exports are authenticated and written to protected temporary storage inside
+  the session capability's revocation fence. Revocation waits for an in-flight
+  bounded write, so no plaintext write can finish after access is revoked.
+  Preparation failure or cancellation removes its partial export; a successful
+  temporary export remains only for its explicit consumer and is removed when
+  that consumer finishes.
 - Interrupted import and export staging is purged the next time the encrypted
   file store opens, covering app termination before normal cleanup completes.
 - Vault deletion invokes an injected add-on cleanup boundary after credential

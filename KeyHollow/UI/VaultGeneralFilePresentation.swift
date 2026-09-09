@@ -19,6 +19,18 @@ final class SessionGeneralFileAccess: VaultGeneralFileCryptographicAccess,
     func open(_ ciphertext: Data, for purpose: VaultGeneralFileKeyPurpose) throws -> Data {
         try capability.openScopedData(ciphertext, domain: purpose.cryptographicDomain)
     }
+
+    func open(
+        _ ciphertext: Data,
+        for purpose: VaultGeneralFileKeyPurpose,
+        consuming consumer: (Data) throws -> Void
+    ) throws {
+        try capability.consumeOpenedScopedData(
+            ciphertext,
+            domain: purpose.cryptographicDomain,
+            consumer
+        )
+    }
 }
 
 enum VaultContentAvailability {
@@ -32,6 +44,7 @@ enum GeneralFilePresentation {
         guard let identifier,
               let type = UTType(identifier) else { return "doc" }
         if type.conforms(to: .pdf) { return "doc.richtext" }
+        if type.conforms(to: .movie) { return "video" }
         if type.conforms(to: .audio) { return "waveform" }
         if type.conforms(to: .archive) { return "archivebox" }
         if type.conforms(to: .image) { return "photo" }

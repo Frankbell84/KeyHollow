@@ -191,6 +191,13 @@ final class VaultGalleryPresentationTests: XCTestCase {
         )
     }
 
+    func testMovieFileUsesVideoFallbackIcon() {
+        XCTAssertEqual(
+            GeneralFilePresentation.iconName(for: "public.mpeg-4"),
+            "video"
+        )
+    }
+
     func testPhotosAndFilesOriginImagesUseTheSameSecurePreviewRoute() {
         let photo = VaultPhotoRecord(
             id: UUID(),
@@ -312,6 +319,54 @@ final class VaultGalleryPresentationTests: XCTestCase {
         )
         XCTAssertNotNil(
             snapshot.sourceByID[VaultGallerySelection.Item.generalFile(sharedSourceID)]
+        )
+    }
+
+    func testSupportedGeneralFileVideoUsesPlaybackRoute() {
+        let video = VaultGeneralFileRecord(
+            id: UUID(),
+            importedAt: Date(timeIntervalSinceReferenceDate: 300),
+            displayName: "Family Clip.mp4",
+            contentTypeIdentifier: "public.mpeg-4",
+            originalByteCount: 4_096,
+            blobName: "video.khg"
+        )
+
+        XCTAssertEqual(
+            VaultGalleryContentItem.generalFile(video).openRoute,
+            .videoPlayback
+        )
+    }
+
+    func testImageDeclarationKeepsPreviewPrecedenceOverVideoFilename() {
+        let image = VaultGeneralFileRecord(
+            id: UUID(),
+            importedAt: Date(timeIntervalSinceReferenceDate: 300),
+            displayName: "Misleading.mp4",
+            contentTypeIdentifier: "public.jpeg",
+            originalByteCount: 4_096,
+            blobName: "image.khg"
+        )
+
+        XCTAssertEqual(
+            VaultGalleryContentItem.generalFile(image).openRoute,
+            .imagePreview
+        )
+    }
+
+    func testBroadMovieDeclarationStaysOnFileManagementRoute() {
+        let video = VaultGeneralFileRecord(
+            id: UUID(),
+            importedAt: Date(timeIntervalSinceReferenceDate: 300),
+            displayName: "Unclassified.mp4",
+            contentTypeIdentifier: "public.movie",
+            originalByteCount: 4_096,
+            blobName: "video.khg"
+        )
+
+        XCTAssertEqual(
+            VaultGalleryContentItem.generalFile(video).openRoute,
+            .fileManagement
         )
     }
 

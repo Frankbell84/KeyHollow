@@ -338,7 +338,8 @@ private struct DeleteCurrentVaultView: View {
                     currentPasscode: passcode,
                     expectedVaultID: vaultID
                 )
-                session.lock()
+                let barrier = session.lock()
+                await barrier.wait()
                 isWorking = false
                 dismiss()
                 onDeleted()

@@ -9,6 +9,21 @@ enum VaultAccessError: Error, Equatable {
     case revoked
 }
 
+/// Captures the sensitive tasks canceled by one lock transition. Locking and
+/// key revocation happen synchronously; production lifecycle code can then
+/// await this value so temporary plaintext cleanup reaches a terminal state.
+struct VaultSessionLockBarrier: Sendable {
+    fileprivate let tasks: [Task<Void, Never>]
+
+    var isEmpty: Bool { tasks.isEmpty }
+
+    func wait() async {
+        for task in tasks {
+            await task.value
+        }
+    }
+}
+
 /// A narrow, revocable boundary around a vault key.
 ///
 /// Callers never receive a key to retain. A revocation waits for any currently
@@ -78,6 +93,23 @@ final class VaultAccessCapability: PortableVaultExportAccess, @unchecked Sendabl
     func openScopedData(_ ciphertext: Data, domain: String) throws -> Data {
         try withKey { vaultKey in
             try CryptoBox.open(ciphertext, using: scopedKey(from: vaultKey, domain: domain))
+        }
+    }
+
+    /// Opens add-on data and consumes it while the capability's key-lifetime
+    /// fence is still held. This intentionally avoids returning decrypted
+    /// bytes across the revocation boundary.
+    func consumeOpenedScopedData(
+        _ ciphertext: Data,
+        domain: String,
+        _ consumer: (Data) throws -> Void
+    ) throws {
+        try withKey { vaultKey in
+            let plaintext = try CryptoBox.open(
+                ciphertext,
+                using: scopedKey(from: vaultKey, domain: domain)
+            )
+            try consumer(plaintext)
         }
     }
 
@@ -170,6 +202,33 @@ final class VaultSession: ObservableObject {
         return id
     }
 
+    /// Runs and awaits one lifecycle-owned sensitive operation. The internal
+    /// task is registered before work begins so `lockAndWait()` can revoke,
+    /// cancel, and observe terminal cleanup. Cancellation of the awaiting
+    /// caller is propagated to the registered task and awaited as well.
+    func performSensitiveTask(
+        _ operation: @escaping @MainActor (VaultAccessCapability) async -> Void
+    ) async {
+        guard !Task.isCancelled,
+              isUnlocked,
+              let capability = activeCapability,
+              !capability.isRevoked else { return }
+
+        let id = UUID()
+        let task = Task { @MainActor [weak self] in
+            defer { self?.sensitiveTasks[id] = nil }
+            guard !Task.isCancelled else { return }
+            await operation(capability)
+        }
+        sensitiveTasks[id] = task
+
+        await withTaskCancellationHandler {
+            await task.value
+        } onCancel: {
+            task.cancel()
+        }
+    }
+
     /// Cancels one lifecycle-owned sensitive operation without affecting other
     /// vault work. The operation remains responsible for cancellation checks
     /// around any in-flight synchronous cryptographic or decoding boundary.
@@ -213,7 +272,8 @@ final class VaultSession: ObservableObject {
         endSystemInteraction()
     }
 
-    func lock() {
+    @discardableResult
+    func lock() -> VaultSessionLockBarrier {
         let capability = activeCapability
         let tasks = Array(sensitiveTasks.values)
 
@@ -230,15 +290,13 @@ final class VaultSession: ObservableObject {
         capability?.revoke()
         tasks.forEach { $0.cancel() }
         sensitiveTasks.removeAll()
+        return VaultSessionLockBarrier(tasks: tasks)
     }
 
     /// Test and shutdown boundary that also observes registered task cleanup.
     func lockAndWait() async {
-        let tasks = Array(sensitiveTasks.values)
-        lock()
-        for task in tasks {
-            await task.value
-        }
+        let barrier = lock()
+        await barrier.wait()
     }
 }
 
