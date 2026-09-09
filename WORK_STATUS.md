@@ -6,15 +6,25 @@ Parent validation head: `c0cb100` (recovered Build 38 checkpoint)
 
 ## Current task
 
-Checkpoint the completed local implementation and final hardening of roadmap
-add-on #4, Encrypted Video Support, on the isolated
-`feature/encrypted-video-build38-integration` branch. Preserve existing
-general-file records, folders, selection/export behavior, and `.khvault`
-formats; the historical video branch remains reference material and was not
-merged wholesale.
+Correct the first exact-source CI finding for roadmap add-on #4, Encrypted
+Video Support, on draft PR #49. Preserve the completed modular implementation
+and hardening; the correction is limited to explicit `CGFloat` types in two
+dimension-policy test fixtures.
 
 ## Test/build status
 
+- Draft PR [#49](https://github.com/Frankbell84/KeyHollow/pull/49) is open
+  from exact implementation commit `36b1e06`. Initial validation run
+  [#34413136429](https://github.com/Frankbell84/KeyHollow/actions/runs/34413136429)
+  compiled the production app successfully and passed release hygiene,
+  architecture enforcement, build-number guard, and packaged-thumbnail checks.
+- The security-test step stopped at compile time on two ambiguous test-only
+  literals (`.infinity` and `.nan`) under Xcode 26. Both now use explicit
+  `CGFloat` qualification; no application, encrypted-store, video, transfer,
+  folder, or format behavior changed. A replacement run is pending.
+- Post-correction architecture enforcement, release hygiene, build-number
+  guard self-test, whitespace integrity, and an independent matching-pattern
+  audit all pass locally.
 - Local architecture-boundary, release-hygiene, build-number-guard self-test,
   and diff-integrity gates pass after final hardening.
 - Independent compile/API, security/lifecycle, and test-completeness reviews
@@ -1159,11 +1169,11 @@ merged wholesale.
 
 ## Blockers
 
-- No known local implementation, modularity, format-compatibility, security, or
-  test-design blocker remains after the final independent post-fix audits.
-- The mandatory Mac/Xcode compile, full simulator/security tests, and Swift
-  CodeQL have not yet run for this exact source revision. A failure there must
-  be corrected before physical-device or release work.
+- No production implementation, modularity, format-compatibility, or security
+  blocker is known. Initial Mac CI confirmed the application target compiles.
+- Replacement Mac/Xcode simulator/security tests and Swift CodeQL must pass
+  after the two-line test-typing correction before physical-device or release
+  work.
 - Physical-device video acceptance is pending and must cover MOV/MP4/M4V,
   portrait/landscape orientation and audio, rapid mixed-gallery scrolling,
   dismiss/lock/background cleanup, malformed media, and existing non-video
@@ -1174,13 +1184,12 @@ merged wholesale.
 
 ## Next action
 
-Commit and push the completed local implementation checkpoint, create an
-isolated draft review against `main`, and run exact-source Mac/Xcode CI plus
-Swift CodeQL. Correct any CI finding on this feature branch. If those gates are
-green, prepare the focused physical-device acceptance checklist before any
-release branch or signed build. Do not change TestFlight groups, perform a
-signed upload, merge the video feature, or change App Store review state
-without the required later approval.
+Validate the two-line test-only CI correction locally, commit and push it to
+the existing draft PR #49, and monitor replacement Mac/Xcode CI plus Swift
+CodeQL to completion. If those gates are green, prepare the focused
+physical-device acceptance checklist before any release branch or signed build.
+Do not change TestFlight groups, perform a signed upload, merge the video
+feature, or change App Store review state without the required later approval.
 
 ## Frank's decision required
 

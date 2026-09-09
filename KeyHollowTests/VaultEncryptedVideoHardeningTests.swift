@@ -69,12 +69,12 @@ final class VaultEncryptedVideoHardeningTests: XCTestCase {
         )
         XCTAssertFalse(
             VaultEncryptedVideoPolicy.allowsSourceDimensions(
-                CGSize(width: .infinity, height: 1)
+                CGSize(width: CGFloat.infinity, height: 1)
             )
         )
         XCTAssertFalse(
             VaultEncryptedVideoPolicy.allowsSourceDimensions(
-                CGSize(width: .nan, height: 1)
+                CGSize(width: CGFloat.nan, height: 1)
             )
         )
 
