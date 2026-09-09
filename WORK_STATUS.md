@@ -1,14 +1,15 @@
 # KeyHollow Work Status
 
 Updated: 2026-09-09
-Branch: `feature/encrypted-video-build38-integration`
-Parent validation head: `c0cb100` (recovered Build 38 checkpoint)
+Branch: `delivery/encrypted-video-support`
+Parent validation head: `5ee18d9` (exact green Encrypted Video review head)
 
 ## Current task
 
-Close exact-source automated validation for roadmap add-on #4, Encrypted Video
-Support, and prepare the focused physical-iPhone acceptance step from the
-exact green draft PR #49 revision.
+Prepare isolated Build 39 release source for roadmap add-on #4, Encrypted
+Video Support, from exact green draft PR #49 head `5ee18d9`. Keep the guarded
+delivery limited to `KeyHollow Internal`; no signed upload, tester-group
+change, merge, or App Store review action is authorized in this phase.
 
 ## Test/build status
 
@@ -34,6 +35,18 @@ exact green draft PR #49 revision.
   digest `f5b270f5ce4da4fb218800a5be56eac4eafd36a2127bb5754aee61a359f6405f`
   and security-test artifact `10128583647` with SHA-256 digest
   `dbbb36ab720ed1e1fa0adf3eb5b201ebbd493df34dfcd4ab74852dab39d2cf5d`.
+- Documentation-head reproducibility run
+  [#34416567530](https://github.com/Frankbell84/KeyHollow/actions/runs/34416567530)
+  passed every mandatory gate at exact PR head `5ee18d9` in 19m36s. The Mac
+  simulator build and complete test suite passed in 7m27s; Swift CodeQL passed
+  in 19m27s with no failed security gate or unresolved finding.
+- Run #34416567530 retained simulator artifact `10129493117` with SHA-256
+  digest `cabdd39ea9134ef53121b29efb0e273a741dc11359f6d88fc8e8e6a7f0a75eb0`
+  and security-test artifact `10129495290` with SHA-256 digest
+  `14fd3c4af1fa1328facb88913c1230a7f2c304f819b7a1efc1ed50dfa1412e43`.
+- Frank inspected App Store Connect directly and confirmed Build 38 is the
+  latest uploaded build, so Build 39 is unused and available for this isolated
+  Internal-only candidate.
 - Local architecture-boundary, release-hygiene, build-number-guard self-test,
   and diff-integrity gates pass after final hardening.
 - Independent compile/API, security/lifecycle, and test-completeness reviews
@@ -46,6 +59,14 @@ exact green draft PR #49 revision.
 
 ## Completed work
 
+- Created local delivery branch `delivery/encrypted-video-support` directly
+  from exact green review head `5ee18d9`; no feature implementation changed
+  during the transition.
+- Reserved Build 39 and synchronized `CURRENT_PROJECT_VERSION` for both the
+  app and embedded thumbnail extension. Marketing version remains 1.0.
+- Replaced the retired Build 38 gallery-performance delivery exception with
+  only `delivery/encrypted-video-support`. `main` remains the other permitted
+  source; ordinary feature branches still cannot upload production builds.
 - Added the independently compiled, dependency-free
   `KeyHollowEncryptedVideoAddOn` with conservative MOV/MP4/M4V classification,
   reference-restricted local AVFoundation assets, real media validation,
@@ -1178,7 +1199,10 @@ exact green draft PR #49 revision.
 ## Blockers
 
 - No production implementation, modularity, format-compatibility, security,
-  build, test, or CodeQL blocker is known at exact green commit `76185b3`.
+  build, test, or CodeQL blocker is known at exact green head `5ee18d9`.
+- Exact Build 39 delivery-source Mac build/tests and Swift CodeQL must pass
+  after the synchronized build-number and allowlist-only changes before any
+  signed-upload decision.
 - Physical-device video acceptance is pending and must cover MOV/MP4/M4V,
   portrait/landscape orientation and audio, rapid mixed-gallery scrolling,
   dismiss/lock/background cleanup, malformed media, and existing non-video
@@ -1189,17 +1213,19 @@ exact green draft PR #49 revision.
 
 ## Next action
 
-Commit and push this final validation record, then present the focused
-physical-device acceptance checklist. A signed Internal TestFlight build is
-the next external boundary and requires Frank's explicit authorization. Do not
-change TestFlight groups, perform a signed upload, merge the video feature, or
-change App Store review state without the required later approval.
+Run local release-source gates, independently audit the narrow Build 39 diff,
+commit and push the isolated delivery checkpoint, open a cumulative draft
+release review against `main`, and require exact delivery-head Mac build/tests
+plus Swift CodeQL. The signed Internal TestFlight upload remains the next
+external boundary and requires Frank's explicit authorization. Do not change
+tester groups, merge the video feature, or change App Store review state.
 
 ## Frank's decision required
 
-- Exact-source automated validation is complete. Frank's next required
-  decision is whether to authorize preparation and signed upload of an
-  Internal-only TestFlight build for physical-device video acceptance.
+- Frank confirmed Build 39 is unused and approved proceeding with isolated
+  delivery preparation. No additional decision is required for local changes,
+  draft review, or validation. The signed Internal-only TestFlight upload
+  remains a separate explicit decision after exact delivery-head gates pass.
 - After exact-source CI and physical-device acceptance pass, signed upload,
   tester-group assignment, merge, and App Store review remain separate explicit
   decisions.
