@@ -11,6 +11,14 @@ evidence remains in `docs/PROJECT_CHECKPOINT.md`.
 - Published phase-entry checkpoint: `6abc6ed`.
 - Published implementation checkpoint:
   `d6d87f39f0c5fee35f7cc05333955ef86046cb7e`.
+- Published implementation-status head:
+  `488efb5fb3387bc04916b9a7fd91d3196f4a4e90`.
+- Fully green exact implementation-status-head CI run:
+  [#34509180786](https://github.com/Frankbell84/KeyHollow/actions/runs/34509180786).
+- Draft review:
+  [PR #52](https://github.com/Frankbell84/KeyHollow/pull/52), targeting exact
+  baseline `0cdf04acce06fd402780eb2857e977a6872fe572` from
+  `feature/backup-verification-center`.
 - Exact protected-main baseline:
   `0cdf04acce06fd402780eb2857e977a6872fe572`
 - Baseline tree:
@@ -40,17 +48,16 @@ evidence remains in `docs/PROJECT_CHECKPOINT.md`.
 
 ## Current task
 
-Implement roadmap add-on #2, Backup Verification Center, as a read-only local
-`.khvault` authenticity and recoverability check. Reuse TransferCore's existing
-authenticated archive validator, immediately discard its protected staging,
-and expose only a sanitized immutable report to the independently compiled
-add-on and its UI. Do not install a vault, create a second transfer path, treat
-the recovery code as a local LowKey, add cloud/sync/account behavior, change the
-archive format, or alter release state.
+Finalize the verified Backup Verification Center checkpoint on exact
+implementation-status head `488efb5fb3387bc04916b9a7fd91d3196f4a4e90`,
+preserve draft PR #52 without merge or release action, publish one status-only
+operational checkpoint, and require that new exact documentation head to retain
+the complete green workflow before presenting it for Frank's separate merge
+decision.
 
 ## Completed work
 
-Implementation and local hardening are complete pending exact-source CI:
+Implementation, local hardening, and exact-source CI are complete:
 
 - Added a TransferCore verify-and-discard facade over the existing authenticated
   restore validator. It returns only primitive counts, source creation time,
@@ -230,11 +237,9 @@ ordinary unreachable objects and a zero-byte empty worktree `refs` directory
 warning; neither affects reachable source history. The temporary
 `.helper-test` directory was verified empty and removed non-recursively.
 
-These Windows checks cannot compile Swift or run iOS tests. Exact-source
-macOS/Xcode 26.0.1 compilation, strict-concurrency diagnostics, the complete
-XCTest/security/lifecycle suite, packaged-resource verification, Darwin
-filesystem behavior, and Swift CodeQL remain mandatory. Build 39's green
-evidence proves the released base, not this new hardening diff.
+Windows still cannot reproduce the macOS/iOS toolchain locally. The exact
+PR-head evidence below now proves this feature revision; the single status-only
+documentation head must retain the same complete workflow.
 
 Draft PR #51 was opened from exact reviewed head
 `42086651719f92e4001c26ef1e7b1e3c590bc0d6`. Its initial run
@@ -299,6 +304,21 @@ successfully. Its build-and-test job, Swift CodeQL job, pull-request security
 result, and both artifact uploads passed with zero annotations and no new
 alerts.
 
+The authoritative Backup Verification Center run
+[#34509180786](https://github.com/Frankbell84/KeyHollow/actions/runs/34509180786)
+on exact commit `488efb5fb3387bc04916b9a7fd91d3196f4a4e90` completed
+successfully for draft PR #52. `build-and-test` passed every preflight gate,
+project generation, simulator build, packaged-resource verification, the
+complete security/lifecycle XCTest suite, and both artifact uploads. Swift
+CodeQL passed; the separate pull-request security result reported no new alerts
+in code changed by PR #52. All three check runs completed with zero annotations.
+Retained run artifacts are:
+
+- `KeyHollow-Security-Tests` artifact `10165399849`, SHA-256
+  `d807f1abef8f8881b1679374cb07f756111e12f1f48a4e4e5503ea76d07379e7`.
+- `KeyHollow-Simulator` artifact `10165393728`, SHA-256
+  `64910e65840ca0af9a08ba043eccfe3b33c53cec96b079d1de98e07ab64ef4a1`.
+
 ## Git helper status
 
 The Codex managed-runtime/Git-helper repair is complete and durable across two
@@ -332,10 +352,13 @@ corruption, and it is no longer an active blocker.
 
 ## Blockers
 
-There is no known engineering or Git-helper blocker to beginning the isolated
-feature. Windows cannot compile Swift or run the iOS suite, so exact-source
-macOS/Xcode CI remains mandatory after implementation. Physical-device testing
-remains mandatory before any later TestFlight acceptance or wider rollout.
+There is no open P1/P2 review finding, known production-code defect, active
+Git-helper blocker, or failed required repository check on the Backup
+Verification Center implementation. Exact implementation-status head
+`488efb5fb3387bc04916b9a7fd91d3196f4a4e90` passed the complete workflow. The
+only remaining repository proof is the one status-only documentation head;
+physical-device testing remains mandatory after any separately approved
+merged-main upload.
 
 ## Required external GitHub controls
 
@@ -365,21 +388,20 @@ Before the next production TestFlight upload, Frank must verify or configure:
 
 ## Next action
 
-1. Commit and publish the exact implementation checkpoint on the isolated
-   feature branch.
-2. Open a draft review and run exact-head macOS/Xcode compilation, the complete
-   XCTest/security/lifecycle suite, packaged-resource verification, and Swift
-   CodeQL.
-3. Correct only evidence-backed branch issues, then publish an exact green-head
-   status checkpoint for review.
-4. Stop before merge, signing, upload, tester assignment, or release action.
+1. Publish this one final operational checkpoint to draft PR #52 and require
+   its status-only exact head to retain the complete green workflow.
+2. Recheck the clean synchronized branch and present that exact green revision
+   to Frank for explicit merge approval.
+3. Require the eventual merged `main` commit to pass the same complete gates.
+4. Stop before signing, upload, tester assignment, or App Store action until a
+   full commit SHA, unused build number, and tester group are separately
+   authorized.
 
 ## Frank's decisions required
 
-Frank confirmed Backup Verification Center follows Encrypted Video Support and
-approved beginning this next step. That approval covers isolated design,
-implementation, tests, a draft review, and CI; it does not authorize merge,
-signed upload, tester assignment, or App Store action.
+No further decision is required for recording this one completed feature
+checkpoint or verifying its exact-head CI. Frank must later explicitly approve
+the exact verified revision before merge.
 
 Frank's action-time decision is required for:
 
