@@ -1,18 +1,35 @@
 # KeyHollow Work Status
 
 Updated: 2026-09-09
-Branch: `delivery/encrypted-video-support`
-Parent validation head: `5ee18d9` (exact green Encrypted Video review head)
+Branch: `hardening/post-build39-baseline`
+Parent release head: `f654390` (exact signed and uploaded Build 39 source)
 
 ## Current task
 
-Record the completed exact-source Build 39 release validation for roadmap
-add-on #4, Encrypted Video Support, and establish the final evidence head on
-`delivery/encrypted-video-support`. Keep delivery limited to `KeyHollow
-Internal`; no signed upload, tester-group change, merge, or App Store review
-action is authorized in this phase.
+Freeze feature work and complete a post-Build-39 hardening pass without
+changing the accepted encrypted formats or Build 39 source. Close every
+confirmed local security, release-compliance, reproducibility, and status gap;
+then require exact-source Mac CI, the complete regression/security suite, and
+Swift CodeQL before this branch can become a merge candidate.
 
 ## Test/build status
+
+- Signed workflow run
+  [#34424283722](https://github.com/Frankbell84/KeyHollow/actions/runs/34424283722)
+  built and uploaded Build 39 from exact commit
+  `f654390ccf45bf7448952be787874a7c3e4f8206`. The retained signed IPA artifact
+  is `10132108885`, SHA-256
+  `99a3ed152df2c5bb267e5950aab27db82e51e3d22e91981f1d3d15812ced72e1`.
+  App Store Connect was separately verified to show Build 39 as Ready to
+  Submit and assigned only to `KeyHollow Internal`.
+- The new hardening branch starts directly from that exact source. Build 39's
+  delivery branch remains unchanged and synchronized with its upstream.
+- Preflight repository integrity, worktree synchronization, architecture,
+  release-hygiene, build-number guard, and whitespace checks pass. The audit
+  found bounded hardening work in archive resource limits, store path
+  canonicalization, passcode-attempt throttling, Apple privacy declarations,
+  and deterministic release tooling. No encrypted-format migration or broad
+  architectural rewrite is required.
 
 - Draft PR [#49](https://github.com/Frankbell84/KeyHollow/pull/49) is open.
   Initial implementation revision `36b1e06` validation run
