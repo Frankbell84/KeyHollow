@@ -9,6 +9,8 @@ evidence remains in `docs/PROJECT_CHECKPOINT.md`.
 
 - Current branch: `feature/backup-verification-center`
 - Published phase-entry checkpoint: `6abc6ed`.
+- Published implementation checkpoint:
+  `d6d87f39f0c5fee35f7cc05333955ef86046cb7e`.
 - Exact protected-main baseline:
   `0cdf04acce06fd402780eb2857e977a6872fe572`
 - Baseline tree:
