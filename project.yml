@@ -105,6 +105,20 @@ targets:
         DEFINES_MODULE: YES
         SKIP_INSTALL: YES
 
+  KeyHollowBackupVerificationAddOn:
+    type: library.static
+    platform: iOS
+    sources:
+      - path: KeyHollow/AddOns/BackupVerification
+    settings:
+      base:
+        PRODUCT_NAME: KeyHollowBackupVerificationAddOn
+        SWIFT_VERSION: 5.0
+        SWIFT_STRICT_CONCURRENCY: complete
+        SWIFT_TREAT_WARNINGS_AS_ERRORS: YES
+        DEFINES_MODULE: YES
+        SKIP_INSTALL: YES
+
   KeyHollowGeneralFileSupportAddOn:
     type: library.static
     platform: iOS
@@ -219,6 +233,7 @@ targets:
       - path: KeyHollow
         excludes:
           - AddOns/FileRecognition
+          - AddOns/BackupVerification
           - AddOns/GeneralFileSupport
           - AddOns/EncryptedVideo
           - AddOns/FolderPresentation
@@ -250,6 +265,7 @@ targets:
       - target: KeyHollowVaultThumbnailExtension
         embed: true
       - target: KeyHollowFileRecognitionAddOn
+      - target: KeyHollowBackupVerificationAddOn
       - target: KeyHollowGeneralFileSupportAddOn
       - target: KeyHollowEncryptedVideoAddOn
       - target: KeyHollowFolderPresentationAddOn
@@ -312,6 +328,8 @@ targets:
       - target: KeyHollow
       - target: KeyHollowFileRecognitionAddOn
         link: false
+      - target: KeyHollowBackupVerificationAddOn
+        link: false
       - target: KeyHollowGeneralFileSupportAddOn
         link: false
       - target: KeyHollowEncryptedVideoAddOn
@@ -356,6 +374,7 @@ schemes:
       targets:
         KeyHollowVaultThumbnailExtension: all
         KeyHollowFileRecognitionAddOn: all
+        KeyHollowBackupVerificationAddOn: all
         KeyHollowGeneralFileSupportAddOn: all
         KeyHollowEncryptedVideoAddOn: all
         KeyHollowFolderPresentationAddOn: all

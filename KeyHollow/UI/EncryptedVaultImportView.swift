@@ -340,17 +340,16 @@ struct EncryptedVaultImportView: View {
 
         session.startProtectedTask {
             do {
-                let restore = try await EncryptedVaultTransferCoordinator().stageAndValidateRestore(
+                let report = try await EncryptedVaultTransferCoordinator().verifyArchive(
                     archiveURL: selectedArchive.url,
                     credential: credential,
                     supplementalContent: GeneralFilePortableTransferBridge()
                 )
                 let summary = ValidatedVaultContentSummary(
-                    photoCount: restore.manifest.photos.count,
-                    generalFileCount: restore.supplementalItemCount,
-                    legacyOversizedPhotoCount: restore.legacyOversizedPhotoCount
+                    photoCount: report.authenticatedPhotoCount,
+                    generalFileCount: report.authenticatedFileCount,
+                    legacyOversizedPhotoCount: report.legacyOversizedPhotoCount
                 )
-                restore.discard()
                 guard !Task.isCancelled else { return }
                 validatedContent = summary
                 isWorking = false

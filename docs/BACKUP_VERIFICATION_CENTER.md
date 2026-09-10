@@ -12,7 +12,7 @@ This phase is intentionally local and read-only.
 - Reuse the authenticated archive reader, payload extractor, catalog checks,
   photo validation, and supplemental general-file validation already owned by
   `KeyHollowTransferCore`.
-- Return a sanitized immutable report containing only archive format and
+- Return a sanitized immutable report containing only payload-catalog and
   compatibility information, authenticated content counts, source creation
   time, and explicit legacy-size warnings.
 - Copy a user-selected archive into the existing protected, disposable
@@ -32,7 +32,7 @@ or cryptographic path.
 | Responsibility | Current owner | Additive change |
 | --- | --- | --- |
 | Container authentication and payload validation | `KeyHollowTransferCore` | Add one verify-and-discard facade over the existing restore validator. |
-| Protected Files-provider ingress | `KeyHollowFileRecognitionAddOn` | Reuse unchanged. |
+| Protected Files-provider ingress | `KeyHollowFileRecognitionAddOn` | Reuse the established copy boundary and add checked, reference-owned cleanup plus canonical crash-debris recovery. |
 | General-file archive authentication | App composition through `GeneralFilePortableTransferBridge` | Reuse unchanged. |
 | Sanitized report model and presentation | New `KeyHollowBackupVerificationAddOn` | Accept no vault key, ciphertext, store, staging URL, install capability, or recovery credential. |
 | File picker, recovery-code lifetime, cancellation, and lock handling | Application composition layer | Coordinate existing modules and publish only the sanitized report. |
@@ -54,17 +54,44 @@ or cryptographic path.
    outer-container and per-entry authentication is never described as fully
    opened or migrated.
 
+## Implemented checkpoint
+
+- `KeyHollowTransferCore` now exposes one verify-and-discard facade over the
+  existing restore validator. It does not expose the secret-bearing validated
+  restore object and refuses to return a report when checked staging cleanup
+  fails.
+- `KeyHollowBackupVerificationAddOn` is an independently compiled, dependency-
+  free static target containing only immutable report values, presentation
+  policy, and the read-only report view.
+- The application owns the Files picker, recovery-code lifetime, progress,
+  cancellation, accessibility focus, and mapping from the TransferCore report.
+- File Recognition now keeps ingress cleanup attached to every copied value,
+  preserves live copies across concurrent operations, and removes only stale
+  canonical UUID directories when a later ingress begins.
+- The locked home screen and unlocked vault menu both expose the same local,
+  read-only verification flow. Existing import remains a separate operation.
+- No vault format, encryption primitive, persistent store, install transaction,
+  local LowKey, sync behavior, account behavior, or release state changed.
+
 ## Required validation
 
-- Valid v1, v2, and v3 archives where existing fixtures support them.
+- Valid v1, v2, and v3 payload catalogs, using authentic encrypted store-backed
+  content for the legacy-version compatibility cases.
 - Photo-only, file-only, mixed-content, and video-as-general-file archives.
-- Wrong recovery code, corruption, truncation, malformed catalog, unsupported
-  version, staged mutation, and symlink rejection.
-- Cancellation and lock/background cleanup with no retained extraction tree.
-- Repeated verification with no credential-store write, restore journal, or
-  installed vault.
+- Wrong recovery code, corruption, truncation, cleanup failure, and the existing
+  shared validator's malformed-catalog, unsupported-version, staged-mutation,
+  topology, and symlink rejection coverage.
+- Cancellation, picker dismissal, replacement, lock/background cleanup, and
+  crash-debris convergence with no success report before checked cleanup.
+- Repeated verification with identical reports, unchanged source bytes, no
+  credential-store or restore-journal capability, and no installed vault.
 - Independent add-on compilation under strict concurrency and warnings as
   errors, complete simulator/security/lifecycle tests, and Swift CodeQL.
+
+All repository-local architecture, release-hygiene, workflow-security, privacy,
+source/environment, build-number, script-syntax, and patch-integrity gates pass
+on Windows. Exact-source macOS/Xcode compilation and runtime tests remain
+mandatory before merge consideration.
 
 ## Future boundary
 

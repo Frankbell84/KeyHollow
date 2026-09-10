@@ -51,7 +51,10 @@ otherwise.
   code. That recovery code never unlocks the normal local keypad.
 - Restore validates and stages the complete archive before installing a new
   local vault identity and LowKey wrapper.
-- The current archive version preserves protected photos and general files but
+- Backup Verification authenticates the same archive contents through the same
+  validator but always discards staging and returns only a read-only summary. It
+  cannot install a vault or turn the recovery code into a local LowKey.
+- The current payload-catalog version preserves protected photos and general files but
   not Folder Presentation names or membership metadata. Export and import both
   disclose that restored items appear at the new vault's top level.
 - Wrong recovery codes, tampering, truncation, path traversal, credential

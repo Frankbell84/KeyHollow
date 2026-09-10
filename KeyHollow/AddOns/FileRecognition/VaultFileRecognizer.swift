@@ -31,17 +31,198 @@ public struct StagedVaultFile: Equatable, Sendable {
     public let url: URL
     public let displayName: String
     public let byteCount: UInt64
-    private let cleanupRoot: URL
+    private let cleanupLease: StagedVaultFileCleanupLease
 
-    init(url: URL, displayName: String, byteCount: UInt64, cleanupRoot: URL) {
+    fileprivate init(
+        url: URL,
+        displayName: String,
+        byteCount: UInt64,
+        directoryLease: VaultFileIngressDirectoryLease
+    ) {
         self.url = url
         self.displayName = displayName
         self.byteCount = byteCount
-        self.cleanupRoot = cleanupRoot
+        cleanupLease = StagedVaultFileCleanupLease(directoryLease: directoryLease)
     }
 
     public func discard(using fileManager: FileManager = .default) {
-        try? fileManager.removeItem(at: cleanupRoot)
+        try? discardChecked(using: fileManager)
+    }
+
+    /// Removes the complete ingress-owned lease and reports cleanup failure to
+    /// callers that must not publish success while temporary data remains.
+    public func discardChecked(using fileManager: FileManager = .default) throws {
+        try cleanupLease.discardChecked(using: fileManager)
+    }
+
+    public static func == (lhs: StagedVaultFile, rhs: StagedVaultFile) -> Bool {
+        lhs.url == rhs.url
+            && lhs.displayName == rhs.displayName
+            && lhs.byteCount == rhs.byteCount
+    }
+}
+
+/// Reference ownership keeps cleanup attached to every value copy. If a
+/// cancellation races the handoff into UI state, releasing the final value
+/// still retries removal of the complete ingress-owned directory.
+private final class StagedVaultFileCleanupLease: @unchecked Sendable {
+    private let cleanupRoot: URL
+    private let lock = NSLock()
+    private var ownsCleanupRoot = true
+    private var directoryLease: VaultFileIngressDirectoryLease?
+
+    init(directoryLease: VaultFileIngressDirectoryLease) {
+        cleanupRoot = directoryLease.directoryURL
+        self.directoryLease = directoryLease
+    }
+
+    deinit {
+        try? discardChecked()
+    }
+
+    func discardChecked(using fileManager: FileManager = .default) throws {
+        lock.lock()
+        defer { lock.unlock() }
+        guard ownsCleanupRoot else { return }
+        do {
+            try fileManager.removeItem(at: cleanupRoot)
+        } catch {
+            let cocoaError = error as NSError
+            guard cocoaError.domain == NSCocoaErrorDomain,
+                  cocoaError.code == NSFileNoSuchFileError else {
+                throw error
+            }
+        }
+        ownsCleanupRoot = false
+        directoryLease = nil
+    }
+}
+
+/// Prevents one live import from being mistaken for crash debris by another
+/// import in the same process. A later ingress removes only canonical UUID
+/// directories that have no live lease, so restart-and-retry converges stale
+/// encrypted copies without widening deletion beyond the add-on-owned root.
+fileprivate final class VaultFileIngressDirectoryLease: @unchecked Sendable {
+    let directoryURL: URL
+
+    private let rootKey: String
+    private let identifier: String
+    private let registry: VaultFileIngressDirectoryRegistry
+
+    init(
+        directoryURL: URL,
+        rootKey: String,
+        identifier: String,
+        registry: VaultFileIngressDirectoryRegistry
+    ) {
+        self.directoryURL = directoryURL
+        self.rootKey = rootKey
+        self.identifier = identifier
+        self.registry = registry
+    }
+
+    deinit {
+        registry.release(rootKey: rootKey, identifier: identifier)
+    }
+}
+
+fileprivate final class VaultFileIngressDirectoryRegistry: @unchecked Sendable {
+    static let shared = VaultFileIngressDirectoryRegistry()
+
+    private let lock = NSLock()
+    private var activeIdentifiersByRoot: [String: Set<String>] = [:]
+
+    func acquire(
+        at rootURL: URL,
+        fileManager: FileManager
+    ) throws -> VaultFileIngressDirectoryLease {
+        let root = rootURL.standardizedFileURL
+        let identifier = UUID().uuidString.lowercased()
+
+        lock.lock()
+        do {
+            try fileManager.createDirectory(
+                at: root,
+                withIntermediateDirectories: true,
+                attributes: [.protectionKey: FileProtectionType.complete]
+            )
+            let rootValues = try root.resourceValues(forKeys: [
+                .isDirectoryKey,
+                .isSymbolicLinkKey
+            ])
+            guard rootValues.isDirectory == true,
+                  rootValues.isSymbolicLink != true else {
+                throw VaultFileIngressError.unavailable
+            }
+            try fileManager.setAttributes(
+                [.protectionKey: FileProtectionType.complete],
+                ofItemAtPath: root.path
+            )
+            var protectedRoot = root
+            var values = URLResourceValues()
+            values.isExcludedFromBackup = true
+            try protectedRoot.setResourceValues(values)
+
+            let rootKey = root.resolvingSymlinksInPath().path
+            try removeAbandonedItems(
+                at: root,
+                preserving: activeIdentifiersByRoot[rootKey] ?? [],
+                fileManager: fileManager
+            )
+            activeIdentifiersByRoot[rootKey, default: []].insert(identifier)
+            lock.unlock()
+            return VaultFileIngressDirectoryLease(
+                directoryURL: root.appendingPathComponent(identifier, isDirectory: true),
+                rootKey: rootKey,
+                identifier: identifier,
+                registry: self
+            )
+        } catch {
+            lock.unlock()
+            throw error
+        }
+    }
+
+    fileprivate func release(rootKey: String, identifier: String) {
+        lock.lock()
+        defer { lock.unlock() }
+        activeIdentifiersByRoot[rootKey]?.remove(identifier)
+        if activeIdentifiersByRoot[rootKey]?.isEmpty == true {
+            activeIdentifiersByRoot.removeValue(forKey: rootKey)
+        }
+    }
+
+    private func removeAbandonedItems(
+        at rootURL: URL,
+        preserving activeIdentifiers: Set<String>,
+        fileManager: FileManager
+    ) throws {
+        let items = try fileManager.contentsOfDirectory(
+            at: rootURL,
+            includingPropertiesForKeys: [.isDirectoryKey, .isSymbolicLinkKey],
+            options: []
+        )
+        for itemURL in items {
+            let name = itemURL.lastPathComponent
+            guard Self.isCanonicalIngressIdentifier(name),
+                  !activeIdentifiers.contains(name) else {
+                continue
+            }
+            let itemValues = try itemURL.resourceValues(forKeys: [
+                .isDirectoryKey,
+                .isSymbolicLinkKey
+            ])
+            guard itemValues.isDirectory == true,
+                  itemValues.isSymbolicLink != true else {
+                continue
+            }
+            try fileManager.removeItem(at: itemURL)
+        }
+    }
+
+    private static func isCanonicalIngressIdentifier(_ value: String) -> Bool {
+        guard let identifier = UUID(uuidString: value) else { return false }
+        return identifier.uuidString.lowercased() == value
     }
 }
 
@@ -140,6 +321,14 @@ public struct KHVaultFileIngress {
         guard sourceByteCount <= UInt64(Int64.max) else {
             throw VaultFileIngressError.unsupportedFile
         }
+        let stagingRoot = fileManager.temporaryDirectory.appendingPathComponent(
+            "KeyHollowPortableImports",
+            isDirectory: true
+        )
+        let directoryLease = try VaultFileIngressDirectoryRegistry.shared.acquire(
+            at: stagingRoot,
+            fileManager: fileManager
+        )
         let sourceSize = Int64(sourceByteCount)
         let capacityValues = try fileManager.temporaryDirectory.resourceValues(
             forKeys: [
@@ -159,9 +348,7 @@ public struct KHVaultFileIngress {
             throw VaultFileIngressError.insufficientStorage
         }
 
-        let importRoot = fileManager.temporaryDirectory
-            .appendingPathComponent("KeyHollowPortableImports", isDirectory: true)
-            .appendingPathComponent(UUID().uuidString.lowercased(), isDirectory: true)
+        let importRoot = directoryLease.directoryURL
         do {
             try fileManager.createDirectory(
                 at: importRoot,
@@ -202,7 +389,7 @@ public struct KHVaultFileIngress {
                 url: destination,
                 displayName: displayName,
                 byteCount: sourceByteCount,
-                cleanupRoot: importRoot
+                directoryLease: directoryLease
             )
         } catch {
             try? fileManager.removeItem(at: importRoot)

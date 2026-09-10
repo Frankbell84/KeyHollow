@@ -21,6 +21,7 @@ KeyHollow is a native iOS privacy application built around multiple independent 
 - Copy-to-vault and verified move-to-vault import modes
 - Unified three-column gallery with encrypted folder organization
 - Reference-restricted playback and bounded encrypted thumbnails for in-limit videos
+- Read-only local verification of portable encrypted vault backups without installation
 - No claims of absolute coercion or forensic resistance
 
 ## Engineering rule

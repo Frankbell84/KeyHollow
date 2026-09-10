@@ -130,6 +130,7 @@ private struct LockView: View {
     @State private var isWorking = false
     @State private var showingNewVault = false
     @State private var showingEncryptedImport = false
+    @State private var showingBackupVerification = false
 
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 18), count: 3)
 
@@ -209,10 +210,16 @@ private struct LockView: View {
             .disabled(isWorking)
             .accessibilityIdentifier("locked-create-new-vault")
 
-            Button {
-                showingEncryptedImport = true
-            } label: {
-                Label("Import Encrypted Vault", systemImage: "square.and.arrow.down.on.square")
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 12) {
+                    importEncryptedVaultButton
+                    verifyBackupButton
+                }
+
+                VStack(spacing: 10) {
+                    importEncryptedVaultButton
+                    verifyBackupButton
+                }
             }
             .buttonStyle(.bordered)
             .disabled(isWorking)
@@ -229,6 +236,10 @@ private struct LockView: View {
             EncryptedVaultImportView(service: service)
                 .environmentObject(session)
         }
+        .sheet(isPresented: $showingBackupVerification) {
+            BackupVerificationCenterView()
+                .environmentObject(session)
+        }
         .onChange(of: session.securityEpoch) { _, _ in
             SecurityEpochCredentialPolicy.clearLockEntry(
                 digits: &digits,
@@ -237,7 +248,30 @@ private struct LockView: View {
             )
             showingNewVault = false
             showingEncryptedImport = false
+            showingBackupVerification = false
         }
+    }
+
+    private var importEncryptedVaultButton: some View {
+        Button {
+            showingEncryptedImport = true
+        } label: {
+            Label("Import", systemImage: "square.and.arrow.down.on.square")
+                .frame(maxWidth: .infinity)
+        }
+        .accessibilityLabel("Import Encrypted Vault")
+        .accessibilityIdentifier("locked-import-encrypted-vault")
+    }
+
+    private var verifyBackupButton: some View {
+        Button {
+            showingBackupVerification = true
+        } label: {
+            Label("Verify", systemImage: "checkmark.shield")
+                .frame(maxWidth: .infinity)
+        }
+        .accessibilityLabel("Verify Backup")
+        .accessibilityIdentifier("locked-verify-backup")
     }
 
     private func key(_ value: String) -> some View {

@@ -8,6 +8,7 @@ evidence remains in `docs/PROJECT_CHECKPOINT.md`.
 ## Provenance
 
 - Current branch: `feature/backup-verification-center`
+- Published phase-entry checkpoint: `6abc6ed`.
 - Exact protected-main baseline:
   `0cdf04acce06fd402780eb2857e977a6872fe572`
 - Baseline tree:
@@ -47,7 +48,42 @@ archive format, or alter release state.
 
 ## Completed work
 
-Phase entry is complete:
+Implementation and local hardening are complete pending exact-source CI:
+
+- Added a TransferCore verify-and-discard facade over the existing authenticated
+  restore validator. It returns only primitive counts, source creation time,
+  payload-catalog version, and explicit legacy limitations after checked
+  extraction cleanup succeeds.
+- Closed every post-extraction exit: export failure, export success,
+  verification cancellation, validation failure, and partial extraction now
+  cross checked cleanup, and a cleanup failure takes precedence over publishing
+  success or a less actionable cancellation result.
+- Added the independently compiled `KeyHollowBackupVerificationAddOn`, with no
+  dependency on core, session, storage, transfer, or application targets.
+- Added one application-owned verification flow reachable from both the locked
+  home screen and the unlocked vault menu. It uses protected `.khvault` ingress,
+  clears the recovery credential, reports progress, cancels on lifecycle
+  transitions, and cannot install or unlock a vault.
+- Hardened File Recognition staging with checked idempotent cleanup, shared
+  reference ownership, active-operation preservation, and canonical-only stale
+  ingress recovery after interruption or restart-and-retry.
+- Restricted both transfer-working and file-ingress stale recovery to inactive,
+  canonical, real directories; canonical-named regular files and symbolic links
+  are preserved and covered by regression tests.
+- Hardened manual and forced dismissal so protected work is canceled before
+  ownership is released, while user-driven dismissal awaits terminal cleanup.
+- Reused the same verification facade for the existing import preview so there
+  is still one authenticated archive-validation path.
+- Added current photo-only, file-only, mixed, and video-as-file coverage; legacy
+  v1 photo and v2 general-file compatibility fixtures; wrong-credential,
+  corrupted, truncated, cancellation, cleanup-failure, repeat/immutability,
+  live-lease, and abandoned-ingress recovery tests.
+- Added source-enforced gates for exact target ownership, allowed imports,
+  sanitized report fields, verify-before-publish ordering, checked cleanup,
+  lifecycle generation guards, background staging, and denial of install,
+  unlock, export, credential-store, or direct-filesystem capabilities.
+
+Phase entry was completed first:
 
 - Re-fetched `origin/main`, verified the exact post-merge commit and tree, and
   created this single-purpose feature branch directly from that baseline.
@@ -182,6 +218,10 @@ Passed on the published Windows worktree:
 - Python syntax compilation for every release/security script
 - Git whitespace and patch-integrity check
 - Conflict-marker and tracked credential/private-key scans
+
+The current Backup Verification Center implementation also passes every local
+gate above, including the expanded architecture rules and Git patch-integrity
+check. The new Swift test matrix is present but cannot execute on Windows.
 
 Repository checks found no reachable Git corruption. `git fsck` reported only
 ordinary unreachable objects and a zero-byte empty worktree `refs` directory
@@ -323,15 +363,14 @@ Before the next production TestFlight upload, Frank must verify or configure:
 
 ## Next action
 
-1. Publish this exact phase-entry checkpoint on the isolated feature branch.
-2. Add the TransferCore verify-and-discard report facade and prove staging is
-   removed on success, failure, and cancellation.
-3. Add `KeyHollowBackupVerificationAddOn`, app-owned picker/lifecycle wiring,
-   report UI, and feature-specific architecture enforcement.
-4. Add hostile-input, legacy-compatibility, mixed-content, cancellation,
-   no-install, and no-credential-mutation regression tests.
-5. Run every local gate, open a draft review, and require exact-head macOS/Xcode
-   tests and Swift CodeQL. Stop before merge or release action.
+1. Commit and publish the exact implementation checkpoint on the isolated
+   feature branch.
+2. Open a draft review and run exact-head macOS/Xcode compilation, the complete
+   XCTest/security/lifecycle suite, packaged-resource verification, and Swift
+   CodeQL.
+3. Correct only evidence-backed branch issues, then publish an exact green-head
+   status checkpoint for review.
+4. Stop before merge, signing, upload, tester assignment, or release action.
 
 ## Frank's decisions required
 

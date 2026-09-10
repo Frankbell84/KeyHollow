@@ -421,6 +421,7 @@ struct VaultGalleryView: View {
     @State private var showingSecuritySettings = false
     @State private var showingEncryptedImport = false
     @State private var showingEncryptedExport = false
+    @State private var showingBackupVerification = false
     @State private var showingVaultFiles = false
     @State private var showingDeleteSelectionConfirmation = false
     @State private var showingFolderEditor = false
@@ -521,6 +522,10 @@ struct VaultGalleryView: View {
         }
         .sheet(isPresented: $showingEncryptedExport) {
             EncryptedVaultExportView(service: service)
+                .environmentObject(session)
+        }
+        .sheet(isPresented: $showingBackupVerification) {
+            BackupVerificationCenterView()
                 .environmentObject(session)
         }
         .sheet(isPresented: $showingVaultFiles, onDismiss: {
@@ -730,6 +735,13 @@ struct VaultGalleryView: View {
                     } label: {
                         Label("Export Encrypted Vault", systemImage: "square.and.arrow.up.on.square")
                     }
+
+                    Button {
+                        showingBackupVerification = true
+                    } label: {
+                        Label("Verify Backup", systemImage: "checkmark.shield")
+                    }
+                    .accessibilityIdentifier("vault-verify-backup")
 
                     Button {
                         showingVaultFiles = true
