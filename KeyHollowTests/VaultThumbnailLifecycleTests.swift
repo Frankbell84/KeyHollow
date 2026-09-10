@@ -419,12 +419,15 @@ final class VaultThumbnailLifecycleTests: XCTestCase {
         }
 
         XCTAssertFalse(FileManager.default.fileExists(atPath: stagedExport.path))
-        let reference = VaultPresentedContentReference(
-            kind: .generalFile,
-            id: videoRecord.id
+        let presentationFiles = try FileManager.default.subpathsOfDirectory(
+            atPath: presentationRoot.path
         )
-        let cachedThumbnail = try await presentationStore.loadThumbnail(for: reference)
-        XCTAssertNil(cachedThumbnail)
+        XCTAssertFalse(
+            presentationFiles.contains {
+                URL(fileURLWithPath: $0).pathExtension.lowercased() == "kht"
+            },
+            "Cancelled thumbnail work persisted an encrypted thumbnail blob"
+        )
         let finalState = await pipeline.permitStateForTesting()
         XCTAssertFalse(finalState.isOccupied)
         XCTAssertEqual(finalState.waiterCount, 0)

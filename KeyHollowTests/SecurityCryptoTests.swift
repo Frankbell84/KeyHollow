@@ -899,7 +899,9 @@ final class SecurityCryptoTests: XCTestCase {
             XCTFail("Could not create isolated defaults")
             return
         }
-        defer { defaults.removePersistentDomain(forName: suite) }
+        defer {
+            UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite)
+        }
 
         let limiter = UnlockAttemptLimiter(defaults: defaults)
         let start = Date(timeIntervalSince1970: 1_000_000)

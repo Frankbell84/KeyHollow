@@ -18,6 +18,8 @@ evidence remains in `docs/PROJECT_CHECKPOINT.md`.
   `42086651719f92e4001c26ef1e7b1e3c590bc0d6`
 - Latest published operational checkpoint before the CI correction:
   `d48d27a87808caea8a014c8e851b5770a59d174a`
+- Published compile-correction head:
+  `a4906c880bba3e9dc9cf3d2af607f3733b267801`
 - Draft review:
   [PR #51](https://github.com/Frankbell84/KeyHollow/pull/51), targeting
   refreshed `main` from `hardening/post-build39-baseline`.
@@ -45,10 +47,11 @@ evidence remains in `docs/PROJECT_CHECKPOINT.md`.
 
 ## Current task
 
-Correct the test-only Swift return-value compile failure found by exact-head
-CI, repeat all local safety gates, publish the minimal correction to draft PR
-#51, and obtain green exact-head macOS/Xcode, XCTest, packaged-resource, and
-Swift CodeQL evidence. Feature work remains frozen.
+Correct the post-lock thumbnail test oracle and the remaining test-only Swift
+concurrency warning found after the first compile correction, repeat all local
+safety gates, publish the minimal correction to draft PR #51, and obtain green
+exact-head macOS/Xcode, XCTest, packaged-resource, and Swift CodeQL evidence.
+Feature work remains frozen.
 
 ## Completed work
 
@@ -91,10 +94,19 @@ The published hardening implementation now includes:
 - Expanded hostile-input, interruption, replay, expiry, rollback, recovery,
   compatibility, cancellation, cleanup, and lifecycle tests.
 - The exact-head CI diagnosis identified no app-runtime or cryptographic
-  defect. The pending correction makes two concurrent lifecycle-test tasks
-  explicitly return their intended result and makes two test-only encryption
-  helpers explicitly return their ciphertext, without changing production
-  behavior, ordering, or encryption.
+  defect. Commit `a4906c880bba3e9dc9cf3d2af607f3733b267801`
+  makes two concurrent lifecycle-test tasks explicitly return their intended
+  result and makes two test-only encryption helpers explicitly return their
+  ciphertext, without changing production behavior, ordering, or encryption.
+- The next exact-head run confirmed those files compile and link. It then
+  exposed a test-oracle defect: after proving `lockAndWait()` revoked the
+  session, the test tried to decrypt the presentation manifest through the
+  deliberately revoked capability. The pending correction preserves strict
+  production revocation and instead verifies directly that cancelled work
+  persisted no encrypted thumbnail blob.
+- The same pending correction removes a Swift 6 test warning by ensuring
+  isolated `UserDefaults` cleanup obtains a fresh handle after the original is
+  transferred to the unlock-limiter actor.
 
 No broad rewrite was required. The protected modular architecture continues to
 hold, and independent compile/API and adversarial-security reviews found no
@@ -160,6 +172,18 @@ same log reported one test-helper unused-result warning. Both sites and the
 single analogous helper are corrected in the current working phase. No green
 result is claimed until every required job completes on the final PR head.
 
+The first replacement run
+[#34466500108](https://github.com/Frankbell84/KeyHollow/actions/runs/34466500108)
+on exact commit `a4906c880bba3e9dc9cf3d2af607f3733b267801`
+passed all preflight gates, project generation, simulator compilation,
+packaged-resource verification, and compiled and linked the complete test
+bundle. It then ran 287 tests and failed when
+`testLockAndWaitObservesRegisteredThumbnailCleanup` attempted post-lock access
+through an intentionally revoked capability. The log also reported one Swift
+6 test-only `UserDefaults` send-after-use warning. Both issues are corrected in
+the current working phase. The failure does not justify weakening production
+revocation, and no such production change was made.
+
 ## Git helper status
 
 The missing-DLL popups come from Codex's bundled Git HTTPS helper, not from the
@@ -195,8 +219,9 @@ corruption.
 ## Blockers
 
 There is no open P1/P2 review finding or known production-code defect. The
-first exact-checkpoint-head CI run exposed a test-only Swift return-value
-compile issue; its minimal correction must pass the full replacement run.
+latest exact-head CI run exposed a post-revocation test-oracle error and one
+test-only Swift concurrency warning; their minimal corrections must pass the
+full replacement run.
 
 Remaining proof and external-control blockers are:
 
