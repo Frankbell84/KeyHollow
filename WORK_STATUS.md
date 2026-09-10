@@ -12,10 +12,15 @@ evidence remains in `docs/PROJECT_CHECKPOINT.md`.
   `73471b6ef72308d737d205f0c0258f590df72948`
 - Published hardening implementation commit:
   `15d73abedb191e3d0e63b7da68d1a13e70ae10d0`
-- Published checkpoint immediately before the PR-phase status commit:
+- Published hardening checkpoint:
   `6e60b9daf8b0f345200fa0cc01d5d2663adc2c4c`
-- The local branch and `origin/hardening/post-build39-baseline` are synchronized
-  at that exact checkpoint with no ahead/behind difference.
+- Reviewed draft-PR submission head:
+  `42086651719f92e4001c26ef1e7b1e3c590bc0d6`
+- Draft review:
+  [PR #51](https://github.com/Frankbell84/KeyHollow/pull/51), targeting
+  refreshed `main` from `hardening/post-build39-baseline`.
+- Initial exact-submission-head CI run:
+  [#34464405249](https://github.com/Frankbell84/KeyHollow/actions/runs/34464405249).
 - Exact signed Build 39 source:
   `f654390ccf45bf7448952be787874a7c3e4f8206`
 - Build 39 signed-upload workflow:
@@ -128,8 +133,12 @@ XCTest/security/lifecycle suite, packaged-resource verification, Darwin
 filesystem behavior, and Swift CodeQL remain mandatory. Build 39's green
 evidence proves the released base, not this new hardening diff.
 
-No GitHub Actions, Xcode, XCTest, or CodeQL result exists yet for the PR-phase
-head containing this checkpoint.
+Draft PR #51 was opened from exact reviewed head
+`42086651719f92e4001c26ef1e7b1e3c590bc0d6`. GitHub Actions run
+[#34464405249](https://github.com/Frankbell84/KeyHollow/actions/runs/34464405249)
+started successfully, with both `build-and-test` and `CodeQL (Swift)` in
+progress when this operational checkpoint was written. No green result is
+claimed until every required job completes on the final PR head.
 
 ## Git helper status
 
@@ -201,10 +210,8 @@ Before the next production TestFlight upload, Frank must verify or configure:
 
 ## Next action
 
-1. Open a pull request from the current published
-   `hardening/post-build39-baseline` head into refreshed `main` at
-   `3df3e1c729d1829a6aa3f534c9014ba4ee3af2a6`.
-2. Require that exact head to pass Xcode generation and compilation, the
+1. Monitor draft PR #51 and GitHub Actions run #34464405249 through completion.
+2. Require the final PR head to pass Xcode generation and compilation, the
    complete simulator test suite, packaged-resource checks, and Swift CodeQL.
 3. Resolve any CI finding on this branch and repeat the full review/gate cycle.
 4. After a green exact revision, obtain Frank's explicit approval before merge.
@@ -214,8 +221,9 @@ Before the next production TestFlight upload, Frank must verify or configure:
 
 ## Frank's decisions required
 
-No further decision is required for the completed local hardening or its
-publication to the assigned branch.
+No further decision is required for the completed local hardening, its
+publication to the assigned branch, or continued CI diagnosis and correction
+inside draft PR #51.
 
 Frank's action-time decision is required for:
 
