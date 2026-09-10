@@ -17,6 +17,7 @@ small local core with narrow adapters around it.
 | `UI` and gallery view | User interaction and presentation | Cryptographic algorithms or direct persistence formats |
 | `App` | Composition and lifecycle entry | Feature implementation details |
 | `AddOns/FileRecognition` | `.khvault` filename recognition and bounded ingress staging | Vault decryption, vault keys, protected content stores, application navigation |
+| `AddOns/BackupVerification` | Immutable archive-verification report values and read-only result presentation | Recovery credentials, vault keys, ciphertext, staging URLs, protected stores, archive parsing, installation, application navigation |
 | `AddOns/GeneralFileSupport` | Encrypted general-file records, manifests, blobs, and protected ingress/egress staging | Vault keys, photo storage, SwiftUI/UIKit, portable archive formats |
 | `AddOns/FolderPresentation` | Folder metadata, neutral content references, and encrypted presentation thumbnails | Vault keys, protected photo/file content, SwiftUI/UIKit, portable archive formats |
 | `UI/VaultGallery*` | Source-neutral grid layout, tile metadata, folder presentation, and selection behavior | Vault keys, ciphertext, protected stores, decryption, portable archive formats |
@@ -72,7 +73,20 @@ adapter.
 `KeyHollowFileRecognitionAddOn` recognizes the declared `.khvault` filename
 extension and creates a bounded, disposable ingress copy for the transfer
 coordinator. It does not authenticate or decrypt an archive, enumerate vaults,
-own a vault capability, or install content.
+own a vault capability, or install content. A private reference-owned cleanup
+lease follows every staged value across cancellation races. A process-scoped
+registry preserves live leases and removes only abandoned canonical UUID
+directories below the add-on-owned ingress root when a later ingress begins.
+
+`KeyHollowBackupVerificationAddOn` owns only immutable, sanitized verification
+report values and the read-only report presentation. The application stages a
+user-selected `.khvault` through File Recognition and asks TransferCore's one
+authenticated validator to verify it. TransferCore discards extracted staging
+before returning its sanitized result; the application then maps primitives
+into the add-on report. The add-on never receives a recovery credential,
+`ValidatedPortableVaultRestore`, vault payload or key, ciphertext, staging URL,
+store, session, restore journal, or installation capability. Removing it leaves
+archive export, import, restore, and local vault unlock unchanged.
 
 `KeyHollowGeneralFileSupportAddOn` owns a separate encrypted data root and
 manifest. It receives domain-separated seal/open operations through a narrow

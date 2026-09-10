@@ -4,6 +4,7 @@ import KeyHollowPhotoCore
 import KeyHollowVaultCore
 
 public enum EncryptedVaultTransferError: Error, Equatable {
+    case archiveCleanupFailed
     case archiveVerificationFailed
     case invalidDestination
     case invalidSourceVault
@@ -63,6 +64,19 @@ public struct EncryptedVaultExportReceipt: Equatable, Sendable {
     public let archiveID: UUID
     public let encryptedFileCount: Int
     public let archiveByteCount: UInt64
+}
+
+/// Sanitized results from authenticating a portable vault without installing it.
+///
+/// This value deliberately contains no vault identity, recovered key material,
+/// ciphertext location, staged payload, or installation capability.
+public struct PortableVaultVerificationReport: Equatable, Sendable {
+    public let authenticatedPhotoCount: Int
+    public let authenticatedFileCount: Int
+    public let authenticatedEntryCount: Int
+    public let sourceVaultCreatedAt: Date
+    public let catalogVersion: Int
+    public let legacyOversizedPhotoCount: Int
 }
 
 /// Process-scoped ownership for private archive-extraction directories.
@@ -162,6 +176,14 @@ fileprivate final class PortableArchiveWorkingDirectoryRegistry: @unchecked Send
                   !activeIdentifiers.contains(name) else {
                 continue
             }
+            let itemValues = try itemURL.resourceValues(forKeys: [
+                .isDirectoryKey,
+                .isSymbolicLinkKey
+            ])
+            guard itemValues.isDirectory == true,
+                  itemValues.isSymbolicLink != true else {
+                continue
+            }
             try FileManager.default.removeItem(at: itemURL)
         }
     }
@@ -221,10 +243,18 @@ public final class ValidatedPortableVaultRestore: @unchecked Sendable {
     }
 
     public func discard() {
+        try? discardChecked()
+    }
+
+    func discardChecked(
+        removing removeItem: (URL) throws -> Void = {
+            try FileManager.default.removeItem(at: $0)
+        }
+    ) throws {
         ownershipLock.lock()
         defer { ownershipLock.unlock() }
         guard ownsStagingDirectory else { return }
-        stagedPayload.discard()
+        try stagedPayload.discardChecked(removing: removeItem)
         ownsStagingDirectory = false
         workingDirectoryLease = nil
     }
@@ -458,33 +488,47 @@ public struct EncryptedVaultTransferCoordinator {
             supplementalContent: supplementalContent,
             keyDeriver: keyDeriver
         )
-        defer { verified.discard() }
+        let receipt: EncryptedVaultExportReceipt
+        do {
+            try Task.checkCancellation()
+            try access.checkAccess()
 
-        try Task.checkCancellation()
-        try access.checkAccess()
+            guard verified.archiveID == prepared.secrets.archiveID,
+                  verified.sourceVaultID == vaultID,
+                  verified.destinationVaultPayload.vaultKey == prepared.secrets.vaultKey,
+                  verified.catalog == source.catalog,
+                  verified.manifest.version == sourceManifest.version,
+                  verified.manifest.photos == sourceManifest.photos,
+                  verified.supplementalItemCount == supplementalInventory.itemCount else {
+                throw EncryptedVaultTransferError.archiveVerificationFailed
+            }
 
-        guard verified.archiveID == prepared.secrets.archiveID,
-              verified.sourceVaultID == vaultID,
-              verified.destinationVaultPayload.vaultKey == prepared.secrets.vaultKey,
-              verified.catalog == source.catalog,
-              verified.manifest.version == sourceManifest.version,
-              verified.manifest.photos == sourceManifest.photos,
-              verified.supplementalItemCount == supplementalInventory.itemCount else {
-            throw EncryptedVaultTransferError.archiveVerificationFailed
+            let attributes = try FileManager.default.attributesOfItem(atPath: destinationURL.path)
+            guard let size = attributes[.size] as? NSNumber else {
+                throw EncryptedVaultTransferError.archiveVerificationFailed
+            }
+
+            receipt = EncryptedVaultExportReceipt(
+                archiveURL: destinationURL,
+                archiveID: prepared.secrets.archiveID,
+                encryptedFileCount: source.catalog.entries.count,
+                archiveByteCount: size.uint64Value
+            )
+        } catch {
+            do {
+                try verified.discardChecked()
+            } catch {
+                throw EncryptedVaultTransferError.archiveCleanupFailed
+            }
+            throw error
         }
-
-        let attributes = try FileManager.default.attributesOfItem(atPath: destinationURL.path)
-        guard let size = attributes[.size] as? NSNumber else {
-            throw EncryptedVaultTransferError.archiveVerificationFailed
+        do {
+            try verified.discardChecked()
+        } catch {
+            throw EncryptedVaultTransferError.archiveCleanupFailed
         }
-
         exportSucceeded = true
-        return EncryptedVaultExportReceipt(
-            archiveURL: destinationURL,
-            archiveID: prepared.secrets.archiveID,
-            encryptedFileCount: source.catalog.entries.count,
-            archiveByteCount: size.uint64Value
-        )
+        return receipt
     }
 
     public func stageAndValidateRestore(
@@ -501,15 +545,25 @@ public struct EncryptedVaultTransferCoordinator {
         let extractor = try PortableArchivePayloadExtractor(
             stagingURL: workingDirectoryLease.directoryURL
         )
-        let reader = try PortableArchiveContainerReader(sourceURL: archiveURL)
-
-        let secrets = try reader.streamAuthenticatedContent(
-            credential: credential,
-            keyDeriver: keyDeriver
-        ) { chunk in
-            try extractor.receive(chunk)
+        let secrets: PortableArchiveSecrets
+        let stagedPayload: PortableArchiveStagedPayload
+        do {
+            let reader = try PortableArchiveContainerReader(sourceURL: archiveURL)
+            secrets = try reader.streamAuthenticatedContent(
+                credential: credential,
+                keyDeriver: keyDeriver
+            ) { chunk in
+                try extractor.receive(chunk)
+            }
+            stagedPayload = try extractor.finish()
+        } catch {
+            do {
+                try extractor.discardChecked()
+            } catch {
+                throw EncryptedVaultTransferError.archiveCleanupFailed
+            }
+            throw error
         }
-        let stagedPayload = try extractor.finish()
 
         do {
             let vaultKey = SymmetricKey(data: secrets.vaultKey)
@@ -593,9 +647,88 @@ public struct EncryptedVaultTransferCoordinator {
                 workingDirectoryLease: workingDirectoryLease
             )
         } catch {
-            stagedPayload.discard()
+            do {
+                try stagedPayload.discardChecked()
+            } catch {
+                throw EncryptedVaultTransferError.archiveCleanupFailed
+            }
             throw error
         }
+    }
+
+    /// Authenticates an archive through the restore validator, then destroys
+    /// its extracted staging before exposing a sanitized read-only result.
+    /// The returned report cannot be used to install or unlock a vault.
+    public func verifyArchive(
+        archiveURL: URL,
+        credential: PortableArchiveCredential,
+        workingRootOverride: URL? = nil,
+        supplementalContent: (any PortableVaultSupplementalContentProviding)? = nil,
+        keyDeriver: any PortableArchiveKeyDeriving = PortableArchiveArgon2idKeyDeriver()
+    ) async throws -> PortableVaultVerificationReport {
+        try await verifyArchive(
+            archiveURL: archiveURL,
+            credential: credential,
+            workingRootOverride: workingRootOverride,
+            supplementalContent: supplementalContent,
+            keyDeriver: keyDeriver,
+            discardStaging: { restore in
+                try restore.discardChecked()
+            }
+        )
+    }
+
+    func verifyArchive(
+        archiveURL: URL,
+        credential: PortableArchiveCredential,
+        workingRootOverride: URL? = nil,
+        supplementalContent: (any PortableVaultSupplementalContentProviding)? = nil,
+        keyDeriver: any PortableArchiveKeyDeriving = PortableArchiveArgon2idKeyDeriver(),
+        discardStaging: @Sendable (ValidatedPortableVaultRestore) throws -> Void
+    ) async throws -> PortableVaultVerificationReport {
+        try Task.checkCancellation()
+        let restore = try await stageAndValidateRestore(
+            archiveURL: archiveURL,
+            credential: credential,
+            workingRootOverride: workingRootOverride,
+            supplementalContent: supplementalContent,
+            keyDeriver: keyDeriver
+        )
+        var cleanupCompleted = false
+        defer {
+            if !cleanupCompleted {
+                restore.discard()
+            }
+        }
+
+        let report: PortableVaultVerificationReport
+        do {
+            try Task.checkCancellation()
+            report = PortableVaultVerificationReport(
+                authenticatedPhotoCount: restore.manifest.photos.count,
+                authenticatedFileCount: restore.supplementalItemCount,
+                authenticatedEntryCount: restore.catalog.entries.count,
+                sourceVaultCreatedAt: restore.sourceVaultCreatedAt,
+                catalogVersion: restore.catalog.version,
+                legacyOversizedPhotoCount: restore.legacyOversizedPhotoCount
+            )
+        } catch {
+            do {
+                try discardStaging(restore)
+            } catch {
+                throw EncryptedVaultTransferError.archiveCleanupFailed
+            }
+            cleanupCompleted = true
+            throw error
+        }
+        do {
+            try discardStaging(restore)
+        } catch {
+            throw EncryptedVaultTransferError.archiveCleanupFailed
+        }
+        cleanupCompleted = true
+        try Task.checkCancellation()
+        return report
     }
 
     static func validate(

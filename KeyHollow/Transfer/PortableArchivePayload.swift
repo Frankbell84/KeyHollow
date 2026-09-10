@@ -567,8 +567,28 @@ final class PortableArchiveStagedPayload {
     }
 
     func discard() {
+        try? discardChecked()
+    }
+
+    /// Verification uses this checked boundary so a success report is never
+    /// published while its extracted staging directory is known to remain.
+    /// Best-effort callers retain ownership after failure, allowing `deinit`
+    /// to make one final cleanup attempt.
+    func discardChecked(
+        removing removeItem: (URL) throws -> Void = {
+            try FileManager.default.removeItem(at: $0)
+        }
+    ) throws {
         guard ownsDirectory else { return }
-        try? FileManager.default.removeItem(at: directoryURL)
+        do {
+            try removeItem(directoryURL)
+        } catch {
+            let cocoaError = error as NSError
+            guard cocoaError.domain == NSCocoaErrorDomain,
+                  cocoaError.code == NSFileNoSuchFileError else {
+                throw error
+            }
+        }
         ownsDirectory = false
     }
 
@@ -747,10 +767,32 @@ final class PortableArchivePayloadExtractor {
     }
 
     deinit {
-        try? currentEntryHandle?.close()
-        if !relinquishedStagingDirectory {
-            try? FileManager.default.removeItem(at: stagingURL)
+        try? discardChecked()
+    }
+
+    /// Removes a partially extracted payload and reports failure so callers
+    /// can fail closed instead of losing the only cleanup signal. Ownership is
+    /// retained after a failed removal, allowing a later retry or `deinit`.
+    func discardChecked(
+        removing removeItem: (URL) throws -> Void = {
+            try FileManager.default.removeItem(at: $0)
         }
+    ) throws {
+        guard !relinquishedStagingDirectory else { return }
+        isFinished = true
+        try? currentEntryHandle?.close()
+        currentEntryHandle = nil
+        buffer.removeAll(keepingCapacity: false)
+        do {
+            try removeItem(stagingURL)
+        } catch {
+            let cocoaError = error as NSError
+            guard cocoaError.domain == NSCocoaErrorDomain,
+                  cocoaError.code == NSFileNoSuchFileError else {
+                throw error
+            }
+        }
+        relinquishedStagingDirectory = true
     }
 
     func receive(_ data: Data) throws {
@@ -945,11 +987,7 @@ final class PortableArchivePayloadExtractor {
     }
 
     private func failAndCleanUp() {
-        isFinished = true
-        try? currentEntryHandle?.close()
-        currentEntryHandle = nil
-        buffer.removeAll(keepingCapacity: false)
-        try? FileManager.default.removeItem(at: stagingURL)
+        try? discardChecked()
     }
 }
 

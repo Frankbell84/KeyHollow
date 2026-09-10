@@ -136,6 +136,26 @@ final class PhaseTwoSecurityTests: XCTestCase {
     }
 
     @MainActor
+    func testOneProtectedTaskCanBeCancelledAndAwaitedThroughCleanup() async throws {
+        let session = VaultSession()
+        let started = expectation(description: "protected work started")
+        var cleanupFinished = false
+        let taskID = session.startProtectedTask {
+            started.fulfill()
+            do {
+                try await Task.sleep(for: .seconds(30))
+            } catch {}
+            XCTAssertTrue(Task.isCancelled)
+            cleanupFinished = true
+        }
+        await fulfillment(of: [started])
+
+        await session.cancelSensitiveTaskAndWait(taskID)
+
+        XCTAssertTrue(cleanupFinished)
+    }
+
+    @MainActor
     func testVaultSwitchPublishesNewAccessOnlyAfterOldCleanupFinishes() async throws {
         let session = VaultSession()
         let oldVaultID = UUID()

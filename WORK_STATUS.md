@@ -7,38 +7,30 @@ evidence remains in `docs/PROJECT_CHECKPOINT.md`.
 
 ## Provenance
 
-- Current branch: `hardening/post-build39-baseline`
-- Hardening start commit:
-  `73471b6ef72308d737d205f0c0258f590df72948`
-- Published hardening implementation commit:
-  `15d73abedb191e3d0e63b7da68d1a13e70ae10d0`
-- Published hardening checkpoint:
-  `6e60b9daf8b0f345200fa0cc01d5d2663adc2c4c`
-- Reviewed draft-PR submission head:
-  `42086651719f92e4001c26ef1e7b1e3c590bc0d6`
-- Latest published operational checkpoint before the CI correction:
-  `d48d27a87808caea8a014c8e851b5770a59d174a`
-- Published compile-correction head:
-  `a4906c880bba3e9dc9cf3d2af607f3733b267801`
-- Published post-revocation test-oracle correction head:
-  `239bd1da7a90327727882ddb669e44b9bcf370f9`
-- Published archive-compatibility test correction head:
-  `437f4f2b0210daa98faadc439fbbc1c3770ba7f7`
-- Published final repository-hardening checkpoint:
-  `f00687d7896be8f65b7dbdd29ab7bc9087b9d358`
-- Fully green exact-correction-head CI run:
-  [#34469885087](https://github.com/Frankbell84/KeyHollow/actions/runs/34469885087).
-- Fully green exact-final-checkpoint CI run:
-  [#34472545516](https://github.com/Frankbell84/KeyHollow/actions/runs/34472545516).
+- Current branch: `feature/backup-verification-center`
+- Published phase-entry checkpoint: `6abc6ed`.
+- Published implementation checkpoint:
+  `d6d87f39f0c5fee35f7cc05333955ef86046cb7e`.
+- Published implementation-status head:
+  `488efb5fb3387bc04916b9a7fd91d3196f4a4e90`.
+- Fully green exact implementation-status-head CI run:
+  [#34509180786](https://github.com/Frankbell84/KeyHollow/actions/runs/34509180786).
 - Draft review:
-  [PR #51](https://github.com/Frankbell84/KeyHollow/pull/51), targeting
-  refreshed `main` from `hardening/post-build39-baseline`.
-- Initial exact-submission-head CI run:
-  [#34464405249](https://github.com/Frankbell84/KeyHollow/actions/runs/34464405249),
-  superseded and automatically cancelled when the required operational
-  checkpoint advanced the PR head.
-- First exact-checkpoint-head CI run:
-  [#34464715632](https://github.com/Frankbell84/KeyHollow/actions/runs/34464715632).
+  [PR #52](https://github.com/Frankbell84/KeyHollow/pull/52), targeting exact
+  baseline `0cdf04acce06fd402780eb2857e977a6872fe572` from
+  `feature/backup-verification-center`.
+- Exact protected-main baseline:
+  `0cdf04acce06fd402780eb2857e977a6872fe572`
+- Baseline tree:
+  `8da1ef0a7d7264ecc1e78382ff8e59ac8b75e2ee`
+- PR [#51](https://github.com/Frankbell84/KeyHollow/pull/51) merged the
+  exact hardening head
+  `b07842126ce4b7a2cf5c478a456fea2c49b38cc6` through a regular merge commit.
+- The merge tree is byte-for-byte identical to the approved hardening tree.
+- Exact merged-main CI run:
+  [#34490248191](https://github.com/Frankbell84/KeyHollow/actions/runs/34490248191)
+  passed build-and-test and Swift CodeQL with zero annotations and no new
+  security alerts.
 - Exact signed Build 39 source:
   `f654390ccf45bf7448952be787874a7c3e4f8206`
 - Build 39 signed-upload workflow:
@@ -49,22 +41,78 @@ evidence remains in `docs/PROJECT_CHECKPOINT.md`.
 - Product version remains 1.0, Build 39.
 - Frank verified Build 39 in App Store Connect and assigned it only to
   `KeyHollow Internal`.
-- Refreshed `origin/main` is
-  `3df3e1c729d1829a6aa3f534c9014ba4ee3af2a6`, the accepted Build 38 merge.
-  Build 39 and this hardening revision are not merged into `main`.
+- Encrypted Video Support and the post-Build-39 hardening revision are now in
+  `main` through `0cdf04a`.
 - No binary has been signed, uploaded, assigned to testers, or submitted from
-  this hardening branch.
+  this new feature branch.
 
 ## Current task
 
-Publish the completed durable Codex managed-runtime/Git-helper repair record,
-preserve draft PR #51 without merge or release action, require the resulting
-exact documentation head to retain the complete green workflow, and then
-present that exact revision to Frank for a separate merge decision.
+Finalize the verified Backup Verification Center checkpoint on exact
+implementation-status head `488efb5fb3387bc04916b9a7fd91d3196f4a4e90`,
+preserve draft PR #52 without merge or release action, publish one status-only
+operational checkpoint, and require that new exact documentation head to retain
+the complete green workflow before presenting it for Frank's separate merge
+decision.
 
 ## Completed work
 
-The published hardening implementation now includes:
+Implementation, local hardening, and exact-source CI are complete:
+
+- Added a TransferCore verify-and-discard facade over the existing authenticated
+  restore validator. It returns only primitive counts, source creation time,
+  payload-catalog version, and explicit legacy limitations after checked
+  extraction cleanup succeeds.
+- Closed every post-extraction exit: export failure, export success,
+  verification cancellation, validation failure, and partial extraction now
+  cross checked cleanup, and a cleanup failure takes precedence over publishing
+  success or a less actionable cancellation result.
+- Added the independently compiled `KeyHollowBackupVerificationAddOn`, with no
+  dependency on core, session, storage, transfer, or application targets.
+- Added one application-owned verification flow reachable from both the locked
+  home screen and the unlocked vault menu. It uses protected `.khvault` ingress,
+  clears the recovery credential, reports progress, cancels on lifecycle
+  transitions, and cannot install or unlock a vault.
+- Hardened File Recognition staging with checked idempotent cleanup, shared
+  reference ownership, active-operation preservation, and canonical-only stale
+  ingress recovery after interruption or restart-and-retry.
+- Restricted both transfer-working and file-ingress stale recovery to inactive,
+  canonical, real directories; canonical-named regular files and symbolic links
+  are preserved and covered by regression tests.
+- Hardened manual and forced dismissal so protected work is canceled before
+  ownership is released, while user-driven dismissal awaits terminal cleanup.
+- Reused the same verification facade for the existing import preview so there
+  is still one authenticated archive-validation path.
+- Added current photo-only, file-only, mixed, and video-as-file coverage; legacy
+  v1 photo and v2 general-file compatibility fixtures; wrong-credential,
+  corrupted, truncated, cancellation, cleanup-failure, repeat/immutability,
+  live-lease, and abandoned-ingress recovery tests.
+- Added source-enforced gates for exact target ownership, allowed imports,
+  sanitized report fields, verify-before-publish ordering, checked cleanup,
+  lifecycle generation guards, background staging, and denial of install,
+  unlock, export, credential-store, or direct-filesystem capabilities.
+
+Phase entry was completed first:
+
+- Re-fetched `origin/main`, verified the exact post-merge commit and tree, and
+  created this single-purpose feature branch directly from that baseline.
+- Reconciled the historical roadmap, later decisions, and architecture
+  addendum. Frank's confirmed next feature is Backup Verification Center; the
+  addendum's broader Backup & Sync Center remains later work.
+- Mapped the safe reuse seam to
+  `EncryptedVaultTransferCoordinator.stageAndValidateRestore`. The existing
+  import screen already proves verify-then-discard behavior, but its
+  `ValidatedPortableVaultRestore` contains recovered vault material and must
+  never cross into the add-on or SwiftUI state.
+- Selected an additive design: a TransferCore-owned verify-and-discard facade,
+  a dependency-light compiled report/presentation add-on, and app-owned file
+  ingress plus lifecycle coordination.
+- Confirmed the report must disclose that current archives preserve photos and
+  general files but not folder names or membership.
+- The merged baseline remains modular and all local architecture, release,
+  workflow-security, privacy, and release-verifier preflight checks pass.
+
+The inherited published hardening implementation includes:
 
 - Bounded archive catalogs, entries, frames, payloads, manifests, batches,
   filenames, content-type identifiers, and temporary working areas.
@@ -180,16 +228,18 @@ Passed on the published Windows worktree:
 - Git whitespace and patch-integrity check
 - Conflict-marker and tracked credential/private-key scans
 
+The current Backup Verification Center implementation also passes every local
+gate above, including the expanded architecture rules and Git patch-integrity
+check. The new Swift test matrix is present but cannot execute on Windows.
+
 Repository checks found no reachable Git corruption. `git fsck` reported only
 ordinary unreachable objects and a zero-byte empty worktree `refs` directory
 warning; neither affects reachable source history. The temporary
 `.helper-test` directory was verified empty and removed non-recursively.
 
-These Windows checks cannot compile Swift or run iOS tests. Exact-source
-macOS/Xcode 26.0.1 compilation, strict-concurrency diagnostics, the complete
-XCTest/security/lifecycle suite, packaged-resource verification, Darwin
-filesystem behavior, and Swift CodeQL remain mandatory. Build 39's green
-evidence proves the released base, not this new hardening diff.
+Windows still cannot reproduce the macOS/iOS toolchain locally. The exact
+PR-head evidence below now proves this feature revision; the single status-only
+documentation head must retain the same complete workflow.
 
 Draft PR #51 was opened from exact reviewed head
 `42086651719f92e4001c26ef1e7b1e3c590bc0d6`. Its initial run
@@ -254,6 +304,21 @@ successfully. Its build-and-test job, Swift CodeQL job, pull-request security
 result, and both artifact uploads passed with zero annotations and no new
 alerts.
 
+The authoritative Backup Verification Center run
+[#34509180786](https://github.com/Frankbell84/KeyHollow/actions/runs/34509180786)
+on exact commit `488efb5fb3387bc04916b9a7fd91d3196f4a4e90` completed
+successfully for draft PR #52. `build-and-test` passed every preflight gate,
+project generation, simulator build, packaged-resource verification, the
+complete security/lifecycle XCTest suite, and both artifact uploads. Swift
+CodeQL passed; the separate pull-request security result reported no new alerts
+in code changed by PR #52. All three check runs completed with zero annotations.
+Retained run artifacts are:
+
+- `KeyHollow-Security-Tests` artifact `10165399849`, SHA-256
+  `d807f1abef8f8881b1679374cb07f756111e12f1f48a4e4e5503ea76d07379e7`.
+- `KeyHollow-Simulator` artifact `10165393728`, SHA-256
+  `64910e65840ca0af9a08ba043eccfe3b33c53cec96b079d1de98e07ab64ef4a1`.
+
 ## Git helper status
 
 The Codex managed-runtime/Git-helper repair is complete and durable across two
@@ -287,18 +352,13 @@ corruption, and it is no longer an active blocker.
 
 ## Blockers
 
-There is no open P1/P2 review finding, known production-code defect, failed
-required repository check, or active Git-helper blocker. The compatibility-
-preserving correction and its final status checkpoint passed the complete
-exact-head workflow.
-
-Remaining proof and external-control blockers are:
-
-- GitHub's live production environment, branch protection, required checks,
-  code-owner review, and secret placement cannot be proven by repository files.
-- Physical-device regression testing is required after a future TestFlight
-  build.
-- External TestFlight and App Store prerequisites remain incomplete.
+There is no open P1/P2 review finding, known production-code defect, active
+Git-helper blocker, or failed required repository check on the Backup
+Verification Center implementation. Exact implementation-status head
+`488efb5fb3387bc04916b9a7fd91d3196f4a4e90` passed the complete workflow. The
+only remaining repository proof is the one status-only documentation head;
+physical-device testing remains mandatory after any separately approved
+merged-main upload.
 
 ## Required external GitHub controls
 
@@ -328,23 +388,25 @@ Before the next production TestFlight upload, Frank must verify or configure:
 
 ## Next action
 
-1. Publish this completed helper-repair checkpoint to draft PR #51 and require
-   its exact head to retain the complete green workflow.
-2. Recheck the clean synchronized branch and present the exact green revision
+1. Publish this one final operational checkpoint to draft PR #52 and require
+   its status-only exact head to retain the complete green workflow.
+2. Recheck the clean synchronized branch and present that exact green revision
    to Frank for explicit merge approval.
 3. Require the eventual merged `main` commit to pass the same complete gates.
-4. Stop before signed upload, tester assignment, or App Store action until a
-   full commit SHA, unused build number, and tester group are authorized.
+4. Stop before signing, upload, tester assignment, or App Store action until a
+   full commit SHA, unused build number, and tester group are separately
+   authorized.
 
 ## Frank's decisions required
 
-No further decision is required for recording this completed hardening
-checkpoint or the now-verified durable Git-helper repair. Frank must later
-explicitly approve the exact verified revision before merge.
+No further decision is required for recording this one completed feature
+checkpoint or verifying its exact-head CI. Frank must later explicitly approve
+the exact verified revision before merge.
 
 Frank's action-time decision is required for:
 
-- Approving and merging the exact hardening revision into `main`.
+- Approving and merging the exact Backup Verification Center revision into
+  `main` after all gates pass.
 - Creating or changing GitHub environments, branch protection, reviewers, or
   secrets.
 - Retiring or deleting historical remote release branches or secrets.

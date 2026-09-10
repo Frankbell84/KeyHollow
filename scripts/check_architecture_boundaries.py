@@ -12,6 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SOURCE_ROOT = ROOT / "KeyHollow"
 PROJECT_FILE = ROOT / "project.yml"
 ADDON_ROOT = SOURCE_ROOT / "AddOns"
+BACKUP_VERIFICATION_ROOT = ADDON_ROOT / "BackupVerification"
 ENCRYPTED_VIDEO_ROOT = ADDON_ROOT / "EncryptedVideo"
 THUMBNAIL_EXTENSION_ROOT = ROOT / "KeyHollowVaultThumbnailExtension"
 
@@ -23,6 +24,7 @@ PRESENTATION_FILES = {
 PRESENTATION_PREFIXES = (
     "KeyHollow/UI/",
     "KeyHollow/AddOns/EncryptedVideo/",
+    "KeyHollow/AddOns/BackupVerification/",
     "KeyHollow/AddOns/SecurePreview/",
 )
 
@@ -89,6 +91,7 @@ GALLERY_UI_MODULE_FILES = {
     "KeyHollow/UI/VaultGallerySelection.swift",
 }
 FILE_RECOGNITION_PREFIX = "KeyHollow/AddOns/FileRecognition/"
+BACKUP_VERIFICATION_PREFIX = "KeyHollow/AddOns/BackupVerification/"
 GENERAL_FILE_SUPPORT_PREFIX = "KeyHollow/AddOns/GeneralFileSupport/"
 SECURE_PREVIEW_PREFIX = "KeyHollow/AddOns/SecurePreview/"
 ENCRYPTED_VIDEO_PREFIX = "KeyHollow/AddOns/EncryptedVideo/"
@@ -96,6 +99,19 @@ ENCRYPTED_VIDEO_MODULE_FILES = {
     "KeyHollow/AddOns/EncryptedVideo/VaultEncryptedVideoPlayerView.swift",
     "KeyHollow/AddOns/EncryptedVideo/VaultEncryptedVideoPolicy.swift",
     "KeyHollow/AddOns/EncryptedVideo/VaultEncryptedVideoThumbnailRenderer.swift",
+}
+BACKUP_VERIFICATION_MODULE_FILES = {
+    "KeyHollow/AddOns/BackupVerification/BackupVerificationReport.swift",
+    "KeyHollow/AddOns/BackupVerification/BackupVerificationReportView.swift",
+}
+BACKUP_VERIFICATION_IMPORTS = {
+    "KeyHollow/AddOns/BackupVerification/BackupVerificationReport.swift": {
+        "Foundation",
+    },
+    "KeyHollow/AddOns/BackupVerification/BackupVerificationReportView.swift": {
+        "Foundation",
+        "SwiftUI",
+    },
 }
 ENCRYPTED_VIDEO_IMPORTS = {
     "KeyHollow/AddOns/EncryptedVideo/VaultEncryptedVideoPlayerView.swift": {
@@ -611,6 +627,117 @@ def main() -> int:
             f"got {sorted(encrypted_video_sources)}"
         )
 
+    backup_verification_target = target_body(
+        project,
+        "KeyHollowBackupVerificationAddOn",
+    )
+    backup_verification_target_count = len(
+        re.findall(r"(?m)^  KeyHollowBackupVerificationAddOn:\s*$", project)
+    )
+    if backup_verification_target is None:
+        violations.append(
+            "project.yml: KeyHollowBackupVerificationAddOn target is missing"
+        )
+    else:
+        if backup_verification_target_count != 1:
+            violations.append(
+                "project.yml: expected exactly one "
+                "KeyHollowBackupVerificationAddOn target, found "
+                f"{backup_verification_target_count}"
+            )
+
+        expected_sources = {"KeyHollow/AddOns/BackupVerification"}
+        declared_sources = set(
+            re.findall(
+                r"(?m)^      - path: ([^\r\n]+)$",
+                backup_verification_target,
+            )
+        )
+        if declared_sources != expected_sources:
+            violations.append(
+                "project.yml: KeyHollowBackupVerificationAddOn source ownership "
+                f"changed; expected {sorted(expected_sources)}, "
+                f"got {sorted(declared_sources)}"
+            )
+
+        for marker in (
+            "type: library.static",
+            "platform: iOS",
+            "PRODUCT_NAME: KeyHollowBackupVerificationAddOn",
+            "SWIFT_STRICT_CONCURRENCY: complete",
+            "SWIFT_TREAT_WARNINGS_AS_ERRORS: YES",
+            "DEFINES_MODULE: YES",
+            "SKIP_INSTALL: YES",
+        ):
+            if marker not in backup_verification_target:
+                violations.append(
+                    "project.yml: KeyHollowBackupVerificationAddOn is missing "
+                    f"{marker!r}"
+                )
+
+        if re.search(
+            r"(?m)^    dependencies:\s*$",
+            backup_verification_target,
+        ):
+            violations.append(
+                "project.yml: KeyHollowBackupVerificationAddOn must remain "
+                "dependency-free; compose protected capabilities in the app"
+            )
+
+    if app_target is not None:
+        app_verification_dependencies = re.findall(
+            r"(?m)^      - target: KeyHollowBackupVerificationAddOn\s*$",
+            app_target,
+        )
+        if len(app_verification_dependencies) != 1:
+            violations.append(
+                "project.yml: KeyHollow must compose "
+                "KeyHollowBackupVerificationAddOn exactly once"
+            )
+
+        app_verification_exclusions = re.findall(
+            r"(?m)^          - AddOns/BackupVerification\s*$",
+            app_target,
+        )
+        if len(app_verification_exclusions) != 1:
+            violations.append(
+                "project.yml: KeyHollow must exclude AddOns/BackupVerification "
+                "exactly once so those sources compile only in the add-on"
+            )
+
+    if tests_target is not None:
+        test_verification_wiring = re.findall(
+            r"(?m)^      - target: KeyHollowBackupVerificationAddOn\s*$\n"
+            r"^        link: false\s*$",
+            tests_target,
+        )
+        if len(test_verification_wiring) != 1:
+            violations.append(
+                "project.yml: KeyHollowTests must depend on "
+                "KeyHollowBackupVerificationAddOn exactly once with link: false"
+            )
+
+    if project.count("        KeyHollowBackupVerificationAddOn: all") != 1:
+        violations.append(
+            "project.yml: KeyHollow scheme must build "
+            "KeyHollowBackupVerificationAddOn exactly once"
+        )
+
+    backup_verification_sources = (
+        {
+            relative(path)
+            for path in BACKUP_VERIFICATION_ROOT.rglob("*.swift")
+        }
+        if BACKUP_VERIFICATION_ROOT.exists()
+        else set()
+    )
+    if backup_verification_sources != BACKUP_VERIFICATION_MODULE_FILES:
+        violations.append(
+            "KeyHollow/AddOns/BackupVerification: source ownership changed; "
+            f"expected {sorted(BACKUP_VERIFICATION_MODULE_FILES)}, "
+            f"got {sorted(backup_verification_sources)}"
+        )
+
     general_file_models_source = (
         SOURCE_ROOT / "AddOns" / "GeneralFileSupport" / "GeneralFileModels.swift"
     ).read_text(encoding="utf-8")
@@ -719,6 +846,27 @@ def main() -> int:
         violations.append(
             "KeyHollow/Session/VaultSession.swift: awaited sensitive work "
             "must register before execution, propagate cancellation, and await cleanup"
+        )
+
+    cancel_and_wait_start = session_source.find(
+        "func cancelSensitiveTaskAndWait("
+    )
+    protected_task_start = session_source.find(
+        "func startProtectedTask(",
+        cancel_and_wait_start,
+    )
+    cancel_and_wait_source = session_source[
+        cancel_and_wait_start:protected_task_start
+    ]
+    if not (
+        cancel_and_wait_start >= 0
+        and protected_task_start > cancel_and_wait_start
+        and 0 <= cancel_and_wait_source.find("task.cancel()")
+        < cancel_and_wait_source.find("await task.value")
+    ):
+        violations.append(
+            "KeyHollow/Session/VaultSession.swift: per-task dismissal must "
+            "cancel and then await terminal cleanup"
         )
 
     lock_start = session_source.find("func lock() -> VaultSessionLockBarrier")
@@ -864,19 +1012,334 @@ def main() -> int:
     if not contains_in_order(
         file_ingress_source,
         (
+            "private let cleanupLease: StagedVaultFileCleanupLease",
+            "directoryLease: VaultFileIngressDirectoryLease",
+            "cleanupLease = StagedVaultFileCleanupLease(directoryLease: directoryLease)",
+            "public func discard(using fileManager: FileManager = .default)",
+            "try? discardChecked(using: fileManager)",
+            "public func discardChecked(using fileManager: FileManager = .default) throws",
+            "try cleanupLease.discardChecked(using: fileManager)",
+            "private final class StagedVaultFileCleanupLease: @unchecked Sendable",
             "private let cleanupRoot: URL",
-            "try? fileManager.removeItem(at: cleanupRoot)",
-            "cleanupRoot: importRoot",
+            "private var directoryLease: VaultFileIngressDirectoryLease?",
+            "deinit",
+            "try? discardChecked()",
+            "func discardChecked(using fileManager: FileManager = .default) throws",
+            "guard ownsCleanupRoot else { return }",
+            "try fileManager.removeItem(at: cleanupRoot)",
+            "cocoaError.code == NSFileNoSuchFileError",
+            "ownsCleanupRoot = false",
+            "directoryLease = nil",
+            "fileprivate final class VaultFileIngressDirectoryRegistry: @unchecked Sendable",
+            "try removeAbandonedItems(",
+            "preserving: activeIdentifiersByRoot[rootKey] ?? []",
+            "guard Self.isCanonicalIngressIdentifier(name)",
+            "!activeIdentifiers.contains(name)",
+            "let itemValues = try itemURL.resourceValues(forKeys:",
+            "guard itemValues.isDirectory == true",
+            "itemValues.isSymbolicLink != true",
+            "try fileManager.removeItem(at: itemURL)",
+            "let directoryLease = try VaultFileIngressDirectoryRegistry.shared.acquire(",
+            "let importRoot = directoryLease.directoryURL",
+            "directoryLease: directoryLease",
         ),
     ):
         violations.append(
             "KeyHollow/AddOns/FileRecognition/VaultFileRecognizer.swift: "
-            "staged-vault cleanup must remain bound to the ingress-owned lease root"
+            "checked staged-vault cleanup must remain idempotent and bound to "
+            "the ingress-owned lease root"
+        )
+    if "try? fileManager.removeItem(at: cleanupRoot)" in file_ingress_source:
+        violations.append(
+            "KeyHollow/AddOns/FileRecognition/VaultFileRecognizer.swift: "
+            "best-effort cleanup must delegate to discardChecked instead of "
+            "bypassing the checked cleanup contract"
         )
     if "removeItem(at: url.deletingLastPathComponent())" in file_ingress_source:
         violations.append(
             "KeyHollow/AddOns/FileRecognition/VaultFileRecognizer.swift: "
             "staged-vault cleanup must not derive a deletion target from a public URL"
+        )
+
+    payload_source = (
+        SOURCE_ROOT / "Transfer" / "PortableArchivePayload.swift"
+    ).read_text(encoding="utf-8")
+    extractor_start = payload_source.find("final class PortableArchivePayloadExtractor")
+    extractor_end = payload_source.find(
+        "private func decodePayloadUInt32",
+        extractor_start,
+    )
+    extractor_source = payload_source[extractor_start:extractor_end]
+    if not contains_in_order(
+        extractor_source,
+        (
+            "deinit",
+            "try? discardChecked()",
+            "func discardChecked(",
+            "guard !relinquishedStagingDirectory else { return }",
+            "try removeItem(stagingURL)",
+            "cocoaError.code == NSFileNoSuchFileError",
+            "relinquishedStagingDirectory = true",
+            "private func failAndCleanUp()",
+            "try? discardChecked()",
+        ),
+    ):
+        violations.append(
+            "KeyHollow/Transfer/PortableArchivePayload.swift: partial archive "
+            "extraction must retain ownership after failed checked cleanup and "
+            "retry cleanup on best-effort failure paths"
+        )
+    if "try? FileManager.default.removeItem(at: stagingURL)" in extractor_source:
+        violations.append(
+            "KeyHollow/Transfer/PortableArchivePayload.swift: extractor cleanup "
+            "must delegate to the checked ownership boundary"
+        )
+
+    transfer_coordinator_source = (
+        SOURCE_ROOT / "Transfer" / "EncryptedVaultTransferCoordinator.swift"
+    ).read_text(encoding="utf-8")
+    working_registry_start = transfer_coordinator_source.find(
+        "fileprivate final class PortableArchiveWorkingDirectoryRegistry"
+    )
+    working_registry_end = transfer_coordinator_source.find(
+        "/// Validation results are immutable.",
+        working_registry_start,
+    )
+    working_registry_source = transfer_coordinator_source[
+        working_registry_start:working_registry_end
+    ]
+    if not contains_in_order(
+        working_registry_source,
+        (
+            "guard Self.isCanonicalWorkingIdentifier(name)",
+            "!activeIdentifiers.contains(name)",
+            "let itemValues = try itemURL.resourceValues(forKeys:",
+            "guard itemValues.isDirectory == true",
+            "itemValues.isSymbolicLink != true",
+            "try FileManager.default.removeItem(at: itemURL)",
+        ),
+    ):
+        violations.append(
+            "KeyHollow/Transfer/EncryptedVaultTransferCoordinator.swift: stale "
+            "working cleanup must remove only inactive canonical real directories"
+        )
+    export_start = transfer_coordinator_source.find("public func exportVault(")
+    restore_start = transfer_coordinator_source.find(
+        "public func stageAndValidateRestore(",
+        export_start,
+    )
+    export_source = transfer_coordinator_source[export_start:restore_start]
+    validation_end = transfer_coordinator_source.find(
+        "/// Authenticates an archive through the restore validator",
+        restore_start,
+    )
+    restore_source = transfer_coordinator_source[restore_start:validation_end]
+    if not contains_in_order(
+        restore_source,
+        (
+            "let extractor = try PortableArchivePayloadExtractor(",
+            "try extractor.discardChecked()",
+            "throw EncryptedVaultTransferError.archiveCleanupFailed",
+            "try stagedPayload.discardChecked()",
+            "throw EncryptedVaultTransferError.archiveCleanupFailed",
+        ),
+    ):
+        violations.append(
+            "KeyHollow/Transfer/EncryptedVaultTransferCoordinator.swift: restore "
+            "validation must surface failed checked cleanup before and after "
+            "payload extraction completes"
+        )
+    if (
+        "defer { verified.discard() }" in export_source
+        or export_source.count("try verified.discardChecked()") < 2
+        or export_source.find("try verified.discardChecked()")
+        > export_source.find("exportSucceeded = true")
+    ):
+        violations.append(
+            "KeyHollow/Transfer/EncryptedVaultTransferCoordinator.swift: export "
+            "verification staging must be removed through checked cleanup on "
+            "both failure and success paths before success is published"
+        )
+    verification_start = transfer_coordinator_source.find(
+        "public func verifyArchive("
+    )
+    verification_end = transfer_coordinator_source.find(
+        "static func validate(",
+        verification_start,
+    )
+    verification_source = transfer_coordinator_source[
+        verification_start:verification_end
+    ]
+    for required in (
+        "public struct PortableVaultVerificationReport: Equatable, Sendable",
+        "public func verifyArchive(",
+        "let restore = try await stageAndValidateRestore(",
+        "restore.discard()",
+        "try discardStaging(restore)",
+        "try Task.checkCancellation()",
+        "report = PortableVaultVerificationReport(",
+        "return report",
+    ):
+        if required not in transfer_coordinator_source:
+            violations.append(
+                "KeyHollow/Transfer/EncryptedVaultTransferCoordinator.swift: "
+                f"verify-and-discard facade is missing {required!r}"
+            )
+    if not (
+        verification_start >= 0
+        and verification_end > verification_start
+        and verification_source.find("stageAndValidateRestore(")
+        < verification_source.find("restore.discard()")
+        < verification_source.find("try discardStaging(restore)")
+        < verification_source.find("return report")
+    ):
+        violations.append(
+            "KeyHollow/Transfer/EncryptedVaultTransferCoordinator.swift: "
+            "backup verification must validate, arm cleanup, and only then "
+            "publish a sanitized report"
+        )
+    if verification_source.count("try discardStaging(restore)") < 2:
+        violations.append(
+            "KeyHollow/Transfer/EncryptedVaultTransferCoordinator.swift: "
+            "verification cancellation and success must both cross the checked "
+            "staging-cleanup boundary"
+        )
+    for forbidden_verification_capability in (
+        "PortableVaultCredentialStoring",
+        "VaultStore",
+        "PortableVaultRestoreTransactionJournal",
+        "installValidatedPortableVault(",
+        "commit(",
+    ):
+        if forbidden_verification_capability in verification_source:
+            violations.append(
+                "KeyHollow/Transfer/EncryptedVaultTransferCoordinator.swift: "
+                "verify-and-discard facade gained persistence/install capability "
+                f"{forbidden_verification_capability}"
+            )
+    for forbidden_result_field in (
+        "vaultID:",
+        "vaultKey:",
+        "payload:",
+        "staging",
+        "archiveURL:",
+    ):
+        report_start = transfer_coordinator_source.find(
+            "public struct PortableVaultVerificationReport"
+        )
+        report_end = transfer_coordinator_source.find("}\n", report_start)
+        report_source = transfer_coordinator_source[report_start:report_end]
+        if forbidden_result_field in report_source:
+            violations.append(
+                "KeyHollow/Transfer/EncryptedVaultTransferCoordinator.swift: "
+                "sanitized verification report exposes forbidden field "
+                f"{forbidden_result_field!r}"
+            )
+
+    verification_ui_source = (
+        SOURCE_ROOT / "UI" / "BackupVerificationCenterView.swift"
+    ).read_text(encoding="utf-8")
+    for required in (
+        "import KeyHollowBackupVerificationAddOn",
+        "import KeyHollowFileRecognitionAddOn",
+        "import KeyHollowTransferCore",
+        "KHVaultFileIngress().stageIfRecognized(",
+        "session.startProtectedTask",
+        "EncryptedVaultTransferCoordinator().verifyArchive(",
+        "BackupVerificationReport(",
+        "try selectedArchive.discardChecked()",
+        "throw BackupVerificationCoordinatorError.ingressCleanupFailed",
+        "discardSelectedArchive()",
+        "private func discardSelectedArchiveChecked() throws",
+        "private static func discardChecked(_ archive: StagedVaultFile) -> Bool",
+        "activePickerRequestID",
+        "filePickerDidDismiss",
+        "Task.detached(priority: .userInitiated)",
+        "await session.cancelSensitiveTaskAndWait(taskID)",
+    ):
+        if required not in verification_ui_source:
+            violations.append(
+                "KeyHollow/UI/BackupVerificationCenterView.swift: "
+                f"read-only verification composition is missing {required!r}"
+            )
+
+    verification_action_start = verification_ui_source.find(
+        "private func verifyBackup()"
+    )
+    verification_action_end = verification_ui_source.find(
+        "private func finishProtectedOperation(",
+        verification_action_start,
+    )
+    verification_action_source = verification_ui_source[
+        verification_action_start:verification_action_end
+    ]
+    if not (
+        verification_action_start >= 0
+        and verification_action_end > verification_action_start
+        and 0
+        <= verification_action_source.find(
+            "EncryptedVaultTransferCoordinator().verifyArchive("
+        )
+        < verification_action_source.find(
+            "let sanitizedReport = BackupVerificationReport("
+        )
+        < verification_action_source.find("try selectedArchive.discardChecked()")
+        < verification_action_source.find("guard activeOperationID == operationID")
+        < verification_action_source.find("report = sanitizedReport")
+    ):
+        violations.append(
+            "KeyHollow/UI/BackupVerificationCenterView.swift: successful backup "
+            "verification must authenticate, sanitize, complete checked ingress "
+            "cleanup, and only then publish the report"
+        )
+    for forbidden_install_capability in (
+        "stageAndValidateRestore(",
+        "installValidatedPortableVault(",
+        "installRestore(",
+        "completeUnlock(",
+        "ValidatedPortableVaultRestore",
+        "PortableVaultRestoreInstaller",
+        "PortableVaultRestoreTransactionJournal",
+        "PortableVaultCredentialStoring",
+        "VaultUnlockService",
+        "preparePortableArchive(",
+        "FileManager",
+        "Data(contentsOf:",
+        "copyItem(",
+        "moveItem(",
+        "removeItem(",
+    ):
+        if forbidden_install_capability in verification_ui_source:
+            violations.append(
+                "KeyHollow/UI/BackupVerificationCenterView.swift: read-only "
+                "verification UI gained install/unlock capability "
+                f"{forbidden_install_capability}"
+            )
+
+    import_ui_source = (
+        SOURCE_ROOT / "UI" / "EncryptedVaultImportView.swift"
+    ).read_text(encoding="utf-8")
+    import_validation_start = import_ui_source.find(
+        "private func validateArchive()"
+    )
+    import_install_start = import_ui_source.find(
+        "private func installRestore()",
+        import_validation_start,
+    )
+    import_validation_source = import_ui_source[
+        import_validation_start:import_install_start
+    ]
+    if (
+        import_validation_start < 0
+        or import_install_start <= import_validation_start
+        or "EncryptedVaultTransferCoordinator().verifyArchive("
+        not in import_validation_source
+        or "stageAndValidateRestore(" in import_validation_source
+    ):
+        violations.append(
+            "KeyHollow/UI/EncryptedVaultImportView.swift: pre-install summary "
+            "must use the verify-and-discard facade; only the final installation "
+            "step may receive ValidatedPortableVaultRestore"
         )
 
     for file in swift_files:
@@ -906,6 +1369,45 @@ def main() -> int:
                     f"{path}: file-recognition add-on imports outside its allowlist: "
                     f"{', '.join(sorted(unexpected))}"
                 )
+
+        if path.startswith(BACKUP_VERIFICATION_PREFIX):
+            expected_imports = BACKUP_VERIFICATION_IMPORTS.get(path)
+            if expected_imports is None or imported != expected_imports:
+                violations.append(
+                    f"{path}: backup-verification imports changed; expected "
+                    f"{sorted(expected_imports or set())}, got {sorted(imported)}"
+                )
+
+            for forbidden_capability in (
+                "VaultSession",
+                "VaultUnlockService",
+                "VaultAccessCapability",
+                "VaultPhotoRecord",
+                "VaultPhotoStore",
+                "VaultGeneralFileRecord",
+                "VaultGeneralFileStore",
+                "VaultFolderRecord",
+                "VaultFolderPresentationStore",
+                "PortableArchiveCredential",
+                "ValidatedPortableVaultRestore",
+                "EncryptedVaultTransferCoordinator",
+                "KHVaultFileIngress",
+                "StagedVaultFile",
+                "CryptoBox",
+                "SymmetricKey",
+                "FileManager",
+                "FileHandle",
+                "URLSession",
+                "Data(contentsOf:",
+                "startAccessingSecurityScopedResource",
+                "stageAndValidateRestore(",
+                "installValidatedPortableVault(",
+            ):
+                if forbidden_capability in source:
+                    violations.append(
+                        f"{path}: backup-verification add-on directly references "
+                        f"protected capability {forbidden_capability}"
+                    )
 
         if (
             "startAccessingSecurityScopedResource" in source
@@ -2018,7 +2520,9 @@ def main() -> int:
         "KeyHollowTransferCore remain separately compiled; KeyHollowGalleryUI "
         "owns the visible gallery without protected capabilities; "
         "KeyHollowEncryptedVideoAddOn remains capability-free and independently "
-        "compiled; registered add-ons remain independently compiled; and core storage, "
+        "compiled; KeyHollowBackupVerificationAddOn remains report-only and "
+        "independently compiled; registered add-ons remain independently compiled; "
+        "and core storage, "
         "cryptography, session, and transfer code "
         "remain free of UI, Photos, network, and remote SDK concerns."
     )

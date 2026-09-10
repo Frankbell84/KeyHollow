@@ -39,6 +39,212 @@ final class VaultFileRecognitionAddOnTests: XCTestCase {
         XCTAssertEqual(stagedValues.fileSize, original.count)
     }
 
+    func testCheckedDiscardFailsClosedAndCanRetry() throws {
+        let sourceURL = FileManager.default.temporaryDirectory.appendingPathComponent(
+            "Checked-Discard-\(UUID().uuidString).khvault"
+        )
+        try Data("authenticated encrypted test container".utf8).write(to: sourceURL)
+        defer { try? FileManager.default.removeItem(at: sourceURL) }
+
+        let staged = try XCTUnwrap(
+            KHVaultFileIngress().stageIfRecognized(sourceURL)
+        )
+        XCTAssertThrowsError(
+            try staged.discardChecked(using: FailingRemovalFileManager())
+        )
+        XCTAssertTrue(FileManager.default.fileExists(atPath: staged.url.path))
+
+        XCTAssertNoThrow(try staged.discardChecked())
+        XCTAssertFalse(FileManager.default.fileExists(atPath: staged.url.path))
+        XCTAssertNoThrow(try staged.discardChecked())
+    }
+
+    func testReleasingLastStagedValueRemovesIngressCopy() throws {
+        let sourceURL = FileManager.default.temporaryDirectory.appendingPathComponent(
+            "Lease-Release-\(UUID().uuidString).khvault"
+        )
+        try Data("authenticated encrypted test container".utf8).write(to: sourceURL)
+        defer { try? FileManager.default.removeItem(at: sourceURL) }
+
+        var staged: StagedVaultFile? = try XCTUnwrap(
+            KHVaultFileIngress().stageIfRecognized(sourceURL)
+        )
+        let stagedURL = try XCTUnwrap(staged?.url)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: stagedURL.path))
+
+        staged = nil
+
+        XCTAssertFalse(FileManager.default.fileExists(atPath: stagedURL.path))
+    }
+
+    func testNextIngressRemovesOnlyCanonicalAbandonedCopies() throws {
+        let stagingRoot = FileManager.default.temporaryDirectory.appendingPathComponent(
+            "KeyHollowPortableImports",
+            isDirectory: true
+        )
+        let abandonedRoot = stagingRoot.appendingPathComponent(
+            UUID().uuidString.lowercased(),
+            isDirectory: true
+        )
+        let unrelatedRoot = stagingRoot.appendingPathComponent(
+            "unrelated-test-fixture",
+            isDirectory: true
+        )
+        try FileManager.default.createDirectory(
+            at: abandonedRoot,
+            withIntermediateDirectories: true
+        )
+        try FileManager.default.createDirectory(
+            at: unrelatedRoot,
+            withIntermediateDirectories: true
+        )
+        try Data("stale encrypted copy".utf8).write(
+            to: abandonedRoot.appendingPathComponent("Selected.khvault")
+        )
+        defer {
+            try? FileManager.default.removeItem(at: abandonedRoot)
+            try? FileManager.default.removeItem(at: unrelatedRoot)
+        }
+
+        let sourceURL = FileManager.default.temporaryDirectory.appendingPathComponent(
+            "Abandoned-Recovery-\(UUID().uuidString).khvault"
+        )
+        try Data("replacement encrypted test container".utf8).write(to: sourceURL)
+        defer { try? FileManager.default.removeItem(at: sourceURL) }
+
+        let staged = try XCTUnwrap(
+            KHVaultFileIngress().stageIfRecognized(sourceURL)
+        )
+        defer { staged.discard() }
+
+        XCTAssertFalse(FileManager.default.fileExists(atPath: abandonedRoot.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: unrelatedRoot.path))
+    }
+
+    func testSecondIngressPreservesEveryLiveLease() throws {
+        let firstSource = FileManager.default.temporaryDirectory.appendingPathComponent(
+            "First-Live-\(UUID().uuidString).khvault"
+        )
+        let secondSource = FileManager.default.temporaryDirectory.appendingPathComponent(
+            "Second-Live-\(UUID().uuidString).khvault"
+        )
+        try Data("first encrypted test container".utf8).write(to: firstSource)
+        try Data("second encrypted test container".utf8).write(to: secondSource)
+        defer {
+            try? FileManager.default.removeItem(at: firstSource)
+            try? FileManager.default.removeItem(at: secondSource)
+        }
+
+        let ingress = KHVaultFileIngress()
+        let first = try XCTUnwrap(ingress.stageIfRecognized(firstSource))
+        defer { first.discard() }
+        let second = try XCTUnwrap(ingress.stageIfRecognized(secondSource))
+        defer { second.discard() }
+
+        XCTAssertTrue(FileManager.default.fileExists(atPath: first.url.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: second.url.path))
+    }
+
+    func testStagedValueCopiesRetainOneCleanupLeaseUntilFinalRelease() throws {
+        let sourceURL = FileManager.default.temporaryDirectory.appendingPathComponent(
+            "Shared-Lease-\(UUID().uuidString).khvault"
+        )
+        try Data("authenticated encrypted test container".utf8).write(to: sourceURL)
+        defer { try? FileManager.default.removeItem(at: sourceURL) }
+
+        var first: StagedVaultFile? = try XCTUnwrap(
+            KHVaultFileIngress().stageIfRecognized(sourceURL)
+        )
+        var second = first
+        let stagedURL = try XCTUnwrap(first?.url)
+
+        first = nil
+        withExtendedLifetime(second) {
+            XCTAssertTrue(FileManager.default.fileExists(atPath: stagedURL.path))
+        }
+
+        second = nil
+        XCTAssertFalse(FileManager.default.fileExists(atPath: stagedURL.path))
+    }
+
+    func testCheckedDiscardTreatsOutOfBandRemovalAsSuccess() throws {
+        let sourceURL = FileManager.default.temporaryDirectory.appendingPathComponent(
+            "Out-Of-Band-Removal-\(UUID().uuidString).khvault"
+        )
+        try Data("authenticated encrypted test container".utf8).write(to: sourceURL)
+        defer { try? FileManager.default.removeItem(at: sourceURL) }
+
+        let staged = try XCTUnwrap(
+            KHVaultFileIngress().stageIfRecognized(sourceURL)
+        )
+        try FileManager.default.removeItem(at: staged.url.deletingLastPathComponent())
+
+        XCTAssertNoThrow(try staged.discardChecked())
+        XCTAssertNoThrow(try staged.discardChecked())
+    }
+
+    func testCrashRecoveryPreservesCanonicalNamedNonDirectories() throws {
+        let fileManager = FileManager.default
+        let stagingRoot = fileManager.temporaryDirectory.appendingPathComponent(
+            "KeyHollowPortableImports",
+            isDirectory: true
+        )
+        try fileManager.createDirectory(
+            at: stagingRoot,
+            withIntermediateDirectories: true
+        )
+
+        let abandonedDirectory = stagingRoot.appendingPathComponent(
+            UUID().uuidString.lowercased(),
+            isDirectory: true
+        )
+        let canonicalFile = stagingRoot.appendingPathComponent(
+            UUID().uuidString.lowercased(),
+            isDirectory: false
+        )
+        let canonicalLink = stagingRoot.appendingPathComponent(
+            UUID().uuidString.lowercased(),
+            isDirectory: false
+        )
+        let externalTarget = fileManager.temporaryDirectory.appendingPathComponent(
+            "Ingress-Link-Target-\(UUID().uuidString)"
+        )
+        let sourceURL = fileManager.temporaryDirectory.appendingPathComponent(
+            "Crash-Recovery-\(UUID().uuidString).khvault"
+        )
+        try fileManager.createDirectory(
+            at: abandonedDirectory,
+            withIntermediateDirectories: false
+        )
+        let fileContents = Data("canonical regular file".utf8)
+        let targetContents = Data("external link target".utf8)
+        try fileContents.write(to: canonicalFile)
+        try targetContents.write(to: externalTarget)
+        try fileManager.createSymbolicLink(
+            at: canonicalLink,
+            withDestinationURL: externalTarget
+        )
+        try Data("replacement encrypted test container".utf8).write(to: sourceURL)
+        defer {
+            try? fileManager.removeItem(at: abandonedDirectory)
+            try? fileManager.removeItem(at: canonicalFile)
+            try? fileManager.removeItem(at: canonicalLink)
+            try? fileManager.removeItem(at: externalTarget)
+            try? fileManager.removeItem(at: sourceURL)
+        }
+
+        let staged = try XCTUnwrap(
+            KHVaultFileIngress().stageIfRecognized(sourceURL)
+        )
+        defer { staged.discard() }
+
+        XCTAssertFalse(fileManager.fileExists(atPath: abandonedDirectory.path))
+        XCTAssertEqual(try Data(contentsOf: canonicalFile), fileContents)
+        XCTAssertEqual(try Data(contentsOf: externalTarget), targetContents)
+        let linkValues = try canonicalLink.resourceValues(forKeys: [.isSymbolicLinkKey])
+        XCTAssertEqual(linkValues.isSymbolicLink, true)
+    }
+
     func testIngressRejectsEmptyVaultFile() throws {
         let sourceURL = FileManager.default.temporaryDirectory.appendingPathComponent(
             "Empty-\(UUID().uuidString).khvault"
@@ -197,5 +403,11 @@ final class VaultFileRecognitionAddOnTests: XCTestCase {
             ),
             "The packaged thumbnail extension must expose the approved icon asset"
         )
+    }
+}
+
+private final class FailingRemovalFileManager: FileManager, @unchecked Sendable {
+    override func removeItem(at URL: URL) throws {
+        throw CocoaError(.fileWriteUnknown)
     }
 }

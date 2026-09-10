@@ -94,8 +94,28 @@ final class EncryptedVaultTransferCoordinatorTests: XCTestCase {
             "preserve-this-item",
             isDirectory: true
         )
+        let canonicalFile = roots.working.appendingPathComponent(
+            UUID().uuidString.lowercased(),
+            isDirectory: false
+        )
+        let canonicalLink = roots.working.appendingPathComponent(
+            UUID().uuidString.lowercased(),
+            isDirectory: false
+        )
+        let externalTarget = roots.parent.appendingPathComponent(
+            "preserve-external-target",
+            isDirectory: false
+        )
         try FileManager.default.createDirectory(at: abandoned, withIntermediateDirectories: false)
         try FileManager.default.createDirectory(at: unowned, withIntermediateDirectories: false)
+        let fileContents = Data("canonical regular file".utf8)
+        let targetContents = Data("external symbolic-link target".utf8)
+        try fileContents.write(to: canonicalFile)
+        try targetContents.write(to: externalTarget)
+        try FileManager.default.createSymbolicLink(
+            at: canonicalLink,
+            withDestinationURL: externalTarget
+        )
 
         try EncryptedVaultTransferCoordinator.cleanUpAbandonedWorkingDirectories(
             workingRootOverride: roots.working
@@ -103,6 +123,10 @@ final class EncryptedVaultTransferCoordinatorTests: XCTestCase {
 
         XCTAssertFalse(FileManager.default.fileExists(atPath: abandoned.path))
         XCTAssertTrue(FileManager.default.fileExists(atPath: unowned.path))
+        XCTAssertEqual(try Data(contentsOf: canonicalFile), fileContents)
+        XCTAssertEqual(try Data(contentsOf: externalTarget), targetContents)
+        let linkValues = try canonicalLink.resourceValues(forKeys: [.isSymbolicLinkKey])
+        XCTAssertEqual(linkValues.isSymbolicLink, true)
     }
 
     func testConcurrentValidatedRestoresPreserveEachOthersWorkingDirectories() async throws {

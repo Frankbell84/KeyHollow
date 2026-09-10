@@ -823,6 +823,30 @@ final class PortableArchivePayloadTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: stagingURL.path))
     }
 
+    func testExtractorCheckedCleanupFailsClosedAndCanRetry() throws {
+        let stagingURL = temporaryURL(label: "checked-extractor-cleanup")
+        defer { try? FileManager.default.removeItem(at: stagingURL) }
+        let extractor = try PortableArchivePayloadExtractor(stagingURL: stagingURL)
+        try FileManager.default.createDirectory(
+            at: stagingURL,
+            withIntermediateDirectories: true
+        )
+        try Data("partially extracted ciphertext".utf8).write(
+            to: stagingURL.appendingPathComponent("partial.khc")
+        )
+
+        XCTAssertThrowsError(
+            try extractor.discardChecked(removing: { _ in
+                throw CocoaError(.fileWriteUnknown)
+            })
+        )
+        XCTAssertTrue(FileManager.default.fileExists(atPath: stagingURL.path))
+
+        XCTAssertNoThrow(try extractor.discardChecked())
+        XCTAssertFalse(FileManager.default.fileExists(atPath: stagingURL.path))
+        XCTAssertNoThrow(try extractor.discardChecked())
+    }
+
     func testPayloadWriterDetectsSourceChangedAfterCatalogCreation() async throws {
         let sourceRoot = temporaryURL(label: "source-change")
         let archiveURL = temporaryURL(label: "source-change-archive")

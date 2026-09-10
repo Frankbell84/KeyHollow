@@ -21,8 +21,12 @@ install vault data.
 The existing import flow remains authoritative. Open-in-place access is used
 only long enough to copy the incoming file into protected temporary storage;
 KeyHollow never edits or deletes the original. It checks available capacity,
-authenticates the
-complete archive with the recovery code, re-authenticates immediately before
+attaches a private reference-owned cleanup lease to every staged copy, and
+preserves active leases across concurrent ingress operations. A later ingress
+removes only abandoned canonical UUID directories below the add-on-owned
+temporary root, allowing restart-and-retry to converge interrupted copies
+without touching unrelated temporary data. KeyHollow authenticates the
+complete archive with the recovery code and re-authenticates immediately before
 installation, and rolls back an incomplete install. A recognized filename is
 never treated as proof that the file is a valid KeyHollow archive.
 

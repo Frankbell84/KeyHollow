@@ -339,6 +339,15 @@ final class VaultSession: ObservableObject {
         sensitiveTasks[id]?.cancel()
     }
 
+    /// Cancels one registered operation and does not return until its terminal
+    /// cleanup has run. User-driven dismissal uses this barrier so a captured
+    /// credential or protected temporary lease cannot outlive its screen.
+    func cancelSensitiveTaskAndWait(_ id: UUID) async {
+        guard let task = sensitiveTasks[id] else { return }
+        task.cancel()
+        await task.value
+    }
+
     /// Tracks cryptographic work that does not use the currently unlocked
     /// vault capability, such as authenticating an encrypted portable vault.
     /// Background locking cancels this work even when the keypad is showing.
