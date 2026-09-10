@@ -24,8 +24,12 @@ evidence remains in `docs/PROJECT_CHECKPOINT.md`.
   `239bd1da7a90327727882ddb669e44b9bcf370f9`
 - Published archive-compatibility test correction head:
   `437f4f2b0210daa98faadc439fbbc1c3770ba7f7`
+- Published final repository-hardening checkpoint:
+  `f00687d7896be8f65b7dbdd29ab7bc9087b9d358`
 - Fully green exact-correction-head CI run:
   [#34469885087](https://github.com/Frankbell84/KeyHollow/actions/runs/34469885087).
+- Fully green exact-final-checkpoint CI run:
+  [#34472545516](https://github.com/Frankbell84/KeyHollow/actions/runs/34472545516).
 - Draft review:
   [PR #51](https://github.com/Frankbell84/KeyHollow/pull/51), targeting
   refreshed `main` from `hardening/post-build39-baseline`.
@@ -53,10 +57,10 @@ evidence remains in `docs/PROJECT_CHECKPOINT.md`.
 
 ## Current task
 
-Finalize the verified post-Build-39 hardening checkpoint on exact code head
-`437f4f2b0210daa98faadc439fbbc1c3770ba7f7`, preserve draft PR #51
-without merge or release action, then perform the reversible Codex managed-
-runtime/Git-helper repair before feature work resumes.
+Publish the completed durable Codex managed-runtime/Git-helper repair record,
+preserve draft PR #51 without merge or release action, require the resulting
+exact documentation head to retain the complete green workflow, and then
+present that exact revision to Frank for a separate merge decision.
 
 ## Completed work
 
@@ -127,6 +131,17 @@ The published hardening implementation now includes:
   complete security/lifecycle XCTest job, both artifact uploads, and Swift
   CodeQL. The pull-request security scan reported no new alerts and zero check
   annotations.
+- Status-only checkpoint `f00687d7896be8f65b7dbdd29ab7bc9087b9d358`
+  also completed the full exact-head workflow in
+  [#34472545516](https://github.com/Frankbell84/KeyHollow/actions/runs/34472545516):
+  build-and-test and Swift CodeQL passed with zero annotations, the separate
+  pull-request security result reported no new alerts, and both required
+  artifacts uploaded successfully.
+- The Codex managed runtime was repaired reversibly after the repository CI
+  became stable. The prior runtime and incomplete installer remain in dated
+  quarantine, a fresh coherent runtime hydrated, and two clean application
+  launches plus local, read-only remote, credential-manager, and authenticated
+  no-change Git checks all passed.
 
 No broad rewrite was required. The protected modular architecture continues to
 hold, and independent compile/API and adversarial-security reviews found no
@@ -232,44 +247,50 @@ no new alerts in code changed by PR #51. Retained run artifacts are:
 - `KeyHollow-Simulator` artifact `10149201668`, SHA-256
   `6d6e617edd61584bdadb8085c9120faf95a17b29be8c89b4b0a777b1a6fa57fc`.
 
+The final status-only head
+`f00687d7896be8f65b7dbdd29ab7bc9087b9d358` then completed
+[#34472545516](https://github.com/Frankbell84/KeyHollow/actions/runs/34472545516)
+successfully. Its build-and-test job, Swift CodeQL job, pull-request security
+result, and both artifact uploads passed with zero annotations and no new
+alerts.
+
 ## Git helper status
 
-The missing-DLL popups come from Codex's bundled Git HTTPS helper, not from the
-KeyHollow repository. The successive `libiconv`, `libpcre2`, `libwinpthread`,
-and `zlib` messages are one incomplete managed-runtime/loader failure; the
-matching files exist in the runtime's own `mingw64/bin` directory.
+The Codex managed-runtime/Git-helper repair is complete and durable across two
+clean application launches.
 
-- System Git at
-  `C:\Users\Cynfox\AppData\Local\Programs\Git\cmd\git.exe`
-  successfully completed GitHub `ls-remote`, fetch, and push operations.
-- The earlier cross-version `GIT_EXEC_PATH` override is absent, as required.
-- A fresh audit found that the intended bundled `mingw64/bin` PATH correction
-  did not persist in either the user environment or this Codex process. One
-  individually copied DLL remains beside the helper, and a stale partial
-  runtime-installer directory remains. A simple restart alone therefore is not
-  a sufficient durable repair.
-- Until restart verification succeeds, use the explicit installed system Git
-  executable for every network operation. This working path does not block the
-  KeyHollow PR/CI phase.
-- After the final PR-head CI result is stable and no command is active, fully
-  quit Codex, verify its child processes have stopped, and reversibly rename
-  both the complete managed runtime and stale installer to timestamped
-  quarantine directories. Reopen Codex online so it can rehydrate a coherent
-  runtime, then verify bundled Git locally and against a bounded read-only
-  GitHub operation. Keep the quarantine through two clean launches.
-- Do not copy more individual DLLs. If a freshly rehydrated runtime still
-  reproduces the failure, append that runtime's own `mingw64/bin` directory to
-  the user PATH while Codex is closed, then reopen and retest.
+- The previous complete runtime and incomplete installer were reversibly
+  renamed to `codex-primary-runtime.quarantine-20260910` and
+  `codex-runtime-install-3VSjvK.quarantine-20260910`; the stale installer's
+  original name is absent.
+- Codex hydrated fresh managed bundle `26.909.12148`. Its bundled Git is
+  `2.53.0.windows.3`, and every required Git DLL is present in the canonical
+  runtime location.
+- No cross-version `GIT_EXEC_PATH` override or user-PATH mutation remains.
+- Bundled Git local status passed, and bounded HTTPS `ls-remote` checks passed
+  on both clean launches.
+- Bundled Git Credential Manager `2.7.3` passed both direct and Git-dispatched
+  version checks outside the restricted diagnostic sandbox.
+- The final authenticated integration check used bundled Git to perform
+  `push --dry-run` against the assigned remote branch. It exited zero with
+  `Everything up-to-date`; the operation could not alter the remote.
+- The two `0xe0434352` dialogs Frank dismissed were delayed results from two
+  earlier direct GCM probes inside the restricted sandbox, where child-process
+  creation was denied. They were not second-launch failures. No Git, HTTPS
+  helper, or credential-manager process remained afterward, and no dialog
+  recurred during the outside-sandbox authenticated test.
+- The quarantine directories are intentionally retained as a recovery path.
+  They must not be deleted without a separate explicit decision.
 
-This is an environment-tooling issue, not repository or KeyHollow source
-corruption.
+This was an environment-tooling failure, not repository or KeyHollow source
+corruption, and it is no longer an active blocker.
 
 ## Blockers
 
-There is no open P1/P2 review finding, known production-code defect, or failed
-required repository check. The compatibility-preserving correction passed the
-complete exact-head workflow. The bundled Git helper remains an environment
-maintenance item, not a KeyHollow source blocker.
+There is no open P1/P2 review finding, known production-code defect, failed
+required repository check, or active Git-helper blocker. The compatibility-
+preserving correction and its final status checkpoint passed the complete
+exact-head workflow.
 
 Remaining proof and external-control blockers are:
 
@@ -307,22 +328,18 @@ Before the next production TestFlight upload, Frank must verify or configure:
 
 ## Next action
 
-1. Publish this final operational checkpoint to draft PR #51 and require its
-   status-only exact head to retain the complete green workflow.
-2. Fully quit Codex while no command is active, perform the reversible managed-
-   runtime quarantine/rehydration repair, and verify bundled Git across two
-   clean launches and a bounded read-only GitHub operation.
-3. After the helper is proven durable, recheck the clean synchronized branch
-   and present the exact green revision to Frank for explicit merge approval.
-4. Require the eventual merged `main` commit to pass the same complete gates.
-5. Stop before signed upload, tester assignment, or App Store action until a
+1. Publish this completed helper-repair checkpoint to draft PR #51 and require
+   its exact head to retain the complete green workflow.
+2. Recheck the clean synchronized branch and present the exact green revision
+   to Frank for explicit merge approval.
+3. Require the eventual merged `main` commit to pass the same complete gates.
+4. Stop before signed upload, tester assignment, or App Store action until a
    full commit SHA, unused build number, and tester group are authorized.
 
 ## Frank's decisions required
 
 No further decision is required for recording this completed hardening
-checkpoint or diagnosing and verifying the bundled Git-helper repair. Frank
-must coordinate the full Codex quit/reopen needed for that repair and later
+checkpoint or the now-verified durable Git-helper repair. Frank must later
 explicitly approve the exact verified revision before merge.
 
 Frank's action-time decision is required for:
@@ -331,6 +348,8 @@ Frank's action-time decision is required for:
 - Creating or changing GitHub environments, branch protection, reviewers, or
   secrets.
 - Retiring or deleting historical remote release branches or secrets.
+- Deleting the dated managed-runtime quarantine directories after the desired
+  retention period.
 - Authorizing a signed TestFlight upload by full commit SHA, unused build
   number, and tester group.
 - Expanding a build from Internal to Family or external testers.
