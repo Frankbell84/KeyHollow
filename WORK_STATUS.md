@@ -133,22 +133,28 @@ head containing this checkpoint.
 
 ## Git helper status
 
-The `libiconv-2.dll` popup came from Codex's bundled Git HTTPS helper, not from
-the KeyHollow repository.
+The missing-DLL popups come from Codex's bundled Git HTTPS helper, not from the
+KeyHollow repository. The successive `libiconv`, `libpcre2`, `libwinpthread`,
+and `zlib` messages are one loader-path failure; the matching files are present
+inside the managed runtime.
 
-- Host-level `GIT_EXEC_PATH` now points to the installed system Git helper
-  directory:
-  `C:\Users\Cynfox\AppData\Local\Programs\Git\mingw64\libexec\git-core`
 - System Git at
   `C:\Users\Cynfox\AppData\Local\Programs\Git\cmd\git.exe`
   successfully completed GitHub `ls-remote`, fetch, and push operations.
-- Use that explicit system Git executable for network work in the current
-  Codex process.
-- Fully quit and reopen Codex later to confirm that a fresh process inherits
-  the persistent helper routing; no machine reboot is required.
-- The bundled Git helper files now exist but bundled HTTPS remains unproven.
-  Leave them untouched. If a fresh Codex process still fails, refresh the
-  complete managed runtime with Codex closed rather than copying more DLLs.
+- A temporary test that added the bundled Git 2.53 runtime's own `mingw64/bin`
+  directory to its loader path completed a read-only GitHub operation. That
+  matching directory is now appended to the user PATH, and the earlier
+  cross-version `GIT_EXEC_PATH` override has been removed.
+- The running Codex process cannot inherit that user-environment correction.
+  Fully quit and reopen Codex before declaring the bundled helper repaired; no
+  machine reboot is required.
+- Until restart verification succeeds, use the explicit installed system Git
+  executable for every network operation. This working path does not block the
+  KeyHollow PR/CI phase.
+- Do not copy more individual DLLs. If the popup remains after a complete Codex
+  restart, close Codex and reversibly quarantine the complete managed runtime
+  so the app can rehydrate it as one unit, then validate it before removing the
+  quarantine.
 
 This is an environment-tooling issue, not repository or KeyHollow source
 corruption.
