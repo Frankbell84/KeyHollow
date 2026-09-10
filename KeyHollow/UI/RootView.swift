@@ -229,6 +229,15 @@ private struct LockView: View {
             EncryptedVaultImportView(service: service)
                 .environmentObject(session)
         }
+        .onChange(of: session.securityEpoch) { _, _ in
+            SecurityEpochCredentialPolicy.clearLockEntry(
+                digits: &digits,
+                message: &message,
+                isWorking: &isWorking
+            )
+            showingNewVault = false
+            showingEncryptedImport = false
+        }
     }
 
     private func key(_ value: String) -> some View {
@@ -253,17 +262,34 @@ private struct LockView: View {
         digits.removeAll(keepingCapacity: false)
         isWorking = true
         message = nil
+        let unlockAuthorization = session.authorizeUnlockCompletion()
+        let requestSecurityEpoch = session.securityEpoch
 
-        Task {
+        session.startProtectedTask {
             do {
                 let unlocked = try await service.unlock(passcode: entered)
-                session.unlock(vaultID: unlocked.vaultID, key: unlocked.vaultKey)
+                let accepted = session.completeUnlock(
+                    vaultID: unlocked.vaultID,
+                    key: unlocked.vaultKey,
+                    authorization: unlockAuthorization
+                )
+                guard accepted else { return }
                 isWorking = false
             } catch VaultUnlockError.temporarilyLocked(let until) {
+                guard session.securityEpoch == requestSecurityEpoch else { return }
                 let wait = max(1, Int(ceil(until.timeIntervalSinceNow)))
                 message = "Too many attempts. Try again in about \(wait) seconds."
                 isWorking = false
+            } catch VaultUnlockError.credentialRecoveryRequired {
+                guard session.securityEpoch == requestSecurityEpoch else { return }
+                message = "KeyHollow must finish secure recovery before another vault can open. Close and reopen the app, then try again."
+                isWorking = false
+            } catch VaultUnlockError.operationInProgress {
+                guard session.securityEpoch == requestSecurityEpoch else { return }
+                message = "A secure vault operation is still finishing. Try again shortly."
+                isWorking = false
             } catch {
+                guard session.securityEpoch == requestSecurityEpoch else { return }
                 message = "Passcode not recognized."
                 isWorking = false
             }
@@ -445,6 +471,14 @@ private struct InitialVaultSetupView: View {
                 EncryptedVaultImportView(service: service)
                     .environmentObject(session)
             }
+            .onChange(of: session.securityEpoch) { _, _ in
+                passcode = ""
+                confirmation = ""
+                message = nil
+                isWorking = false
+                acknowledgesNoRecovery = false
+                showingEncryptedImport = false
+            }
         }
     }
 
@@ -475,18 +509,44 @@ private struct InitialVaultSetupView: View {
         confirmation = ""
         message = nil
         isWorking = true
+        let unlockAuthorization = session.authorizeUnlockCompletion()
+        let requestSecurityEpoch = session.securityEpoch
 
-        Task {
+        session.startProtectedTask {
             do {
                 let unlocked = try await service.createVault(passcode: selectedPasscode)
-                session.unlock(vaultID: unlocked.vaultID, key: unlocked.vaultKey)
+                let accepted = session.completeUnlock(
+                    vaultID: unlocked.vaultID,
+                    key: unlocked.vaultKey,
+                    authorization: unlockAuthorization
+                )
+                guard accepted else { return }
                 onCreated()
                 isWorking = false
             } catch {
+                guard session.securityEpoch == requestSecurityEpoch else { return }
                 message = "The vault could not be created."
                 isWorking = false
             }
         }
+    }
+}
+
+enum SecurityEpochCredentialPolicy {
+    /// A real session epoch transition always outranks the temporary lifecycle
+    /// exemption used while an Apple picker/share sheet is onscreen.
+    static func mustClearDuringSystemInteraction(_ systemInteractionOpen: Bool) -> Bool {
+        true
+    }
+
+    static func clearLockEntry(
+        digits: inout String,
+        message: inout String?,
+        isWorking: inout Bool
+    ) {
+        digits.removeAll(keepingCapacity: false)
+        message = nil
+        isWorking = false
     }
 }
 

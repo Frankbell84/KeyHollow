@@ -7,21 +7,28 @@ on:
         description: Build number confirmed against App Store Connect
         required: true
         type: string
+      expected_commit_sha:
+        description: Full 40-character commit SHA expected to upload
+        required: true
+        type: string
 
 permissions:
+  actions: read
   contents: read
+
+concurrency:
+  group: keyhollow-production-testflight
+  cancel-in-progress: false
 
 jobs:
   archive-and-upload:
-    # Production delivery may run from main or the exact isolated gallery-performance
-    # delivery branch after its review gates pass. No feature branch can upload.
-    if: >-
-      github.ref == 'refs/heads/main' ||
-      github.ref == 'refs/heads/delivery/gallery-file-performance'
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
     runs-on: macos-26
     timeout-minutes: 30
+    environment: production-testflight
     env:
       TEAM_ID: P38X56QHU9
+      DEVELOPER_DIR: /Applications/Xcode_26.0.1.app/Contents/Developer
 
     steps:
       - name: Checkout
@@ -29,8 +36,57 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Verify workflow security
+        run: python3 scripts/check_workflow_security.py
+
+      - name: Verify selected production commit
+        shell: bash
+        env:
+          EXPECTED_COMMIT_SHA: ${{ inputs.expected_commit_sha }}
+        run: |
+          set -euo pipefail
+
+          if [[ ! "$EXPECTED_COMMIT_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo 'Expected commit SHA must be exactly 40 lowercase hexadecimal characters.'
+            exit 1
+          fi
+          if [[ "$EXPECTED_COMMIT_SHA" != "$GITHUB_SHA" ]]; then
+            echo "Expected commit $EXPECTED_COMMIT_SHA does not match workflow commit $GITHUB_SHA."
+            exit 1
+          fi
+          if [[ "$(git rev-parse HEAD)" != "$GITHUB_SHA" ]]; then
+            echo 'Checked-out commit does not match GITHUB_SHA.'
+            exit 1
+          fi
+
+      - name: Verify pinned Xcode toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(xcodebuild -version | sed -n '1p')" = 'Xcode 26.0.1'
+
+      - name: Verify exact-source CI succeeded
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 scripts/verify_release_source.py
+
+      - name: Verify protected production environment
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PRODUCTION_RELEASE_GUARD: ${{ secrets.PRODUCTION_RELEASE_GUARD }}
+        run: python3 scripts/verify_release_environment.py
+
       - name: Verify release hygiene
         run: python3 scripts/check_release_hygiene.py
+
+      - name: Verify architecture boundaries
+        run: python3 scripts/check_architecture_boundaries.py
+
+      - name: Test TestFlight build-number guard
+        run: node scripts/verify_testflight_build_number.mjs --self-test
+
+      - name: Verify privacy manifest
+        run: python3 scripts/check_privacy_manifest.py
 
       - name: Verify production identity
         shell: bash
@@ -50,19 +106,20 @@ jobs:
             exit 1
           fi
 
+      - name: Install XcodeGen
+        run: bash scripts/install_xcodegen.sh
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
       - name: Verify build number against App Store Connect
         env:
           APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
           APP_STORE_CONNECT_API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
           APP_STORE_CONNECT_API_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_API_KEY_BASE64 }}
           APP_STORE_CONNECT_APP_ID: 6807022780
-        run: node scripts/verify_testflight_build_number.mjs "${{ inputs.build_number }}"
-
-      - name: Install XcodeGen
-        run: brew install xcodegen
-
-      - name: Generate Xcode project
-        run: xcodegen generate
+          REQUESTED_BUILD_NUMBER: ${{ inputs.build_number }}
+        run: node scripts/verify_testflight_build_number.mjs "$REQUESTED_BUILD_NUMBER"
 
       - name: Install cloud-signing material
         env:
@@ -132,11 +189,12 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             archive
 
-      - name: Verify archived build and module hygiene
+      - name: Verify archived build, privacy, and module hygiene
         run: |
           set -euo pipefail
 
           APP_PATH='build/KeyHollow.xcarchive/Products/Applications/KeyHollow.app'
+          python3 scripts/check_privacy_manifest.py --app-bundle "$APP_PATH"
           ARCHIVED_INFO="$APP_PATH/Info.plist"
           EXTENSION_PATH="$APP_PATH/PlugIns/KeyHollowVaultThumbnail.appex"
           EXTENSION_INFO="$EXTENSION_PATH/Info.plist"
@@ -203,7 +261,6 @@ jobs:
         env:
           APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
           APP_STORE_CONNECT_API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
-          APP_STORE_CONNECT_API_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_API_KEY_BASE64 }}
         run: |
           set -euo pipefail
 
@@ -243,10 +300,17 @@ jobs:
             "$RUNNER_TEMP/keyhollow-app.mobileprovision" \
             "$RUNNER_TEMP/keyhollow-thumbnail.mobileprovision" \
             "$RUNNER_TEMP/keyhollow-app-profile.plist" \
-            "$RUNNER_TEMP/keyhollow-thumbnail-profile.plist" \
-            "$PROFILE_DIRECTORY/${APP_PROFILE_UUID:-}.mobileprovision" \
-            "$PROFILE_DIRECTORY/${THUMBNAIL_PROFILE_UUID:-}.mobileprovision" \
-            "$APP_STORE_CONNECT_API_KEY_PATH"
+            "$RUNNER_TEMP/keyhollow-thumbnail-profile.plist"
+
+          if [[ -n "${APP_PROFILE_UUID:-}" ]]; then
+            rm -f "$PROFILE_DIRECTORY/$APP_PROFILE_UUID.mobileprovision"
+          fi
+          if [[ -n "${THUMBNAIL_PROFILE_UUID:-}" ]]; then
+            rm -f "$PROFILE_DIRECTORY/$THUMBNAIL_PROFILE_UUID.mobileprovision"
+          fi
+          if [[ -n "${APP_STORE_CONNECT_API_KEY_PATH:-}" ]]; then
+            rm -f "$APP_STORE_CONNECT_API_KEY_PATH"
+          fi
 
           if [[ -n "${APP_STORE_CONNECT_API_KEY_ID:-}" ]]; then
             rm -f "$HOME/.appstoreconnect/private_keys/AuthKey_${APP_STORE_CONNECT_API_KEY_ID}.p8"

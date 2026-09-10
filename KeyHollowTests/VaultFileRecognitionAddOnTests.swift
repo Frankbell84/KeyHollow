@@ -29,6 +29,14 @@ final class VaultFileRecognitionAddOnTests: XCTestCase {
         XCTAssertNotEqual(staged.url, sourceURL)
         XCTAssertEqual(try Data(contentsOf: staged.url), original)
         XCTAssertEqual(try Data(contentsOf: sourceURL), original)
+        let stagedValues = try staged.url.resourceValues(forKeys: [
+            .fileSizeKey,
+            .isRegularFileKey,
+            .isSymbolicLinkKey
+        ])
+        XCTAssertEqual(stagedValues.isRegularFile, true)
+        XCTAssertNotEqual(stagedValues.isSymbolicLink, true)
+        XCTAssertEqual(stagedValues.fileSize, original.count)
     }
 
     func testIngressRejectsEmptyVaultFile() throws {
@@ -41,6 +49,46 @@ final class VaultFileRecognitionAddOnTests: XCTestCase {
         XCTAssertThrowsError(try KHVaultFileIngress().stageIfRecognized(sourceURL)) { error in
             XCTAssertEqual(error as? VaultFileIngressError, .unsupportedFile)
         }
+    }
+
+    func testIngressRejectsDirectoryWithVaultExtension() throws {
+        let sourceURL = FileManager.default.temporaryDirectory.appendingPathComponent(
+            "Directory-\(UUID().uuidString).khvault",
+            isDirectory: true
+        )
+        try FileManager.default.createDirectory(
+            at: sourceURL,
+            withIntermediateDirectories: false
+        )
+        defer { try? FileManager.default.removeItem(at: sourceURL) }
+
+        XCTAssertThrowsError(try KHVaultFileIngress().stageIfRecognized(sourceURL)) { error in
+            XCTAssertEqual(error as? VaultFileIngressError, .unsupportedFile)
+        }
+    }
+
+    func testIngressRejectsSymbolicLinkWithVaultExtension() throws {
+        let sourceRoot = FileManager.default.temporaryDirectory.appendingPathComponent(
+            "VaultFileIngressSymlinkTests-\(UUID().uuidString)",
+            isDirectory: true
+        )
+        try FileManager.default.createDirectory(
+            at: sourceRoot,
+            withIntermediateDirectories: false
+        )
+        defer { try? FileManager.default.removeItem(at: sourceRoot) }
+        let target = sourceRoot.appendingPathComponent("target.khvault")
+        let symbolicLink = sourceRoot.appendingPathComponent("linked.khvault")
+        try Data("encrypted target".utf8).write(to: target)
+        try FileManager.default.createSymbolicLink(
+            at: symbolicLink,
+            withDestinationURL: target
+        )
+
+        XCTAssertThrowsError(try KHVaultFileIngress().stageIfRecognized(symbolicLink)) { error in
+            XCTAssertEqual(error as? VaultFileIngressError, .unsupportedFile)
+        }
+        XCTAssertEqual(try Data(contentsOf: target), Data("encrypted target".utf8))
     }
 
     func testIngressIgnoresUnrelatedFileWithoutCreatingAStagedCopy() throws {

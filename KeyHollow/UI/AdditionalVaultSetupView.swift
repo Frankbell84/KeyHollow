@@ -122,6 +122,14 @@ struct AdditionalVaultSetupView: View {
             }
             .interactiveDismissDisabled(isWorking)
         }
+        .onChange(of: session.securityEpoch) { _, _ in
+            passcode = ""
+            confirmation = ""
+            message = nil
+            isWorking = false
+            acknowledgesNoRecovery = false
+            isPasscodeEntryFocused = false
+        }
     }
 
     private var canCreate: Bool {
@@ -152,22 +160,31 @@ struct AdditionalVaultSetupView: View {
         confirmation = ""
         message = nil
         isWorking = true
+        let unlockAuthorization = session.authorizeUnlockCompletion()
+        let requestSecurityEpoch = session.securityEpoch
 
-        Task {
+        session.startProtectedTask {
             do {
                 let unlocked = try await service.createVault(passcode: selectedPasscode)
 
                 // Switch directly into the newly created vault. No vault index,
                 // count, name, or other discovery surface is introduced.
-                session.unlock(vaultID: unlocked.vaultID, key: unlocked.vaultKey)
+                let accepted = session.completeUnlock(
+                    vaultID: unlocked.vaultID,
+                    key: unlocked.vaultKey,
+                    authorization: unlockAuthorization
+                )
+                guard accepted else { return }
                 isWorking = false
                 dismiss()
             } catch VaultUnlockError.passcodeAlreadyUsed {
+                guard session.securityEpoch == requestSecurityEpoch else { return }
                 // Deliberately avoid saying that another vault exists for this
                 // passcode. The creation UI exposes no vault discovery metadata.
                 message = "That passcode cannot be used. Choose a different passcode."
                 isWorking = false
             } catch {
+                guard session.securityEpoch == requestSecurityEpoch else { return }
                 message = "The new encrypted vault could not be created."
                 isWorking = false
             }

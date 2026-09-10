@@ -12,6 +12,7 @@ struct VaultGeneralFilesView: View {
     @State private var isImporting = false
     @State private var isWorking = false
     @State private var export: PreparedGeneralFileExport?
+    @State private var exportTaskID: UUID?
     @State private var message: String?
     @State private var showingDeleteConfirmation = false
 
@@ -136,7 +137,17 @@ struct VaultGeneralFilesView: View {
             Text(message ?? "")
         }
         .task(id: session.activeVaultID) {
-            await initializeStore()
+            guard let expectedVaultID = session.activeVaultID else {
+                store = nil
+                records = []
+                return
+            }
+            await session.performSensitiveTask { capability in
+                await initializeStore(
+                    expectedVaultID: expectedVaultID,
+                    capability: capability
+                )
+            }
         }
     }
 
@@ -175,15 +186,32 @@ struct VaultGeneralFilesView: View {
         }
     }
 
-    private func initializeStore() async {
+    private func initializeStore(
+        expectedVaultID: UUID,
+        capability: VaultAccessCapability
+    ) async {
         guard store == nil,
-              let context = session.activeVaultContext() else { return }
+              capability.vaultID == expectedVaultID else { return }
         do {
-            let access = SessionGeneralFileAccess(capability: context.access)
-            let created = try VaultGeneralFileStore(vaultID: context.id, access: access)
+            let access = SessionGeneralFileAccess(capability: capability)
+            let created = try VaultGeneralFileStore(
+                vaultID: expectedVaultID,
+                access: access
+            )
+            let loadedRecords = try await created.loadManifest().files
+            try Task.checkCancellation()
+            guard let currentContext = session.activeVaultContext(),
+                  currentContext.id == expectedVaultID,
+                  currentContext.access === capability,
+                  !capability.isRevoked else { return }
             store = created
-            records = try await created.loadManifest().files
+            records = loadedRecords
+        } catch is CancellationError {
+            return
+        } catch VaultAccessError.revoked {
+            return
         } catch {
+            guard session.activeVaultID == expectedVaultID else { return }
             message = "The encrypted file store could not be opened."
         }
     }
@@ -228,29 +256,52 @@ struct VaultGeneralFilesView: View {
         let selection = selectedRecords
         guard let store, !selection.isEmpty, !isWorking else { return }
         isWorking = true
-        session.startSensitiveTask { _ in
-            defer { isWorking = false }
+        let taskID = session.startSensitiveTask { _ in
             do {
                 let prepared = try await store.prepareExport(selection)
                 guard !Task.isCancelled else {
                     await store.discardExport(prepared)
+                    isWorking = false
                     return
                 }
                 session.beginSystemInteraction()
                 export = prepared
+                await waitForExportDismissal()
+                // `discardExport` deliberately ignores cancellation. Keeping
+                // this registered task alive until deletion means session lock
+                // and vault deletion cannot finish while plaintext remains.
+                await store.discardExport(prepared)
+                if export?.id == prepared.id {
+                    export = nil
+                    session.endSystemInteraction()
+                }
             } catch is CancellationError {
-                return
+                // The store owns cleanup for cancellation during preparation.
             } catch {
                 message = "The selected files could not be authenticated and exported."
             }
+            exportTaskID = nil
+            isWorking = false
         }
+        exportTaskID = taskID
+        if taskID == nil { isWorking = false }
     }
 
     private func finishExport(_ prepared: PreparedGeneralFileExport) {
         export = nil
         session.endSystemInteraction()
-        guard let store else { return }
-        Task { await store.discardExport(prepared) }
+        guard let taskID = exportTaskID else { return }
+        session.cancelSensitiveTask(taskID)
+    }
+
+    private func waitForExportDismissal() async {
+        while !Task.isCancelled {
+            do {
+                try await Task.sleep(nanoseconds: 60_000_000_000)
+            } catch {
+                return
+            }
+        }
     }
 
     private func deleteSelected() {

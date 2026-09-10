@@ -28,6 +28,9 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Verify workflow security
+        run: python3 scripts/check_workflow_security.py
+
       - name: Verify release hygiene
         run: python3 scripts/check_release_hygiene.py
 
@@ -37,8 +40,17 @@ jobs:
       - name: Test TestFlight build-number guard
         run: node scripts/verify_testflight_build_number.mjs --self-test
 
+      - name: Test release-source evidence guard
+        run: python3 scripts/verify_release_source.py --self-test
+
+      - name: Test release-environment guard
+        run: python3 scripts/verify_release_environment.py --self-test
+
+      - name: Verify privacy manifest
+        run: python3 scripts/check_privacy_manifest.py
+
       - name: Install XcodeGen
-        run: brew install xcodegen
+        run: bash scripts/install_xcodegen.sh
 
       - name: Generate Xcode project
         run: xcodegen generate
@@ -113,10 +125,12 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             build
 
-      - name: Verify packaged thumbnail asset
+      - name: Verify packaged app resources
         run: |
           set -euo pipefail
-          EXTENSION_PATH="build/DerivedData/Build/Products/Debug-iphonesimulator/KeyHollow.app/PlugIns/KeyHollowVaultThumbnail.appex"
+          APP_PATH="build/DerivedData/Build/Products/Debug-iphonesimulator/KeyHollow.app"
+          EXTENSION_PATH="$APP_PATH/PlugIns/KeyHollowVaultThumbnail.appex"
+          python3 scripts/check_privacy_manifest.py --app-bundle "$APP_PATH"
           test -d "$EXTENSION_PATH"
           test -f "$EXTENSION_PATH/Assets.car"
 
@@ -170,7 +184,7 @@ jobs:
           persist-credentials: false
 
       - name: Install XcodeGen
-        run: brew install xcodegen
+        run: bash scripts/install_xcodegen.sh
 
       - name: Generate Xcode project
         run: xcodegen generate

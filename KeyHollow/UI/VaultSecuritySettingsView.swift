@@ -138,6 +138,13 @@ private struct ChangeVaultPasscodeView: View {
             }
             .interactiveDismissDisabled(isWorking)
         }
+        .onChange(of: session.securityEpoch) { _, _ in
+            currentPasscode = ""
+            newPasscode = ""
+            confirmation = ""
+            message = nil
+            isWorking = false
+        }
     }
 
     private var canSubmit: Bool {
@@ -168,25 +175,34 @@ private struct ChangeVaultPasscodeView: View {
         confirmation = ""
         message = nil
         isWorking = true
-
-        Task {
+        let unlockAuthorization = session.authorizeUnlockCompletion()
+        let requestSecurityEpoch = session.securityEpoch
+        session.startProtectedTask {
             do {
                 let unlocked = try await service.changePasscode(
                     currentPasscode: old,
                     newPasscode: new,
                     expectedVaultID: vaultID
                 )
-                session.unlock(vaultID: unlocked.vaultID, key: unlocked.vaultKey)
+                let accepted = session.completeUnlock(
+                    vaultID: unlocked.vaultID,
+                    key: unlocked.vaultKey,
+                    authorization: unlockAuthorization
+                )
+                guard accepted else { return }
                 isWorking = false
                 dismiss()
             } catch VaultUnlockError.passcodeAlreadyUsed {
+                guard session.securityEpoch == requestSecurityEpoch else { return }
                 message = "That new passcode cannot be used. Choose a different passcode."
                 isWorking = false
             } catch VaultUnlockError.invalidCredentials {
+                guard session.securityEpoch == requestSecurityEpoch else { return }
                 message = "The current passcode was not recognized for this vault."
                 isWorking = false
             } catch {
-                message = "The passcode could not be changed safely. The existing passcode should be treated as unchanged."
+                guard session.securityEpoch == requestSecurityEpoch else { return }
+                message = "The passcode change could not be verified. Keep both passcodes available and restart KeyHollow before trying again."
                 isWorking = false
             }
         }
@@ -290,6 +306,13 @@ private struct DeleteCurrentVaultView: View {
                 .interactiveDismissDisabled(isWorking)
             }
         }
+        .onChange(of: session.securityEpoch) { _, _ in
+            currentPasscode = ""
+            confirmationText = ""
+            message = nil
+            isWorking = false
+            focusedField = nil
+        }
     }
 
     private var canDelete: Bool {
@@ -331,21 +354,44 @@ private struct DeleteCurrentVaultView: View {
         confirmationText = ""
         message = nil
         isWorking = true
-
+        let requestSecurityEpoch = session.securityEpoch
         Task {
             do {
-                try await service.deleteVault(
+                try await VaultDeletionSessionCoordinator.deleteVault(
+                    service: service,
+                    session: session,
                     currentPasscode: passcode,
                     expectedVaultID: vaultID
                 )
-                session.lock()
                 isWorking = false
                 dismiss()
                 onDeleted()
             } catch VaultUnlockError.invalidCredentials {
+                guard session.securityEpoch == requestSecurityEpoch else { return }
                 message = "The current passcode was not recognized for this vault."
                 isWorking = false
+            } catch VaultUnlockError.credentialDestroyedCleanupIncomplete {
+                // The credential deletion committed even though encrypted-file
+                // cleanup was incomplete. Never leave its key live or invite a
+                // retry with a LowKey that can no longer succeed.
+                isWorking = false
+                dismiss()
+                onDeleted()
+            } catch VaultUnlockError.credentialStateUnknown {
+                // Fail closed without claiming deletion. Recovery must inspect
+                // the authenticated journal before KeyHollow can know whether
+                // the LowKey still exists.
+                isWorking = false
+                dismiss()
             } catch {
+                guard session.securityEpoch == requestSecurityEpoch else {
+                    // Authorization succeeded and the session was retired, but
+                    // deletion did not report a committed outcome. Stay locked
+                    // and let startup recovery recheck any authenticated journal.
+                    isWorking = false
+                    dismiss()
+                    return
+                }
                 message = "KeyHollow could not complete vault deletion cleanly. Do not assume the operation succeeded until the vault state is rechecked."
                 isWorking = false
             }

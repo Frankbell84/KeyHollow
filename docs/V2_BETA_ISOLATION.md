@@ -1,16 +1,19 @@
-# V2 Beta Isolation Boundary
+# Retired V2 Beta Isolation Boundary
 
-The encrypted-vault-transfer work is developed and tested outside the V1
-release line.
+This file records a historical experiment. It is not a current release path.
+The production application already contains the reviewed encrypted-vault
+transfer implementation, and `.github/workflows/testflight-beta.yml` is
+intentionally disabled.
 
 ## Repository boundary
 
-- Production remains on `main`.
-- V2 integration occurs only on
-  `integration/v2-encrypted-vault-transfer`.
-- The V2 pull request must remain a draft until every release gate below is
-  complete.
-- No V2 commit may be merged into `main` merely to obtain CI or device builds.
+- Production remains on protected `main`.
+- Historical `integration/v2-encrypted-vault-transfer` and `delivery/v2-beta`
+  branches are reference material only. They must not upload, sign, or be
+  merged wholesale.
+- The remote `delivery/v2-beta` branch must be neutralized or removed through a
+  separately authorized repository-maintenance change because a workflow is
+  evaluated from the branch that contains it.
 
 ## Device boundary
 
@@ -23,13 +26,13 @@ preferences, Keychain access group, and local vault storage. Installing or
 deleting KeyHollow Beta must not upgrade, replace, or delete the production
 KeyHollow app or its vaults.
 
-The production TestFlight upload workflow is also restricted to `main`. A
-separate beta workflow runs only when the guarded `delivery/v2-beta` branch is
-advanced. It requires the `KeyHollow Beta App Store` profile through the
-separate `BETA_BUILD_PROVISION_PROFILE_BASE64` secret. Ordinary integration
-branch pushes cannot upload a build.
+The production TestFlight workflow is restricted to `main`. There is no active
+beta upload workflow. A future side-by-side beta requires a new review of the
+app and embedded-extension identifiers, entitlements, provisioning profiles,
+Keychain access, local containers, release environment, and exact-source CI
+binding before any signing secret is made available to it.
 
-## Release gates
+## Requirements before any future beta is reintroduced
 
 1. Existing V1 unit, security, launch, Copy, Move, and lifecycle tests remain
    green on the V2 integration branch.
@@ -41,4 +44,7 @@ branch pushes cannot upload a build.
 5. Forced termination is tested at every export and import commit boundary.
 6. Large-vault testing demonstrates bounded memory and sufficient-storage
    failure handling.
-7. The V2 beta is independently reviewed before any merge into `main`.
+7. The beta release workflow is manual-only, environment-protected, bound to a
+   full exact-commit CI/CodeQL success, and independently reviewed before use.
+8. Reintroduction follows `docs/ADDON_RELEASE_POLICY.md`; historical branch
+   state is never treated as release evidence.

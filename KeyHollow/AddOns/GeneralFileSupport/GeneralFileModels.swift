@@ -88,18 +88,38 @@ public enum VaultGeneralFileKeyPurpose: Sendable {
 public protocol VaultGeneralFileCryptographicAccess: Sendable {
     var vaultID: UUID { get }
 
+    func checkAccess() throws
     func seal(_ plaintext: Data, for purpose: VaultGeneralFileKeyPurpose) throws -> Data
     func open(_ ciphertext: Data, for purpose: VaultGeneralFileKeyPurpose) throws -> Data
+
+    /// Opens authenticated bytes and synchronously consumes them while a
+    /// revocable implementation still owns its access lifetime. The fixed
+    /// `Void` result avoids returning decrypted bytes across this boundary.
+    func open(
+        _ ciphertext: Data,
+        for purpose: VaultGeneralFileKeyPurpose,
+        consuming consumer: (Data) throws -> Void
+    ) throws
 }
 
 public struct PreparedGeneralFileExport: Identifiable, Sendable {
     public let id: UUID
     public let urls: [URL]
     let rootURL: URL
+    /// Keeps this export's transient ownership registered even if the store
+    /// that prepared it leaves its lifecycle while a share sheet still holds
+    /// the exported URLs.
+    private let temporarySession: GeneralFileTemporarySession
 
-    init(id: UUID, urls: [URL], rootURL: URL) {
+    init(
+        id: UUID,
+        urls: [URL],
+        rootURL: URL,
+        temporarySession: GeneralFileTemporarySession
+    ) {
         self.id = id
         self.urls = urls
         self.rootURL = rootURL
+        self.temporarySession = temporarySession
     }
 }

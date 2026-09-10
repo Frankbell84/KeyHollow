@@ -13,6 +13,7 @@ public enum VaultKeyPurpose {
 public protocol VaultPhotoCryptographicAccess: Sendable {
     var vaultID: UUID { get }
 
+    func checkAccess() throws
     func seal(_ plaintext: Data, for purpose: VaultKeyPurpose) throws -> Data
     func open(_ ciphertext: Data, for purpose: VaultKeyPurpose) throws -> Data
 }
@@ -25,6 +26,8 @@ final class DirectVaultPhotoAccess: VaultPhotoCryptographicAccess, @unchecked Se
         self.vaultID = vaultID
         self.vaultKey = vaultKey
     }
+
+    func checkAccess() throws {}
 
     func seal(_ plaintext: Data, for purpose: VaultKeyPurpose) throws -> Data {
         try CryptoBox.seal(plaintext, using: derivedKey(for: purpose))

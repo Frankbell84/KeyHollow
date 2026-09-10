@@ -5,13 +5,13 @@
 - Native iOS target: KeyHollow
 - Bundle identifier: `com.keyhollow.app`
 - Minimum iOS version: 17.0
-- Version: 1.0 (build 1)
-- Automatic code-signing mode configured
+- Version: 1.0; latest accepted internal binary is Build 39
+- Reproducible XcodeGen project generation with a pinned XcodeGen release and
+  pinned Xcode 26.0.1 release toolchain
 - Release archive configuration present
-- Simulator CI build
-- Security unit-test target
+- Full simulator CI, security/lifecycle tests, and Swift CodeQL
 - Photos permission strings
-- Standard Apple cryptography export declaration configured
+- Apple privacy manifest and standard cryptography export declaration
 - Draft privacy policy, support page, and App Store metadata
 - App icon asset catalog with a 1024x1024 source image
 
@@ -22,9 +22,11 @@ These cannot be stored or guessed in source control and must be supplied through
 1. Active Apple Developer Program membership. **Complete.**
 2. Apple Developer Team `P38X56QHU9`. **Confirmed.**
 3. Registration of `com.keyhollow.app`. **Complete.**
-4. Apple Distribution certificate and App Store provisioning profile. **Pending.**
+4. Apple Distribution certificate and App Store provisioning profiles for the
+   app and thumbnail extension. **Complete for internal delivery.**
 5. App Store Connect record for KeyHollow (Apple ID `6807022780`). **Complete.**
-6. App Store Connect API access and upload key for the cloud release workflow. **Pending.**
+6. App Store Connect API access and upload key for the cloud release workflow.
+   **Complete for internal delivery.**
 
 ## Required product assets before external TestFlight/App Store review
 
@@ -38,15 +40,17 @@ These cannot be stored or guessed in source control and must be supplied through
 
 ## Internal TestFlight path
 
-1. Open/generate `KeyHollow.xcodeproj` from `project.yml` using XcodeGen.
-2. Select the KeyHollow target and the user's Apple Developer Team.
-3. Confirm bundle ID `com.keyhollow.app` is accepted by Apple.
-4. Run on a physical iPhone and complete `DEVICE_TEST_PLAN.md` critical cases.
-5. Product > Archive using the Release configuration.
-6. Validate the archive in Xcode Organizer.
-7. Distribute to App Store Connect.
-8. Add the build to an internal TestFlight group.
-9. Re-run the device-security test plan on the TestFlight-delivered build.
+1. Merge an explicitly approved reviewed revision through protected `main`.
+2. Require the exact merged commit to pass the full `KeyHollow iOS Build`
+   workflow, including tests, architecture/privacy/release gates, and CodeQL.
+3. Explicitly authorize the full 40-character commit and unused build number.
+4. Dispatch `Upload KeyHollow to TestFlight` from that exact `main` commit.
+5. Require approval in the protected `production-testflight` environment before
+   signing secrets are exposed.
+6. Verify App Store Connect processing and assignment only to the authorized
+   internal group.
+7. Complete `DEVICE_TEST_PLAN.md` on the TestFlight-delivered binary. Any
+   failure returns to a new pull request and a new exact-commit validation.
 
 ## External TestFlight gate
 

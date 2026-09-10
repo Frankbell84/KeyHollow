@@ -24,7 +24,7 @@ struct EncryptedVaultExportView: View {
             ScrollViewReader { proxy in
                 Form {
                     Section {
-                        Text("This creates a portable .khvault copy of only the vault that is currently open. Its photos and files remain in KeyHollow.")
+                        Text("This creates a portable .khvault copy of only the vault that is currently open. Its photos and files remain in KeyHollow. Folder names and organization are not included; restored items appear at the new vault's top level.")
                             .foregroundStyle(.secondary)
                     }
 
@@ -145,6 +145,20 @@ struct EncryptedVaultExportView: View {
                     clearSensitiveState()
                 }
             }
+        }
+        .onChange(of: session.securityEpoch) { _, _ in
+            if systemInteractionOpen {
+                systemInteractionOpen = false
+                session.endSystemInteraction()
+            }
+            if let pendingExport {
+                Self.discardTemporaryExport(at: pendingExport.archiveURL)
+                self.pendingExport = nil
+            }
+            clearSensitiveState()
+            isWorking = false
+            message = nil
+            focusedField = nil
         }
     }
 

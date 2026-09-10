@@ -11,6 +11,10 @@ final class SessionFolderPresentationAccess: VaultFolderPresentationCryptographi
         self.capability = capability
     }
 
+    func checkAccess() throws {
+        try capability.checkAccess()
+    }
+
     func seal(
         _ plaintext: Data,
         for purpose: VaultFolderPresentationKeyPurpose

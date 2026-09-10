@@ -1,6 +1,7 @@
 import SwiftUI
 import UIKit
 import UniformTypeIdentifiers
+import KeyHollowEncryptedVideoAddOn
 import KeyHollowFolderPresentationAddOn
 import KeyHollowGalleryUI
 import KeyHollowGeneralFileSupportAddOn
@@ -90,13 +91,25 @@ enum VaultGalleryContentItem: Identifiable, Equatable {
         case .photo:
             return .imagePreview
         case .generalFile(let record):
-            return VaultSecurePreviewPolicy.kind(
+            let securePreviewKind = VaultSecurePreviewPolicy.kind(
                 for: VaultSecurePreviewDescriptor(
                     displayName: record.displayName,
                     contentTypeIdentifier: record.contentTypeIdentifier,
                     originalByteCount: record.originalByteCount
                 )
-            ) == .image ? .imagePreview : .fileManagement
+            )
+            if securePreviewKind == .image {
+                return .imagePreview
+            }
+
+            let encryptedVideoKind = VaultEncryptedVideoPolicy.kind(
+                for: VaultEncryptedVideoDescriptor(
+                    displayName: record.displayName,
+                    contentTypeIdentifier: record.contentTypeIdentifier,
+                    originalByteCount: record.originalByteCount
+                )
+            )
+            return encryptedVideoKind == .video ? .videoPlayback : .fileManagement
         }
     }
 
@@ -113,6 +126,7 @@ enum VaultGalleryContentItem: Identifiable, Equatable {
 
 enum VaultGalleryOpenRoute: Equatable {
     case imagePreview
+    case videoPlayback
     case fileManagement
 }
 
@@ -161,11 +175,39 @@ private struct ActiveVaultImagePreview: Identifiable {
 /// cannot queue multiple large decrypted files between otherwise independent
 /// actors. Queued duplicate misses recheck the encrypted cache after the first
 /// request completes.
-private actor VaultGeneralFileThumbnailPipeline {
+struct VaultGeneralFileThumbnailPipelineHooks: Sendable {
+    var didAcquireColdPermit: @Sendable () async -> Void
+    var didPrepareVideoPlaintext: @Sendable () async -> Void
+
+    init(
+        didAcquireColdPermit: @escaping @Sendable () async -> Void = {},
+        didPrepareVideoPlaintext: @escaping @Sendable () async -> Void = {}
+    ) {
+        self.didAcquireColdPermit = didAcquireColdPermit
+        self.didPrepareVideoPlaintext = didPrepareVideoPlaintext
+    }
+}
+
+actor VaultGeneralFileThumbnailPipeline {
+    private enum PipelineError: Error {
+        case unsupportedItem
+        case invalidPreparedExport
+    }
+
+    private struct PermitWaiter {
+        let id: UUID
+        let continuation: CheckedContinuation<Bool, Never>
+    }
+
     private let cachedThumbnailDecoder = VaultSecureImageProcessor()
     private let cacheMissImageProcessor = VaultSecureImageProcessor()
+    private let hooks: VaultGeneralFileThumbnailPipelineHooks
     private var isOccupied = false
-    private var waiters: [CheckedContinuation<Void, Never>] = []
+    private var waiters: [PermitWaiter] = []
+
+    init(hooks: VaultGeneralFileThumbnailPipelineHooks = .init()) {
+        self.hooks = hooks
+    }
 
     func image(
         for record: VaultGeneralFileRecord,
@@ -173,32 +215,117 @@ private actor VaultGeneralFileThumbnailPipeline {
         presentationStore: VaultFolderPresentationStore
     ) async throws -> VaultSecureRenderedImage {
         let reference = VaultPresentedContentReference(kind: .generalFile, id: record.id)
-        if let cachedImage = try await loadCachedThumbnail(
-            for: reference,
-            presentationStore: presentationStore
-        ) {
-            return cachedImage
+        return try await loadOrGenerate(
+            loadCached: { [self] in
+                try await loadCachedThumbnail(
+                    for: reference,
+                    presentationStore: presentationStore
+                )
+            },
+            generate: { [self] in
+                try await generateThumbnail(
+                    for: record,
+                    reference: reference,
+                    generalFileStore: generalFileStore,
+                    presentationStore: presentationStore
+                )
+            }
+        )
+    }
+
+    /// Shared cache/cold-work primitive used by both Files-origin images and
+    /// videos. Keeping this internal gives deterministic tests direct access
+    /// to the production permit and duplicate-cache recheck semantics.
+    func loadOrGenerate<Value: Sendable>(
+        loadCached: @escaping @Sendable () async throws -> Value?,
+        generate: @escaping @Sendable () async throws -> Value
+    ) async throws -> Value {
+        if let cachedValue = try await loadCached() {
+            return cachedValue
         }
 
-        await acquire()
+        guard await acquire() else { throw CancellationError() }
         defer { release() }
         try Task.checkCancellation()
 
-        if let cachedImage = try await loadCachedThumbnail(
-            for: reference,
-            presentationStore: presentationStore
-        ) {
-            return cachedImage
+        if let cachedValue = try await loadCached() {
+            return cachedValue
+        }
+
+        await hooks.didAcquireColdPermit()
+        try Task.checkCancellation()
+        return try await generate()
+    }
+
+    private func generateThumbnail(
+        for record: VaultGeneralFileRecord,
+        reference: VaultPresentedContentReference,
+        generalFileStore: VaultGeneralFileStore,
+        presentationStore: VaultFolderPresentationStore
+    ) async throws -> VaultSecureRenderedImage {
+
+        let securePreviewKind = VaultSecurePreviewPolicy.kind(
+            for: VaultSecurePreviewDescriptor(
+                displayName: record.displayName,
+                contentTypeIdentifier: record.contentTypeIdentifier,
+                originalByteCount: record.originalByteCount
+            )
+        )
+        if securePreviewKind == .image {
+            try Task.checkCancellation()
+            let originalData = try await generalFileStore.loadFile(record)
+            try Task.checkCancellation()
+            let thumbnail = try await cacheMissImageProcessor.prepareThumbnail(from: originalData)
+            try Task.checkCancellation()
+            try await presentationStore.storeThumbnail(thumbnail.encodedData, for: reference)
+            try Task.checkCancellation()
+            return thumbnail.renderedImage
+        }
+
+        let descriptor = VaultEncryptedVideoDescriptor(
+            displayName: record.displayName,
+            contentTypeIdentifier: record.contentTypeIdentifier,
+            originalByteCount: record.originalByteCount
+        )
+        guard VaultEncryptedVideoPolicy.kind(for: descriptor) == .video else {
+            throw PipelineError.unsupportedItem
         }
 
         try Task.checkCancellation()
-        let originalData = try await generalFileStore.loadFile(record)
-        try Task.checkCancellation()
-        let thumbnail = try await cacheMissImageProcessor.prepareThumbnail(from: originalData)
-        try Task.checkCancellation()
-        try await presentationStore.storeThumbnail(thumbnail.encodedData, for: reference)
-        try Task.checkCancellation()
-        return thumbnail.renderedImage
+        let prepared = try await generalFileStore.prepareExport([record])
+        do {
+            await hooks.didPrepareVideoPlaintext()
+            try Task.checkCancellation()
+            guard prepared.urls.count == 1, let fileURL = prepared.urls.first else {
+                throw PipelineError.invalidPreparedExport
+            }
+            let playback = try VaultPreparedVideoPlayback(
+                id: record.id,
+                descriptor: descriptor,
+                fileURL: fileURL
+            )
+            let videoThumbnail = try await VaultEncryptedVideoThumbnailRenderer.render(playback)
+            try Task.checkCancellation()
+
+            // The original plaintext is gone before its bounded JPEG enters
+            // the encrypted presentation cache.
+            await generalFileStore.discardExport(prepared)
+            try Task.checkCancellation()
+            let renderedImage = try await cachedThumbnailDecoder.decodeThumbnail(
+                from: videoThumbnail.jpegData
+            )
+            try Task.checkCancellation()
+            try await presentationStore.storeThumbnail(
+                videoThumbnail.jpegData,
+                for: reference
+            )
+            try Task.checkCancellation()
+            return renderedImage
+        } catch {
+            // Idempotent cleanup covers cancellation and every failure point.
+            await generalFileStore.discardExport(prepared)
+            throw error
+        }
     }
 
     private func loadCachedThumbnail(
@@ -223,13 +350,24 @@ private actor VaultGeneralFileThumbnailPipeline {
         }
     }
 
-    private func acquire() async {
+    private func acquire() async -> Bool {
+        guard !Task.isCancelled else { return false }
         if !isOccupied {
             isOccupied = true
-            return
+            return true
         }
-        await withCheckedContinuation { continuation in
-            waiters.append(continuation)
+
+        let waiterID = UUID()
+        return await withTaskCancellationHandler {
+            await withCheckedContinuation { continuation in
+                if Task.isCancelled {
+                    continuation.resume(returning: false)
+                } else {
+                    waiters.append(PermitWaiter(id: waiterID, continuation: continuation))
+                }
+            }
+        } onCancel: {
+            Task { await self.cancelWaiter(id: waiterID) }
         }
     }
 
@@ -237,8 +375,17 @@ private actor VaultGeneralFileThumbnailPipeline {
         if waiters.isEmpty {
             isOccupied = false
         } else {
-            waiters.removeFirst().resume()
+            waiters.removeFirst().continuation.resume(returning: true)
         }
+    }
+
+    private func cancelWaiter(id: UUID) {
+        guard let index = waiters.firstIndex(where: { $0.id == id }) else { return }
+        waiters.remove(at: index).continuation.resume(returning: false)
+    }
+
+    func permitStateForTesting() -> (isOccupied: Bool, waiterCount: Int) {
+        (isOccupied, waiters.count)
     }
 }
 
@@ -264,6 +411,7 @@ struct VaultGalleryView: View {
     @State private var preparedImagePreview: VaultSecureImagePreview?
     @State private var previewTaskID: UUID?
     @State private var generalFileExport: PreparedGeneralFileExport?
+    @State private var generalFileExportTaskID: UUID?
     @State private var isSavingPreview = false
     @State private var previewMessage: String?
     @State private var showingImportOptions = false
@@ -285,6 +433,7 @@ struct VaultGalleryView: View {
     @State private var isWorking = false
     @State private var message: String?
     @State private var importProgress: VaultImportProgress?
+    @StateObject private var videoPlayback = VaultVideoPlaybackCoordinator()
 
     // SwiftUI recreates View values freely. State preserves these actor
     // identities so decoding and full-payload bounds survive recomposition.
@@ -375,7 +524,9 @@ struct VaultGalleryView: View {
                 .environmentObject(session)
         }
         .sheet(isPresented: $showingVaultFiles, onDismiss: {
-            Task { await reloadGeneralFiles() }
+            session.startSensitiveTask { _ in
+                await reloadGeneralFiles()
+            }
         }) {
             VaultGeneralFilesView()
                 .environmentObject(session)
@@ -400,6 +551,32 @@ struct VaultGalleryView: View {
                     }
                 },
                 onDelete: { deletePreviewSource(active.source) }
+            )
+        }
+        .sheet(
+            item: Binding(
+                get: { videoPlayback.active },
+                set: { active in
+                    if active == nil {
+                        videoPlayback.dismiss()
+                    }
+                }
+            ),
+            onDismiss: { videoPlayback.dismiss() }
+        ) { active in
+            VaultEncryptedVideoPlayerView(
+                playback: active.playback,
+                onPlayerWillAttach: {
+                    videoPlayback.playerWillAttach(active.playback.id)
+                },
+                onPlayerReleased: {
+                    videoPlayback.playerDidRelease(active.playback.id)
+                },
+                onDismiss: { videoPlayback.dismiss() },
+                onFailure: { _ in
+                    videoPlayback.dismiss()
+                    message = "The video stopped because iOS could not continue secure playback."
+                }
             )
         }
         .confirmationDialog(
@@ -456,6 +633,7 @@ struct VaultGalleryView: View {
             Text(message ?? "")
         }
         .task(id: session.activeVaultID) {
+            await videoPlayback.dismissAndWait()
             store = nil
             records = []
             generalFileStore = nil
@@ -468,8 +646,17 @@ struct VaultGalleryView: View {
             generalFileThumbnails = [:]
             clearActiveImagePreview()
             leaveSelectionMode()
-            await initializeStores()
-            contentStoresLoaded = true
+            await session.performSensitiveTask { capability in
+                guard session.activeVaultID == capability.vaultID else { return }
+                await initializeStores(expectedVaultID: capability.vaultID)
+            }
+            contentStoresLoaded = session.hasActiveAccess
+        }
+        .onChange(of: session.securityEpoch) { _, _ in
+            videoPlayback.dismiss()
+        }
+        .onDisappear {
+            videoPlayback.dismiss()
         }
     }
 
@@ -490,7 +677,7 @@ struct VaultGalleryView: View {
                 .disabled(visibleItemIDs.isEmpty || isWorking)
             } else {
                 if activeFolderID == nil {
-                    Button("Lock") { session.lock() }
+                    Button("Lock") { lockVaultAndFinishCleanup() }
                 } else {
                     Button {
                         leaveSelectionMode()
@@ -557,7 +744,7 @@ struct VaultGalleryView: View {
                     }
 
                     Button {
-                        session.lock()
+                        lockVaultAndFinishCleanup()
                     } label: {
                         Label("Lock KeyHollow", systemImage: "lock.fill")
                     }
@@ -637,6 +824,13 @@ struct VaultGalleryView: View {
                 Label("Save / Export", systemImage: "square.and.arrow.up.on.square")
             }
             .disabled(isWorking)
+        }
+    }
+
+    private func lockVaultAndFinishCleanup() {
+        let barrier = session.lock()
+        Task {
+            await barrier.wait()
         }
     }
 
@@ -876,6 +1070,9 @@ struct VaultGalleryView: View {
         switch item.openRoute {
         case .imagePreview:
             openImage(item)
+        case .videoPlayback:
+            guard case .generalFile(let record) = item else { return }
+            openVideo(record)
         case .fileManagement:
             showingVaultFiles = true
         }
@@ -913,16 +1110,20 @@ struct VaultGalleryView: View {
         }
     }
 
-    private func initializeStores() async {
-        guard let context = session.activeVaultContext() else { return }
+    private func initializeStores(expectedVaultID: UUID) async {
+        guard !Task.isCancelled,
+              let context = session.activeVaultContext(),
+              context.id == expectedVaultID else { return }
 
         if store == nil {
             do {
                 let createdStore = try VaultPhotoStore(vaultID: context.id, access: context.access)
                 store = createdStore
                 try await reload(using: createdStore)
+                try Task.checkCancellation()
             } catch {
                 store = nil
+                guard !Task.isCancelled, session.activeVaultID == expectedVaultID else { return }
                 message = "The encrypted photo store could not be opened."
             }
         }
@@ -936,8 +1137,10 @@ struct VaultGalleryView: View {
                 )
                 presentationStore = createdStore
                 folderManifest = try await createdStore.loadManifest()
+                try Task.checkCancellation()
             } catch {
                 presentationStore = nil
+                guard !Task.isCancelled, session.activeVaultID == expectedVaultID else { return }
                 message = "The encrypted presentation store could not be opened."
             }
         }
@@ -948,8 +1151,10 @@ struct VaultGalleryView: View {
                 let createdStore = try VaultGeneralFileStore(vaultID: context.id, access: access)
                 generalFileStore = createdStore
                 generalFileRecords = try await createdStore.loadManifest().files
+                try Task.checkCancellation()
             } catch {
                 generalFileStore = nil
+                guard !Task.isCancelled, session.activeVaultID == expectedVaultID else { return }
                 message = "The encrypted file store could not be opened."
             }
         }
@@ -959,9 +1164,14 @@ struct VaultGalleryView: View {
 
     @MainActor
     private func reloadGeneralFiles() async {
-        guard let generalFileStore else { return }
+        guard !Task.isCancelled,
+              let generalFileStore,
+              session.hasActiveAccess else { return }
         do {
-            generalFileRecords = try await generalFileStore.loadManifest().files
+            let loadedRecords = try await generalFileStore.loadManifest().files
+            try Task.checkCancellation()
+            guard session.hasActiveAccess else { return }
+            generalFileRecords = loadedRecords
             let validIDs = Set(generalFileRecords.map(\.id))
             generalFileThumbnails = generalFileThumbnails.filter { validIDs.contains($0.key) }
             reconcileSelection()
@@ -969,14 +1179,18 @@ struct VaultGalleryView: View {
                 leaveSelectionMode()
             }
             await reconcilePresentationStore()
+        } catch is CancellationError {
+            return
         } catch {
+            guard session.hasActiveAccess else { return }
             message = "The encrypted file list could not be refreshed."
         }
     }
 
     @MainActor
     private func reconcilePresentationStore() async {
-        guard let presentationStore,
+        guard !Task.isCancelled,
+              let presentationStore,
               store != nil,
               generalFileStore != nil,
               session.isUnlocked else { return }
@@ -990,7 +1204,10 @@ struct VaultGalleryView: View {
 
         do {
             try await presentationStore.reconcile(validItems: Set(photoItems + fileItems))
-            folderManifest = try await presentationStore.loadManifest()
+            let loadedManifest = try await presentationStore.loadManifest()
+            try Task.checkCancellation()
+            guard session.hasActiveAccess else { return }
+            folderManifest = loadedManifest
             if let activeFolderID,
                !folderManifest.folders.contains(where: { $0.id == activeFolderID }) {
                 self.activeFolderID = nil
@@ -1184,24 +1401,29 @@ struct VaultGalleryView: View {
             importProgress = VaultImportProgress(mode: importMode, total: total)
 
         case .photo(let photo):
-            guard var progress = importProgress,
-                  let store,
-                  session.isUnlocked,
-                  !Task.isCancelled else { return }
-            do {
-                _ = try await store.importPhoto(
-                    originalData: photo.originalData,
-                    thumbnailData: photo.thumbnailData,
-                    displayName: photo.displayName
-                )
-                progress.importedCount += 1
-                if progress.mode == .move, let identifier = photo.sourceAssetIdentifier {
-                    progress.identifiersToDelete.append(identifier)
+            await session.performSensitiveTask { capability in
+                guard var progress = importProgress,
+                      let store,
+                      session.activeVaultID == capability.vaultID,
+                      !Task.isCancelled else { return }
+                do {
+                    _ = try await store.importPhoto(
+                        originalData: photo.originalData,
+                        thumbnailData: photo.thumbnailData,
+                        displayName: photo.displayName
+                    )
+                    try Task.checkCancellation()
+                    progress.importedCount += 1
+                    if progress.mode == .move, let identifier = photo.sourceAssetIdentifier {
+                        progress.identifiersToDelete.append(identifier)
+                    }
+                } catch is CancellationError {
+                    return
+                } catch {
+                    progress.failedCount += 1
                 }
-            } catch {
-                progress.failedCount += 1
+                importProgress = progress
             }
-            importProgress = progress
 
         case .failed:
             importProgress?.failedCount += 1
@@ -1213,7 +1435,13 @@ struct VaultGalleryView: View {
                 return
             }
             importProgress = nil
-            await finishImport(progress)
+            await session.performSensitiveTask { capability in
+                guard session.activeVaultID == capability.vaultID else { return }
+                await finishImport(progress)
+            }
+            if !session.hasActiveAccess {
+                isWorking = false
+            }
         }
     }
 
@@ -1227,10 +1455,18 @@ struct VaultGalleryView: View {
         do {
             try await reload(using: store)
         } catch {
+            guard !Task.isCancelled, session.hasActiveAccess else {
+                isWorking = false
+                return
+            }
             message = "Photos were encrypted, but the gallery could not be refreshed."
         }
 
         if progress.mode == .move, progress.importedCount > 0 {
+            guard !Task.isCancelled, session.hasActiveAccess else {
+                isWorking = false
+                return
+            }
             let allImportedPhotosAreDeletable =
                 progress.identifiersToDelete.count == progress.importedCount
             let result: PhotoMoveResult
@@ -1240,6 +1476,10 @@ struct VaultGalleryView: View {
                     localIdentifiers: progress.identifiersToDelete
                 )
                 session.endSystemPhotoOperation()
+                guard !Task.isCancelled, session.hasActiveAccess else {
+                    isWorking = false
+                    return
+                }
             } else {
                 result = .copiedOnly
             }
@@ -1275,50 +1515,68 @@ struct VaultGalleryView: View {
     private func loadThumbnailIfNeeded(_ record: VaultPhotoRecord) async {
         guard thumbnails[record.id] == nil,
               let store,
-              session.isUnlocked else { return }
-        guard let data = try? await store.loadThumbnail(record),
-              !Task.isCancelled,
-              let rendered = try? await thumbnailImageProcessor.decodeThumbnail(from: data),
-              !Task.isCancelled else { return }
+              let activeVaultID = session.activeVaultID,
+              session.hasActiveAccess else { return }
+        await session.performSensitiveTask { capability in
+            guard capability.vaultID == activeVaultID,
+                  let data = try? await store.loadThumbnail(record),
+                  !Task.isCancelled,
+                  let rendered = try? await thumbnailImageProcessor.decodeThumbnail(from: data),
+                  !Task.isCancelled,
+                  session.activeVaultID == activeVaultID else { return }
 
-        if thumbnails.count >= maximumCachedThumbnails,
-           let eviction = thumbnails.keys.first(where: { $0 != record.id }) {
-            thumbnails.removeValue(forKey: eviction)
+            if thumbnails.count >= maximumCachedThumbnails,
+               let eviction = thumbnails.keys.first(where: { $0 != record.id }) {
+                thumbnails.removeValue(forKey: eviction)
+            }
+            thumbnails[record.id] = rendered.image
         }
-        thumbnails[record.id] = rendered.image
     }
 
     @MainActor
     private func loadGeneralFileThumbnailIfNeeded(
         _ record: VaultGeneralFileRecord
     ) async {
+        let securePreviewKind = VaultSecurePreviewPolicy.kind(
+            for: VaultSecurePreviewDescriptor(
+                displayName: record.displayName,
+                contentTypeIdentifier: record.contentTypeIdentifier,
+                originalByteCount: record.originalByteCount
+            )
+        )
+        let encryptedVideoKind = VaultEncryptedVideoPolicy.kind(
+            for: VaultEncryptedVideoDescriptor(
+                displayName: record.displayName,
+                contentTypeIdentifier: record.contentTypeIdentifier,
+                originalByteCount: record.originalByteCount
+            )
+        )
         guard generalFileThumbnails[record.id] == nil,
               let generalFileStore,
               let presentationStore,
+              let activeVaultID = session.activeVaultID,
               session.isUnlocked,
-              VaultSecurePreviewPolicy.kind(
-                  for: VaultSecurePreviewDescriptor(
-                      displayName: record.displayName,
-                      contentTypeIdentifier: record.contentTypeIdentifier,
-                      originalByteCount: record.originalByteCount
-                  )
-              ) == .image else {
+              securePreviewKind == .image || encryptedVideoKind == .video else {
             return
         }
 
-        do {
-            let renderedImage = try await generalFileThumbnailPipeline.image(
-                for: record,
-                generalFileStore: generalFileStore,
-                presentationStore: presentationStore
-            )
-            guard !Task.isCancelled else { return }
-            cacheGeneralFileThumbnail(renderedImage.image, id: record.id)
-        } catch is CancellationError {
-            return
-        } catch {
-            // A presentation preview must never block access to protected content.
-            return
+        await session.performSensitiveTask { capability in
+            guard capability.vaultID == activeVaultID else { return }
+            do {
+                let renderedImage = try await generalFileThumbnailPipeline.image(
+                    for: record,
+                    generalFileStore: generalFileStore,
+                    presentationStore: presentationStore
+                )
+                guard !Task.isCancelled,
+                      session.activeVaultID == activeVaultID else { return }
+                cacheGeneralFileThumbnail(renderedImage.image, id: record.id)
+            } catch is CancellationError {
+                return
+            } catch {
+                // A presentation preview must never block access to protected content.
+                return
+            }
         }
     }
 
@@ -1387,6 +1645,9 @@ struct VaultGalleryView: View {
                 preparedImagePreview = preview
             } catch is CancellationError {
                 return
+            } catch VaultPhotoStore.StoreError.originalTooLarge {
+                guard activeImagePreview?.source.id == item.id else { return }
+                previewMessage = "This legacy photo is larger than KeyHollow's current safe open-size limit. It remains encrypted and can be deleted, moved, or included in a compatibility export."
             } catch {
                 guard activeImagePreview?.source.id == item.id else { return }
                 previewMessage = "The image could not be authenticated, validated, and opened."
@@ -1490,6 +1751,27 @@ struct VaultGalleryView: View {
         visibleGeneralFileRecords.filter { selection.contains(.generalFile($0.id)) }
     }
 
+    private func openVideo(_ record: VaultGeneralFileRecord) {
+        guard !isWorking, let generalFileStore else { return }
+        message = nil
+        isWorking = true
+
+        let taskID = session.startSensitiveTask { _ in
+            defer { isWorking = false }
+            do {
+                try await videoPlayback.prepare(record, using: generalFileStore)
+            } catch is CancellationError {
+                return
+            } catch {
+                guard session.isUnlocked else { return }
+                message = "The video could not be authenticated, validated, and opened."
+            }
+        }
+        if taskID == nil {
+            isWorking = false
+        }
+    }
+
     private var selectedPresentedReferences: Set<VaultPresentedContentReference> {
         let photoReferences = selectedPhotoRecords.map {
             VaultPresentedContentReference(kind: .photo, id: $0.id)
@@ -1536,29 +1818,51 @@ struct VaultGalleryView: View {
         isWorking = true
 
         let taskID = session.startSensitiveTask { _ in
-            defer { isWorking = false }
             do {
                 let prepared = try await generalFileStore.prepareExport(files)
                 guard !Task.isCancelled else {
                     await generalFileStore.discardExport(prepared)
+                    isWorking = false
                     return
                 }
                 session.beginSystemInteraction()
                 generalFileExport = prepared
+                await waitForGeneralFileExportDismissal()
+                // This task stays session-registered until plaintext cleanup,
+                // making lock/deletion barriers observe the actual lifetime of
+                // the decrypted export directory.
+                await generalFileStore.discardExport(prepared)
+                if generalFileExport?.id == prepared.id {
+                    generalFileExport = nil
+                    session.endSystemInteraction()
+                }
             } catch is CancellationError {
-                return
+                // Preparation owns cleanup when cancellation precedes a result.
             } catch {
                 message = "The selected files could not be authenticated and exported."
             }
+            generalFileExportTaskID = nil
+            isWorking = false
         }
+        generalFileExportTaskID = taskID
         if taskID == nil { isWorking = false }
     }
 
     private func finishGeneralFileExport(_ prepared: PreparedGeneralFileExport) {
         generalFileExport = nil
         session.endSystemInteraction()
-        guard let generalFileStore else { return }
-        Task { await generalFileStore.discardExport(prepared) }
+        guard let taskID = generalFileExportTaskID else { return }
+        session.cancelSensitiveTask(taskID)
+    }
+
+    private func waitForGeneralFileExportDismissal() async {
+        while !Task.isCancelled {
+            do {
+                try await Task.sleep(nanoseconds: 60_000_000_000)
+            } catch {
+                return
+            }
+        }
     }
 
     private func savePhotos(_ photos: [VaultPhotoRecord]) {

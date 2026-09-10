@@ -31,15 +31,17 @@ public struct StagedVaultFile: Equatable, Sendable {
     public let url: URL
     public let displayName: String
     public let byteCount: UInt64
+    private let cleanupRoot: URL
 
-    public init(url: URL, displayName: String, byteCount: UInt64) {
+    init(url: URL, displayName: String, byteCount: UInt64, cleanupRoot: URL) {
         self.url = url
         self.displayName = displayName
         self.byteCount = byteCount
+        self.cleanupRoot = cleanupRoot
     }
 
     public func discard(using fileManager: FileManager = .default) {
-        try? fileManager.removeItem(at: url.deletingLastPathComponent())
+        try? fileManager.removeItem(at: cleanupRoot)
     }
 }
 
@@ -122,14 +124,23 @@ public struct KHVaultFileIngress {
             throw VaultFileIngressError.unsupportedFile
         }
 
-        let attributes = try fileManager.attributesOfItem(atPath: sourceURL.path)
-        guard let fileSize = attributes[.size] as? NSNumber,
-              fileSize.uint64Value > 0,
-              fileSize.uint64Value <= UInt64(Int64.max) else {
+        let sourceValues = try sourceURL.resourceValues(forKeys: [
+            .fileSizeKey,
+            .isRegularFileKey,
+            .isSymbolicLinkKey
+        ])
+        guard sourceValues.isRegularFile == true,
+              sourceValues.isSymbolicLink != true,
+              let fileSize = sourceValues.fileSize,
+              fileSize > 0 else {
             throw VaultFileIngressError.unsupportedFile
         }
 
-        let sourceSize = Int64(fileSize.uint64Value)
+        let sourceByteCount = UInt64(fileSize)
+        guard sourceByteCount <= UInt64(Int64.max) else {
+            throw VaultFileIngressError.unsupportedFile
+        }
+        let sourceSize = Int64(sourceByteCount)
         let capacityValues = try fileManager.temporaryDirectory.resourceValues(
             forKeys: [
                 .volumeAvailableCapacityForImportantUsageKey,
@@ -164,10 +175,34 @@ public struct KHVaultFileIngress {
 
             let destination = importRoot.appendingPathComponent("Selected.khvault")
             try fileManager.copyItem(at: sourceURL, to: destination)
+            try fileManager.setAttributes(
+                [.protectionKey: FileProtectionType.complete],
+                ofItemAtPath: destination.path
+            )
+            var protectedDestination = destination
+            var destinationProtectionValues = URLResourceValues()
+            destinationProtectionValues.isExcludedFromBackup = true
+            try protectedDestination.setResourceValues(destinationProtectionValues)
+
+            let postCopySourceValues = try URL(fileURLWithPath: sourceURL.path).resourceValues(
+                forKeys: [.fileSizeKey, .isRegularFileKey, .isSymbolicLinkKey]
+            )
+            let destinationValues = try URL(fileURLWithPath: destination.path).resourceValues(
+                forKeys: [.fileSizeKey, .isRegularFileKey, .isSymbolicLinkKey]
+            )
+            guard postCopySourceValues.isRegularFile == true,
+                  postCopySourceValues.isSymbolicLink != true,
+                  postCopySourceValues.fileSize == fileSize,
+                  destinationValues.isRegularFile == true,
+                  destinationValues.isSymbolicLink != true,
+                  destinationValues.fileSize == fileSize else {
+                throw VaultFileIngressError.unavailable
+            }
             return StagedVaultFile(
                 url: destination,
                 displayName: displayName,
-                byteCount: fileSize.uint64Value
+                byteCount: sourceByteCount,
+                cleanupRoot: importRoot
             )
         } catch {
             try? fileManager.removeItem(at: importRoot)

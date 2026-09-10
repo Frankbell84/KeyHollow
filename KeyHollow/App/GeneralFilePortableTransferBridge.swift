@@ -85,12 +85,22 @@ private struct PortableGeneralFileAccess: VaultGeneralFileCryptographicAccess {
     let vaultID: UUID
     let vaultKey: SymmetricKey
 
+    func checkAccess() throws {}
+
     func seal(_ plaintext: Data, for purpose: VaultGeneralFileKeyPurpose) throws -> Data {
         try CryptoBox.seal(plaintext, using: derivedKey(for: purpose))
     }
 
     func open(_ ciphertext: Data, for purpose: VaultGeneralFileKeyPurpose) throws -> Data {
         try CryptoBox.open(ciphertext, using: derivedKey(for: purpose))
+    }
+
+    func open(
+        _ ciphertext: Data,
+        for purpose: VaultGeneralFileKeyPurpose,
+        consuming consumer: (Data) throws -> Void
+    ) throws {
+        try consumer(open(ciphertext, for: purpose))
     }
 
     private func derivedKey(for purpose: VaultGeneralFileKeyPurpose) -> SymmetricKey {

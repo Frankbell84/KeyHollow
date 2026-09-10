@@ -39,9 +39,21 @@ Every feature follows this order:
 3. Architecture boundary gate.
 4. Complete simulator build, unit, security, lifecycle, and launch tests.
 5. Swift CodeQL analysis with no unresolved security findings.
-6. Production-identity TestFlight build from a guarded delivery branch.
-7. Physical-iPhone testing of the feature, core regressions, interruptions,
-   low-storage behavior, and rollback/data-integrity behavior.
-8. Explicit approval to merge only after all evidence is recorded.
+6. Explicit approval of the exact reviewed revision, followed by merge through
+   the protected `main` branch. Direct pushes to `main` are not a release path.
+7. A successful full CI and CodeQL run for the exact merged `main` commit.
+8. Explicit authorization of that exact commit and build number, followed by a
+   production-identity TestFlight upload from `main` through the protected
+   `production-testflight` environment.
+9. Physical-iPhone testing of the TestFlight binary: the feature, core
+   regressions, interruptions, background locking, low-storage behavior, and
+   rollback/data-integrity behavior.
+10. No source changes after physical acceptance. A failure returns to a new
+    reviewed pull request; external TestFlight or App Store promotion requires
+    a separate explicit authorization.
 
 No gate may be skipped because a feature is small, urgent, or UI-only.
+
+This protected-main-first sequence makes the commit reviewed by CI, the commit
+signed for TestFlight, and the commit physically accepted the same immutable
+source. A merge is not authorization to upload or distribute a binary.

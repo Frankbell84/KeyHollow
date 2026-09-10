@@ -2,7 +2,8 @@
 
 General File Support is an independently compiled, local-only KeyHollow add-on.
 It expands a vault beyond photos without changing the existing photo manifest,
-photo blobs, credential envelopes, or `.khvault` version-one decoder.
+photo blobs, credential envelopes, or outer `.khvault` version-one container
+decoder.
 
 ## First release scope
 
@@ -12,28 +13,32 @@ photo blobs, credential envelopes, or `.khvault` version-one decoder.
 - Import the selected files immediately after Apple's picker closes, then
   refresh the same unified three-column Vault grid used by photos. There is no
   KeyHollow staging, review, or second confirmation screen.
-- Canceling Apple's picker leaves the vault unchanged. Opening `Vault Files`
-  intentionally remains the management path for stored-file export and
-  deletion, not an intermediate import destination.
+- Canceling Apple's picker leaves the vault unchanged. `Vault Files` remains
+  an alternate file-management path, not an intermediate import destination;
+  the unified gallery also supports mixed selection, export, and deletion.
 - Future metadata editing is intentionally decoupled from import and deferred
   to a post-import Vault Security/settings surface.
 - Accept common documents, PDFs, audio, archives, text, and other data files.
 - Encrypt the file bytes and authenticated metadata before committing the item
   to the add-on manifest.
-- Show only the authenticated display name, type, and size after unlock.
+- Show the authenticated display name, type, and size after unlock.
 - Compose authenticated general-file records into the primary Vault screen so a
   file-only vault never appears empty; the photo and general-file manifests
   remain independently stored and compiled behind the presentation layer.
-- Present photos and general files in one consistent square-tile grid; file
-  tiles retain a type icon, name, and size while opening the dedicated file
-  manager for file-specific actions.
+- Present photos and general files in one consistent square-tile grid with
+  names and sizes. Files-origin images use encrypted thumbnails and the same
+  secure image preview as photo imports; non-image files retain a type icon and
+  open the dedicated file manager for file-specific actions.
 - Select one or many files, export authenticated copies through the system share
   interface, or permanently delete their encrypted vault copies.
 - Keep every source file unchanged during import.
 
-The first release intentionally excludes folders, packages, executable formats,
-`.khvault` backups, empty files, and individual files larger than 100 MB. Video
-and streaming large-file encryption remain a separately reviewed add-on.
+The first release intentionally excludes packages, executable formats,
+`.khvault` backups, empty files, and individual files larger than 100 MB.
+Existing in-limit video files remain ordinary general-file records. The
+separately compiled Encrypted Video add-on supplies bounded thumbnails and
+playback without changing those records or the transfer format. Streaming
+large-file encryption remains a later, separately reviewed storage design.
 
 ## Security and architecture boundaries
 
@@ -51,8 +56,12 @@ and streaming large-file encryption remain a separately reviewed add-on.
   storage before encryption. The protected copy is removed after import.
 - Blob names are random. File names, content types, sizes, and timestamps exist
   only inside the encrypted manifest.
-- Exports are authenticated before a protected temporary copy is shared, then
-  the temporary export directory is removed when the system sheet closes.
+- Exports are authenticated and written to protected temporary storage inside
+  the session capability's revocation fence. Revocation waits for an in-flight
+  bounded write, so no plaintext write can finish after access is revoked.
+  Preparation failure or cancellation removes its partial export; a successful
+  temporary export remains only for its explicit consumer and is removed when
+  that consumer finishes.
 - Interrupted import and export staging is purged the next time the encrypted
   file store opens, covering app termination before normal cleanup completes.
 - Vault deletion invokes an injected add-on cleanup boundary after credential
@@ -60,12 +69,18 @@ and streaming large-file encryption remain a separately reviewed add-on.
 
 ## Transfer compatibility
 
-Existing `.khvault` exports and restores remain byte-format compatible and
-continue to transfer the existing encrypted photo store. General files are not
-silently inserted into version one. Adding general files to portable whole-vault
-transfer requires a separately reviewed, versioned catalog extension with old-
-archive decoding, hostile-input, interruption, rollback, and device tests.
+The outer `.khvault` container, public header, and payload framing remain
+version one. The authenticated inner payload catalog reader accepts legacy
+photo-only catalog version one and general-file catalog version two archives.
+Current bounded exports emit catalog version three. Version three preserves the
+version-two supplemental manifest/blob layout while applying the current item,
+role-size, catalog-size, and aggregate-size policy. An authenticated legacy
+vault that exceeds only those newer limits is exported as version two within
+the already-shipped legacy ceilings so Build 39 data remains migratable. Mixed
+photo/file exports and restores therefore preserve general files, and legacy
+archives remain readable by current builds. Catalog-version-three exports are
+not readable by older builds that recognize only catalog versions one or two.
 
-The add-on is not eligible to merge until its own CI, security analysis,
-production-identity TestFlight, physical-device, interruption, low-storage, and
-data-integrity gates have passed.
+The add-on remains subject to the independent gates in
+`ADDON_RELEASE_POLICY.md`; the current implementation is merged and recorded
+as complete and hardened.
