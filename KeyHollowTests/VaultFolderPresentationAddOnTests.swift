@@ -657,7 +657,7 @@ private final class TestAccess: VaultFolderPresentationCryptographicAccess,
         for purpose: VaultFolderPresentationKeyPurpose
     ) throws -> Data {
         try checkAccess()
-        try CryptoBox.seal(plaintext, using: derivedKey(for: purpose))
+        return try CryptoBox.seal(plaintext, using: derivedKey(for: purpose))
     }
 
     func open(

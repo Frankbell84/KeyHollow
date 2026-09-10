@@ -16,11 +16,17 @@ evidence remains in `docs/PROJECT_CHECKPOINT.md`.
   `6e60b9daf8b0f345200fa0cc01d5d2663adc2c4c`
 - Reviewed draft-PR submission head:
   `42086651719f92e4001c26ef1e7b1e3c590bc0d6`
+- Latest published operational checkpoint before the CI correction:
+  `d48d27a87808caea8a014c8e851b5770a59d174a`
 - Draft review:
   [PR #51](https://github.com/Frankbell84/KeyHollow/pull/51), targeting
   refreshed `main` from `hardening/post-build39-baseline`.
 - Initial exact-submission-head CI run:
-  [#34464405249](https://github.com/Frankbell84/KeyHollow/actions/runs/34464405249).
+  [#34464405249](https://github.com/Frankbell84/KeyHollow/actions/runs/34464405249),
+  superseded and automatically cancelled when the required operational
+  checkpoint advanced the PR head.
+- First exact-checkpoint-head CI run:
+  [#34464715632](https://github.com/Frankbell84/KeyHollow/actions/runs/34464715632).
 - Exact signed Build 39 source:
   `f654390ccf45bf7448952be787874a7c3e4f8206`
 - Build 39 signed-upload workflow:
@@ -39,10 +45,10 @@ evidence remains in `docs/PROJECT_CHECKPOINT.md`.
 
 ## Current task
 
-Move the completed post-Build-39 hardening revision into formal review and
-obtain exact-head macOS/Xcode, XCTest, packaged-resource, and Swift CodeQL
-evidence. Feature work remains frozen. Any CI correction must stay on this
-branch and repeat the full review cycle.
+Correct the test-only Swift return-value compile failure found by exact-head
+CI, repeat all local safety gates, publish the minimal correction to draft PR
+#51, and obtain green exact-head macOS/Xcode, XCTest, packaged-resource, and
+Swift CodeQL evidence. Feature work remains frozen.
 
 ## Completed work
 
@@ -84,6 +90,11 @@ The published hardening implementation now includes:
   current artifact action.
 - Expanded hostile-input, interruption, replay, expiry, rollback, recovery,
   compatibility, cancellation, cleanup, and lifecycle tests.
+- The exact-head CI diagnosis identified no app-runtime or cryptographic
+  defect. The pending correction makes two concurrent lifecycle-test tasks
+  explicitly return their intended result and makes two test-only encryption
+  helpers explicitly return their ciphertext, without changing production
+  behavior, ordering, or encryption.
 
 No broad rewrite was required. The protected modular architecture continues to
 hold, and independent compile/API and adversarial-security reviews found no
@@ -134,43 +145,58 @@ filesystem behavior, and Swift CodeQL remain mandatory. Build 39's green
 evidence proves the released base, not this new hardening diff.
 
 Draft PR #51 was opened from exact reviewed head
-`42086651719f92e4001c26ef1e7b1e3c590bc0d6`. GitHub Actions run
+`42086651719f92e4001c26ef1e7b1e3c590bc0d6`. Its initial run
 [#34464405249](https://github.com/Frankbell84/KeyHollow/actions/runs/34464405249)
-started successfully, with both `build-and-test` and `CodeQL (Swift)` in
-progress when this operational checkpoint was written. No green result is
-claimed until every required job completes on the final PR head.
+was superseded and automatically cancelled when the required status checkpoint
+advanced the PR head to `d48d27a87808caea8a014c8e851b5770a59d174a`.
+
+The authoritative exact-checkpoint-head run
+[#34464715632](https://github.com/Frankbell84/KeyHollow/actions/runs/34464715632)
+passed preflight architecture, release-hygiene, workflow-security, privacy,
+project generation, simulator build, and packaged-resource verification. Its
+`build-and-test` job then failed while compiling test code because two
+multi-statement `Task` closures did not explicitly return their result. The
+same log reported one test-helper unused-result warning. Both sites and the
+single analogous helper are corrected in the current working phase. No green
+result is claimed until every required job completes on the final PR head.
 
 ## Git helper status
 
 The missing-DLL popups come from Codex's bundled Git HTTPS helper, not from the
 KeyHollow repository. The successive `libiconv`, `libpcre2`, `libwinpthread`,
-and `zlib` messages are one loader-path failure; the matching files are present
-inside the managed runtime.
+and `zlib` messages are one incomplete managed-runtime/loader failure; the
+matching files exist in the runtime's own `mingw64/bin` directory.
 
 - System Git at
   `C:\Users\Cynfox\AppData\Local\Programs\Git\cmd\git.exe`
   successfully completed GitHub `ls-remote`, fetch, and push operations.
-- A temporary test that added the bundled Git 2.53 runtime's own `mingw64/bin`
-  directory to its loader path completed a read-only GitHub operation. That
-  matching directory is now appended to the user PATH, and the earlier
-  cross-version `GIT_EXEC_PATH` override has been removed.
-- The running Codex process cannot inherit that user-environment correction.
-  Fully quit and reopen Codex before declaring the bundled helper repaired; no
-  machine reboot is required.
+- The earlier cross-version `GIT_EXEC_PATH` override is absent, as required.
+- A fresh audit found that the intended bundled `mingw64/bin` PATH correction
+  did not persist in either the user environment or this Codex process. One
+  individually copied DLL remains beside the helper, and a stale partial
+  runtime-installer directory remains. A simple restart alone therefore is not
+  a sufficient durable repair.
 - Until restart verification succeeds, use the explicit installed system Git
   executable for every network operation. This working path does not block the
   KeyHollow PR/CI phase.
-- Do not copy more individual DLLs. If the popup remains after a complete Codex
-  restart, close Codex and reversibly quarantine the complete managed runtime
-  so the app can rehydrate it as one unit, then validate it before removing the
-  quarantine.
+- After the final PR-head CI result is stable and no command is active, fully
+  quit Codex, verify its child processes have stopped, and reversibly rename
+  both the complete managed runtime and stale installer to timestamped
+  quarantine directories. Reopen Codex online so it can rehydrate a coherent
+  runtime, then verify bundled Git locally and against a bounded read-only
+  GitHub operation. Keep the quarantine through two clean launches.
+- Do not copy more individual DLLs. If a freshly rehydrated runtime still
+  reproduces the failure, append that runtime's own `mingw64/bin` directory to
+  the user PATH while Codex is closed, then reopen and retest.
 
 This is an environment-tooling issue, not repository or KeyHollow source
 corruption.
 
 ## Blockers
 
-There is no failing local static gate or open P1/P2 review finding.
+There is no open P1/P2 review finding or known production-code defect. The
+first exact-checkpoint-head CI run exposed a test-only Swift return-value
+compile issue; its minimal correction must pass the full replacement run.
 
 Remaining proof and external-control blockers are:
 
@@ -210,13 +236,17 @@ Before the next production TestFlight upload, Frank must verify or configure:
 
 ## Next action
 
-1. Monitor draft PR #51 and GitHub Actions run #34464405249 through completion.
-2. Require the final PR head to pass Xcode generation and compilation, the
-   complete simulator test suite, packaged-resource checks, and Swift CodeQL.
+1. Complete local verification of the minimal test-only CI correction, commit
+   it with this checkpoint, and push it to draft PR #51.
+2. Require the replacement exact-head run to pass Xcode generation and
+   compilation, the complete simulator test suite, packaged-resource checks,
+   and Swift CodeQL.
 3. Resolve any CI finding on this branch and repeat the full review/gate cycle.
-4. After a green exact revision, obtain Frank's explicit approval before merge.
-5. Require the eventual merged `main` commit to pass the same complete gates.
-6. Stop before signed upload, tester assignment, or App Store action until a
+4. Once the final PR-head result is stable, pause between phases for the
+   reversible Codex managed-runtime repair and verify it across two launches.
+5. After a green exact revision, obtain Frank's explicit approval before merge.
+6. Require the eventual merged `main` commit to pass the same complete gates.
+7. Stop before signed upload, tester assignment, or App Store action until a
    full commit SHA, unused build number, and tester group are authorized.
 
 ## Frank's decisions required

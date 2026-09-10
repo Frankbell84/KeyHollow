@@ -265,14 +265,14 @@ final class VaultLifecycleBaselineTests: XCTestCase {
 
         let firstTask = Task {
             await startGate.wait()
-            await attemptConcurrentVaultCreation(
+            return await attemptConcurrentVaultCreation(
                 service: firstService,
                 passcode: fixture.originalPasscode
             )
         }
         let secondTask = Task {
             await startGate.wait()
-            await attemptConcurrentVaultCreation(
+            return await attemptConcurrentVaultCreation(
                 service: secondService,
                 passcode: fixture.originalPasscode
             )

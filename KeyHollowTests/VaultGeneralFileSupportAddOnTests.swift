@@ -971,7 +971,7 @@ private final class TestAccess: VaultGeneralFileCryptographicAccess, @unchecked 
 
     func seal(_ plaintext: Data, for purpose: VaultGeneralFileKeyPurpose) throws -> Data {
         try checkAccess()
-        try CryptoBox.seal(plaintext, using: derivedKey(for: purpose))
+        return try CryptoBox.seal(plaintext, using: derivedKey(for: purpose))
     }
 
     func open(_ ciphertext: Data, for purpose: VaultGeneralFileKeyPurpose) throws -> Data {
