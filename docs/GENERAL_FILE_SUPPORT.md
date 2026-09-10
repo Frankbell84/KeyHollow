@@ -71,14 +71,15 @@ large-file encryption remains a later, separately reviewed storage design.
 
 The outer `.khvault` container, public header, and payload framing remain
 version one. The authenticated inner payload catalog reader accepts legacy
-photo-only catalog version one archives, while current exports emit catalog
-version two. Catalog
-version two adds a validated supplemental manifest and encrypted blob entries
-for general files without changing existing photo records or the outer archive
-decoder. Mixed photo/file exports and restores therefore preserve general
-files, and legacy photo-only archives remain readable by current builds.
-Catalog-version-two exports are not readable by older builds that recognize
-only catalog version one.
+photo-only catalog version one and general-file catalog version two archives.
+Current bounded exports emit catalog version three. Version three preserves the
+version-two supplemental manifest/blob layout while applying the current item,
+role-size, catalog-size, and aggregate-size policy. An authenticated legacy
+vault that exceeds only those newer limits is exported as version two within
+the already-shipped legacy ceilings so Build 39 data remains migratable. Mixed
+photo/file exports and restores therefore preserve general files, and legacy
+archives remain readable by current builds. Catalog-version-three exports are
+not readable by older builds that recognize only catalog versions one or two.
 
 The add-on remains subject to the independent gates in
 `ADDON_RELEASE_POLICY.md`; the current implementation is merged and recorded

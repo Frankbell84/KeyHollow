@@ -24,6 +24,17 @@ enum PortableArchiveContainerFormat {
     static let plaintextChunkByteCount = 1_048_576
     static let maximumSealedChunkByteCount = plaintextChunkByteCount + 64
     static let framePrefixByteCount = 13
+
+    // The container carries exactly one PortableArchivePayload stream. Derive
+    // the frame ceiling from the shipped v1/v2 payload/catalog ceilings so
+    // Build 39 archives remain readable. Canonical full non-final frames keep
+    // this legacy-compatible bound from permitting a tiny-frame CPU attack.
+    static let maximumAuthenticatedPlaintextByteCount =
+        PortableArchivePayloadFormat.legacyMaximumTotalByteCount
+        + UInt64(PortableArchivePayloadFormat.prefixByteCount)
+        + UInt64(PortableArchivePayloadFormat.legacyMaximumCatalogByteCount)
+    static let maximumFrameCount =
+        (maximumAuthenticatedPlaintextByteCount / UInt64(plaintextChunkByteCount)) + 1
 }
 
 struct PortableArchiveContentChunk: Equatable, Sendable {
@@ -234,6 +245,7 @@ final class PortableArchiveContainerWriter {
         guard let handle = fileHandle else {
             throw PortableArchiveContainerError.alreadyFinished
         }
+        try Self.validateWritableFrameSequence(nextSequence)
         let chunk = try PortableArchiveContentChunk.seal(
             plaintext,
             sequence: nextSequence,
@@ -253,6 +265,12 @@ final class PortableArchiveContainerWriter {
         let (incremented, overflow) = nextSequence.addingReportingOverflow(1)
         guard !overflow else { throw PortableArchiveContainerError.invalidFrame }
         nextSequence = incremented
+    }
+
+    static func validateWritableFrameSequence(_ sequence: UInt64) throws {
+        guard sequence < PortableArchiveContainerFormat.maximumFrameCount else {
+            throw PortableArchiveContainerError.invalidFrame
+        }
     }
 }
 
@@ -329,6 +347,9 @@ final class PortableArchiveContainerReader {
 
             while !foundFinalChunk {
                 try Task.checkCancellation()
+                guard expectedSequence < PortableArchiveContainerFormat.maximumFrameCount else {
+                    throw PortableArchiveContainerError.invalidFrame
+                }
                 let prefix: Data
                 do {
                     prefix = try Self.readExactly(
@@ -360,6 +381,17 @@ final class PortableArchiveContainerReader {
                     archiveID: secrets.archiveID,
                     contentKey: contentKey
                 )
+                if chunk.isFinal {
+                    // The writer always flushes full chunks as non-final and
+                    // closes with a strictly shorter (possibly empty) frame.
+                    guard plaintext.count < PortableArchiveContainerFormat.plaintextChunkByteCount else {
+                        throw PortableArchiveContainerError.invalidFrame
+                    }
+                } else {
+                    guard plaintext.count == PortableArchiveContainerFormat.plaintextChunkByteCount else {
+                        throw PortableArchiveContainerError.invalidFrame
+                    }
+                }
                 try receive(plaintext)
                 try Task.checkCancellation()
                 foundFinalChunk = chunk.isFinal

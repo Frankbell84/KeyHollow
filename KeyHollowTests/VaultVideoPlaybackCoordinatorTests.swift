@@ -442,6 +442,8 @@ private final class VideoPlaybackTestAccess:
         self.vaultID = vaultID
     }
 
+    func checkAccess() throws {}
+
     func seal(_ plaintext: Data, for purpose: VaultGeneralFileKeyPurpose) throws -> Data {
         try CryptoBox.seal(plaintext, using: derivedKey(for: purpose))
     }

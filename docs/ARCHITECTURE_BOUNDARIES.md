@@ -132,8 +132,10 @@ change storage, folders, selection, or `.khvault` formats.
 6. A module or add-on change must preserve existing vault data and `.khvault`
    compatibility unless a separately reviewed migration is provided.
 7. Every feature must pass architecture enforcement, the complete simulator
-   suite, Swift security analysis, and physical-device TestFlight validation
-   before merge.
+   suite, and Swift security analysis before protected merge. The exact merged
+   `main` commit must pass those gates again before it is eligible for signed
+   TestFlight upload, then pass physical-device acceptance before any external
+   distribution or App Store promotion.
 
 The mandatory implementation and release contract is defined in
 `docs/ADDON_RELEASE_POLICY.md` and reinforced by the repository pull-request

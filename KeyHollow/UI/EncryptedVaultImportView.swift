@@ -40,7 +40,7 @@ struct EncryptedVaultImportView: View {
             ScrollViewReader { proxy in
                 Form {
                 Section {
-                    Text("Import creates a new independent local vault. It never replaces, merges with, or deletes an existing vault.")
+                    Text("Import creates a new independent local vault. It never replaces, merges with, or deletes an existing vault. Folder names and organization are not included in this archive version, so restored items appear at the new vault's top level.")
                         .foregroundStyle(.secondary)
                 }
 
@@ -212,7 +212,9 @@ struct EncryptedVaultImportView: View {
             discardUninstalledMaterial()
         }
         .onChange(of: session.securityEpoch) { _, _ in
-            guard !systemInteractionOpen else { return }
+            guard SecurityEpochCredentialPolicy.mustClearDuringSystemInteraction(
+                systemInteractionOpen
+            ) else { return }
             clearSensitiveState()
             discardUninstalledMaterial()
             isWorking = false
@@ -334,6 +336,7 @@ struct EncryptedVaultImportView: View {
         let credential = PortableArchiveCredential.recoveryCode(recoveryCode)
         isWorking = true
         message = nil
+        let requestSecurityEpoch = session.securityEpoch
 
         session.startProtectedTask {
             do {
@@ -344,15 +347,18 @@ struct EncryptedVaultImportView: View {
                 )
                 let summary = ValidatedVaultContentSummary(
                     photoCount: restore.manifest.photos.count,
-                    generalFileCount: restore.supplementalItemCount
+                    generalFileCount: restore.supplementalItemCount,
+                    legacyOversizedPhotoCount: restore.legacyOversizedPhotoCount
                 )
                 restore.discard()
                 guard !Task.isCancelled else { return }
                 validatedContent = summary
                 isWorking = false
             } catch is CancellationError {
+                guard session.securityEpoch == requestSecurityEpoch else { return }
                 isWorking = false
             } catch {
+                guard session.securityEpoch == requestSecurityEpoch else { return }
                 isWorking = false
                 recoveryCode = ""
                 message = "The export could not be authenticated. Check the recovery code and confirm the .khvault file is unchanged."
@@ -372,6 +378,8 @@ struct EncryptedVaultImportView: View {
         passcodeConfirmation = ""
         isWorking = true
         message = nil
+        let unlockAuthorization = session.authorizeUnlockCompletion()
+        let requestSecurityEpoch = session.securityEpoch
 
         session.startProtectedTask {
             var restore: ValidatedPortableVaultRestore?
@@ -396,17 +404,25 @@ struct EncryptedVaultImportView: View {
                 validatedContent = nil
                 recoveryCode = ""
                 isWorking = false
-                session.unlock(vaultID: unlocked.vaultID, key: unlocked.vaultKey)
+                let accepted = session.completeUnlock(
+                    vaultID: unlocked.vaultID,
+                    key: unlocked.vaultKey,
+                    authorization: unlockAuthorization
+                )
+                guard accepted else { return }
                 dismiss()
             } catch is CancellationError {
                 restore?.discard()
+                guard session.securityEpoch == requestSecurityEpoch else { return }
                 isWorking = false
             } catch VaultUnlockError.passcodeAlreadyUsed {
                 restore?.discard()
+                guard session.securityEpoch == requestSecurityEpoch else { return }
                 isWorking = false
                 message = "That LowKey is already in use. Choose a different unpredictable LowKey."
             } catch {
                 restore?.discard()
+                guard session.securityEpoch == requestSecurityEpoch else { return }
                 isWorking = false
                 message = "The vault could not be installed safely. The incomplete install was rolled back; select the export and try again."
             }
@@ -464,11 +480,15 @@ enum ImportLowKeyContinuation {
 private struct ValidatedVaultContentSummary: Equatable {
     let photoCount: Int
     let generalFileCount: Int
+    let legacyOversizedPhotoCount: Int
 
     var verificationMessage: String {
         let photoNoun = photoCount == 1 ? "photo" : "photos"
         let fileNoun = generalFileCount == 1 ? "file" : "files"
-        return "Authenticated and verified: \(photoCount) \(photoNoun), \(generalFileCount) \(fileNoun)"
+        let verified = "Authenticated and verified: \(photoCount) \(photoNoun), \(generalFileCount) \(fileNoun)"
+        guard legacyOversizedPhotoCount > 0 else { return verified }
+        let itemNoun = legacyOversizedPhotoCount == 1 ? "photo" : "photos"
+        return "Archive authenticated: \(photoCount) \(photoNoun), \(generalFileCount) \(fileNoun). \(legacyOversizedPhotoCount) legacy \(itemNoun) exceed the current open-size limit; their encrypted bytes and archive digests are preserved, but full item verification is deferred until migration."
     }
 }
 

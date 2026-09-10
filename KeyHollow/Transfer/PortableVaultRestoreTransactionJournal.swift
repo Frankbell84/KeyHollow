@@ -59,6 +59,7 @@ struct PortableVaultRestoreTransactionRecord: Codable, Equatable, Sendable {
 
 public struct PortableVaultRestoreTransactionJournal {
     private static let fileExtension = "khtxn"
+    static let maximumJournalByteCount: UInt64 = 65_536
 
     let journalRoot: URL
     let photoDataRoot: URL
@@ -202,14 +203,26 @@ public struct PortableVaultRestoreTransactionJournal {
                 throw PortableVaultRestoreTransactionError.invalidJournal
             }
             let values = try url.resourceValues(
-                forKeys: [.isRegularFileKey, .isSymbolicLinkKey]
+                forKeys: [.fileSizeKey, .isRegularFileKey, .isSymbolicLinkKey]
             )
             guard values.isRegularFile == true,
-                  values.isSymbolicLink != true else {
+                  values.isSymbolicLink != true,
+                  let fileSize = values.fileSize,
+                  fileSize >= 28,
+                  UInt64(fileSize) <= Self.maximumJournalByteCount else {
                 throw PortableVaultRestoreTransactionError.invalidJournal
             }
 
             let sealed = try Data(contentsOf: url, options: [.mappedIfSafe])
+            let postReadValues = try URL(fileURLWithPath: url.path).resourceValues(
+                forKeys: [.fileSizeKey, .isRegularFileKey, .isSymbolicLinkKey]
+            )
+            guard postReadValues.isRegularFile == true,
+                  postReadValues.isSymbolicLink != true,
+                  postReadValues.fileSize == fileSize,
+                  sealed.count == fileSize else {
+                throw PortableVaultRestoreTransactionError.invalidJournal
+            }
             let plaintext: Data
             do {
                 plaintext = try CryptoBox.open(sealed, using: authenticationKey)

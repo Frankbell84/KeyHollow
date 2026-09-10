@@ -8,6 +8,230 @@ import XCTest
 @testable import KeyHollowVaultCore
 
 final class EncryptedVaultTransferCoordinatorTests: XCTestCase {
+    func testRestoreRejectsSymbolicLinkWorkingRootBeforeReadingArchive() async throws {
+        let roots = try TestRoots.create()
+        defer { roots.remove() }
+
+        let realWorkingRoot = roots.parent.appendingPathComponent(
+            "real-working",
+            isDirectory: true
+        )
+        try FileManager.default.createDirectory(
+            at: realWorkingRoot,
+            withIntermediateDirectories: false
+        )
+        let linkedWorkingRoot = roots.parent.appendingPathComponent(
+            "linked-working",
+            isDirectory: true
+        )
+        try FileManager.default.createSymbolicLink(
+            at: linkedWorkingRoot,
+            withDestinationURL: realWorkingRoot
+        )
+
+        do {
+            _ = try await EncryptedVaultTransferCoordinator().stageAndValidateRestore(
+                archiveURL: roots.parent.appendingPathComponent("missing.khvault"),
+                credential: .recoveryCode(
+                    "0123-4567-89AB-CDEF-GHJK-MNPQ-RSTV-WXYZ"
+                ),
+                workingRootOverride: linkedWorkingRoot,
+                keyDeriver: TestTransferKeyDeriver()
+            )
+            XCTFail("A symbolic-link transfer root was accepted")
+        } catch EncryptedVaultTransferError.invalidDestination {}
+    }
+
+    func testRestoreRemovesCanonicalWorkingDirectoryLeftByPriorProcess() async throws {
+        let roots = try TestRoots.create()
+        defer { roots.remove() }
+        let fixture = try await createArchive(at: roots)
+        let abandoned = roots.working.appendingPathComponent(
+            UUID().uuidString.lowercased(),
+            isDirectory: true
+        )
+        try FileManager.default.createDirectory(
+            at: abandoned,
+            withIntermediateDirectories: false
+        )
+        try Data("abandoned encrypted staging".utf8).write(
+            to: abandoned.appendingPathComponent("manifest.khm")
+        )
+        let unownedName = roots.working.appendingPathComponent(
+            "operator-note",
+            isDirectory: true
+        )
+        try FileManager.default.createDirectory(
+            at: unownedName,
+            withIntermediateDirectories: false
+        )
+
+        let restore = try await EncryptedVaultTransferCoordinator().stageAndValidateRestore(
+            archiveURL: fixture.archiveURL,
+            credential: .recoveryCode("0123-4567-89AB-CDEF-GHJK-MNPQ-RSTV-WXYZ"),
+            workingRootOverride: roots.working,
+            keyDeriver: TestTransferKeyDeriver()
+        )
+        defer { restore.discard() }
+
+        XCTAssertFalse(FileManager.default.fileExists(atPath: abandoned.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: unownedName.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: restore.stagingURL.path))
+    }
+
+    func testStartupWorkingCleanupRemovesOnlyCoordinatorOwnedNames() throws {
+        let roots = try TestRoots.create()
+        defer { roots.remove() }
+        try FileManager.default.createDirectory(
+            at: roots.working,
+            withIntermediateDirectories: false
+        )
+        let abandoned = roots.working.appendingPathComponent(
+            UUID().uuidString.lowercased(),
+            isDirectory: true
+        )
+        let unowned = roots.working.appendingPathComponent(
+            "preserve-this-item",
+            isDirectory: true
+        )
+        try FileManager.default.createDirectory(at: abandoned, withIntermediateDirectories: false)
+        try FileManager.default.createDirectory(at: unowned, withIntermediateDirectories: false)
+
+        try EncryptedVaultTransferCoordinator.cleanUpAbandonedWorkingDirectories(
+            workingRootOverride: roots.working
+        )
+
+        XCTAssertFalse(FileManager.default.fileExists(atPath: abandoned.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: unowned.path))
+    }
+
+    func testConcurrentValidatedRestoresPreserveEachOthersWorkingDirectories() async throws {
+        let roots = try TestRoots.create()
+        defer { roots.remove() }
+        let fixture = try await createArchive(at: roots)
+        let coordinator = EncryptedVaultTransferCoordinator()
+        let credential = PortableArchiveCredential.recoveryCode(
+            "0123-4567-89AB-CDEF-GHJK-MNPQ-RSTV-WXYZ"
+        )
+
+        let first = try await coordinator.stageAndValidateRestore(
+            archiveURL: fixture.archiveURL,
+            credential: credential,
+            workingRootOverride: roots.working,
+            keyDeriver: TestTransferKeyDeriver()
+        )
+        defer { first.discard() }
+        let firstStagingURL = first.stagingURL
+
+        let second = try await coordinator.stageAndValidateRestore(
+            archiveURL: fixture.archiveURL,
+            credential: credential,
+            workingRootOverride: roots.working,
+            keyDeriver: TestTransferKeyDeriver()
+        )
+        defer { second.discard() }
+
+        XCTAssertNotEqual(firstStagingURL, second.stagingURL)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: firstStagingURL.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: second.stagingURL.path))
+    }
+
+    func testGeneralFileOnlyArchiveCreatesEmptyPhotoManifestAndRestoresFile() async throws {
+        let roots = try TestRoots.create()
+        defer { roots.remove() }
+
+        let vaultID = UUID()
+        let vaultKey = SymmetricKey(data: Data(repeating: 0x58, count: 32))
+        let capability = VaultAccessCapability(vaultID: vaultID, vaultKey: vaultKey)
+        _ = try VaultPhotoStore(
+            vaultID: vaultID,
+            vaultKey: vaultKey,
+            storageRoot: roots.source
+        )
+        XCTAssertFalse(
+            FileManager.default.fileExists(
+                atPath: roots.source.appendingPathComponent("manifest.khm").path
+            )
+        )
+
+        let generalAccess = SessionGeneralFileAccess(capability: capability)
+        let generalStore = try VaultGeneralFileStore(
+            vaultID: vaultID,
+            access: generalAccess,
+            storageRoot: roots.generalSource,
+            temporaryRoot: roots.parent
+        )
+        let expectedFile = Data("general-file-only archive payload".utf8)
+        let sourceFile = roots.parent.appendingPathComponent("only-file.pdf")
+        try expectedFile.write(to: sourceFile)
+        let fileRecord = try await generalStore.importFile(at: sourceFile)
+
+        let credential = PortableArchiveCredential.recoveryCode(
+            "0123-4567-89AB-CDEF-GHJK-MNPQ-RSTV-WXYZ"
+        )
+        let coordinator = EncryptedVaultTransferCoordinator()
+        let receipt = try await coordinator.exportVault(
+            vaultID: vaultID,
+            createdAt: Date(timeIntervalSince1970: 1_700_000_050),
+            access: capability,
+            credential: credential,
+            destinationURL: roots.archive,
+            sourceRootOverride: roots.source,
+            supplementalSourceRootOverride: roots.generalSource,
+            supplementalContent: GeneralFilePortableTransferBridge(access: generalAccess),
+            workingRootOverride: roots.working,
+            keyDeriver: TestTransferKeyDeriver()
+        )
+        XCTAssertEqual(receipt.encryptedFileCount, 3)
+        XCTAssertTrue(
+            FileManager.default.fileExists(
+                atPath: roots.source.appendingPathComponent("manifest.khm").path
+            )
+        )
+
+        let restore = try await coordinator.stageAndValidateRestore(
+            archiveURL: roots.archive,
+            credential: credential,
+            workingRootOverride: roots.working,
+            supplementalContent: GeneralFilePortableTransferBridge(),
+            keyDeriver: TestTransferKeyDeriver()
+        )
+        XCTAssertTrue(restore.manifest.photos.isEmpty)
+        XCTAssertEqual(restore.supplementalItemCount, 1)
+
+        let installer = try PortableVaultRestoreInstaller(
+            credentialStore: TestPortableVaultCredentialStore(),
+            journalAuthenticationKey: testRestoreJournalKey,
+            journalRootOverride: roots.transactions,
+            photoDataRootOverride: roots.installed,
+            generalFileDataRootOverride: roots.generalInstalled
+        )
+        let installed = try await installer.install(
+            restore,
+            localUnlockKey: SymmetricKey(data: Data(repeating: 0x19, count: 32))
+        )
+        let installedGeneralRoot = roots.generalInstalled.appendingPathComponent(
+            installed.vaultID.uuidString.lowercased(),
+            isDirectory: true
+        )
+        let installedStore = try VaultGeneralFileStore(
+            vaultID: installed.vaultID,
+            access: SessionGeneralFileAccess(
+                capability: VaultAccessCapability(
+                    vaultID: installed.vaultID,
+                    vaultKey: SymmetricKey(data: installed.vaultKey)
+                )
+            ),
+            storageRoot: installedGeneralRoot,
+            temporaryRoot: roots.parent
+        )
+        let installedManifest = try await installedStore.validateAllEncryptedFiles()
+        XCTAssertEqual(installedManifest.files, [fileRecord])
+        let prepared = try await installedStore.prepareExport([fileRecord])
+        XCTAssertEqual(try Data(contentsOf: try XCTUnwrap(prepared.urls.first)), expectedFile)
+        await installedStore.discardExport(prepared)
+    }
+
     func testMixedPhotoAndGeneralFileArchiveRestoresBothStores() async throws {
         let roots = try TestRoots.create()
         defer { roots.remove() }
@@ -430,6 +654,37 @@ final class EncryptedVaultTransferCoordinatorTests: XCTestCase {
         XCTAssertTrue(try FileManager.default.contentsOfDirectory(atPath: roots.transactions.path).isEmpty)
     }
 
+    func testCancellationDuringCredentialLookupStopsBeforeJournalAndInstall() async throws {
+        let roots = try TestRoots.create()
+        defer { roots.remove() }
+        let restore = try await makeValidatedRestore(at: roots)
+        defer { restore.discard() }
+        let credentialStore = PausingPortableVaultCredentialStore()
+        let installer = try PortableVaultRestoreInstaller(
+            credentialStore: credentialStore,
+            journalAuthenticationKey: testRestoreJournalKey,
+            journalRootOverride: roots.transactions,
+            photoDataRootOverride: roots.installed
+        )
+        let localUnlockKey = SymmetricKey(data: Data(repeating: 0x43, count: 32))
+
+        let installTask = Task {
+            try await installer.install(restore, localUnlockKey: localUnlockKey)
+        }
+        await credentialStore.waitUntilContainsStarts()
+        installTask.cancel()
+        await credentialStore.resumeContains(returning: false)
+
+        do {
+            _ = try await installTask.value
+            XCTFail("A cancelled install crossed the restore-journal boundary")
+        } catch is CancellationError {}
+
+        XCTAssertTrue(FileManager.default.fileExists(atPath: restore.stagingURL.path))
+        XCTAssertTrue(try FileManager.default.contentsOfDirectory(atPath: roots.installed.path).isEmpty)
+        XCTAssertTrue(try FileManager.default.contentsOfDirectory(atPath: roots.transactions.path).isEmpty)
+    }
+
     func testUsedLocalLowKeyDoesNotConsumeValidatedRestore() async throws {
         let roots = try TestRoots.create()
         defer { roots.remove() }
@@ -457,6 +712,98 @@ final class EncryptedVaultTransferCoordinatorTests: XCTestCase {
         XCTAssertTrue(FileManager.default.fileExists(atPath: restore.stagingURL.path))
         XCTAssertTrue(try FileManager.default.contentsOfDirectory(atPath: roots.installed.path).isEmpty)
         restore.discard()
+    }
+
+    func testLowKeyRaceRollsBackRestoreWithoutDeletingWinningCredential() async throws {
+        let roots = try TestRoots.create()
+        defer { roots.remove() }
+        let fixture = try await createArchive(at: roots)
+        let restore = try await EncryptedVaultTransferCoordinator().stageAndValidateRestore(
+            archiveURL: fixture.archiveURL,
+            credential: .recoveryCode("0123-4567-89AB-CDEF-GHJK-MNPQ-RSTV-WXYZ"),
+            workingRootOverride: roots.working,
+            keyDeriver: TestTransferKeyDeriver()
+        )
+        let localUnlockKey = SymmetricKey(data: Data(repeating: 0x25, count: 32))
+        let locator = VaultLocator.derive(from: localUnlockKey)
+        let winningEnvelope = try VaultEnvelope.seal(
+            payload: VaultPayload(
+                vaultID: UUID(),
+                vaultKey: Data(repeating: 0x26, count: 32),
+                createdAt: Date(timeIntervalSince1970: 1_700_000_321)
+            ),
+            using: localUnlockKey
+        )
+        let credentialStore = TestPortableVaultCredentialStore(
+            collisionEnvelopeOnWrite: winningEnvelope
+        )
+        let installer = try PortableVaultRestoreInstaller(
+            credentialStore: credentialStore,
+            journalAuthenticationKey: testRestoreJournalKey,
+            journalRootOverride: roots.transactions,
+            photoDataRootOverride: roots.installed
+        )
+
+        do {
+            _ = try await installer.install(restore, localUnlockKey: localUnlockKey)
+            XCTFail("A LowKey race was accepted")
+        } catch PortableVaultRestoreInstallationError.credentialAlreadyUsed {}
+
+        let preserved = await credentialStore.envelope(for: locator)
+        XCTAssertEqual(preserved?.version, winningEnvelope.version)
+        XCTAssertEqual(preserved?.sealedPayload, winningEnvelope.sealedPayload)
+        XCTAssertTrue(try FileManager.default.contentsOfDirectory(atPath: roots.installed.path).isEmpty)
+        XCTAssertTrue(try FileManager.default.contentsOfDirectory(atPath: roots.transactions.path).isEmpty)
+    }
+
+    func testInstallRejectsCiphertextChangedAfterValidation() async throws {
+        let roots = try TestRoots.create()
+        defer { roots.remove() }
+        let restore = try await makeValidatedRestore(at: roots)
+        defer { restore.discard() }
+        let entry = try XCTUnwrap(
+            restore.catalog.entries.first(where: { $0.role == .original })
+        )
+        let entryURL = restore.stagingURL.appendingPathComponent(entry.storageName)
+        var ciphertext = try Data(contentsOf: entryURL)
+        ciphertext[ciphertext.index(before: ciphertext.endIndex)] ^= 0x01
+        try ciphertext.write(to: entryURL, options: .atomic)
+
+        try await assertInstallFailsClosed(restore, roots: roots)
+    }
+
+    func testInstallRejectsUnexpectedFileAddedAfterValidation() async throws {
+        let roots = try TestRoots.create()
+        defer { roots.remove() }
+        let restore = try await makeValidatedRestore(at: roots)
+        defer { restore.discard() }
+        try Data("unexpected staged content".utf8).write(
+            to: restore.stagingURL.appendingPathComponent("unexpected.khp")
+        )
+
+        try await assertInstallFailsClosed(restore, roots: roots)
+    }
+
+    func testInstallRejectsSymlinkSubstitutionAfterValidation() async throws {
+        let roots = try TestRoots.create()
+        defer { roots.remove() }
+        let restore = try await makeValidatedRestore(at: roots)
+        defer { restore.discard() }
+        let entry = try XCTUnwrap(
+            restore.catalog.entries.first(where: { $0.role == .thumbnail })
+        )
+        let entryURL = restore.stagingURL.appendingPathComponent(entry.storageName)
+        let replacementURL = roots.parent.appendingPathComponent("replacement.kht")
+        try Data(repeating: 0x44, count: Int(entry.ciphertextByteCount)).write(
+            to: replacementURL
+        )
+        try FileManager.default.removeItem(at: entryURL)
+        try FileManager.default.createSymbolicLink(
+            at: entryURL,
+            withDestinationURL: replacementURL
+        )
+
+        try await assertInstallFailsClosed(restore, roots: roots)
     }
 
     func testCredentialWriteFailureRollsBackCommittedCiphertext() async throws {
@@ -602,6 +949,37 @@ final class EncryptedVaultTransferCoordinatorTests: XCTestCase {
                 journalRootOverride: roots.transactions
             )
         )
+    }
+
+    func testOversizedRestoreJournalIsRejectedBeforeUnboundedRead() async throws {
+        let roots = try TestRoots.create()
+        defer { roots.remove() }
+        let journal = try PortableVaultRestoreTransactionJournal(
+            authenticationKey: testRestoreJournalKey,
+            journalRootOverride: roots.transactions,
+            photoDataRootOverride: roots.installed,
+            generalFileDataRootOverride: roots.generalInstalled
+        )
+        let oversizedURL = roots.transactions
+            .appendingPathComponent(UUID().uuidString.lowercased())
+            .appendingPathExtension("khtxn")
+        try Data(
+            repeating: 0x44,
+            count: Int(PortableVaultRestoreTransactionJournal.maximumJournalByteCount + 1)
+        ).write(to: oversizedURL)
+
+        do {
+            try await journal.recoverAll(
+                credentialStore: TestPortableVaultCredentialStore()
+            )
+            XCTFail("An oversized restore journal was read or accepted")
+        } catch {
+            XCTAssertEqual(
+                error as? PortableVaultRestoreTransactionError,
+                .invalidJournal
+            )
+        }
+        XCTAssertTrue(FileManager.default.fileExists(atPath: oversizedURL.path))
     }
 
     func testTamperedRecoveryJournalFailsClosedWithoutDeletingVaultMaterial() async throws {
@@ -844,6 +1222,56 @@ final class EncryptedVaultTransferCoordinatorTests: XCTestCase {
         )
     }
 
+    private func makeValidatedRestore(
+        at roots: TestRoots
+    ) async throws -> ValidatedPortableVaultRestore {
+        let receipt = try await createArchive(at: roots)
+        return try await EncryptedVaultTransferCoordinator().stageAndValidateRestore(
+            archiveURL: receipt.archiveURL,
+            credential: .recoveryCode("0123-4567-89AB-CDEF-GHJK-MNPQ-RSTV-WXYZ"),
+            workingRootOverride: roots.working,
+            keyDeriver: TestTransferKeyDeriver()
+        )
+    }
+
+    private func assertInstallFailsClosed(
+        _ restore: ValidatedPortableVaultRestore,
+        roots: TestRoots
+    ) async throws {
+        let localUnlockKey = SymmetricKey(data: Data(repeating: 0x6a, count: 32))
+        let credentialStore = TestPortableVaultCredentialStore()
+        let installer = try PortableVaultRestoreInstaller(
+            credentialStore: credentialStore,
+            journalAuthenticationKey: testRestoreJournalKey,
+            journalRootOverride: roots.transactions,
+            photoDataRootOverride: roots.installed,
+            generalFileDataRootOverride: roots.generalInstalled
+        )
+
+        do {
+            _ = try await installer.install(restore, localUnlockKey: localUnlockKey)
+            XCTFail("A staged payload changed after validation was installed")
+        } catch {
+            XCTAssertEqual(
+                error as? PortableVaultRestoreInstallationError,
+                .credentialCommitFailed
+            )
+        }
+
+        let locator = VaultLocator.derive(from: localUnlockKey)
+        let installedURL = roots.installed.appendingPathComponent(
+            restore.destinationVaultPayload.vaultID.uuidString.lowercased(),
+            isDirectory: true
+        )
+        let storedEnvelope = await credentialStore.envelope(for: locator)
+        XCTAssertNil(storedEnvelope)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: installedURL.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: restore.stagingURL.path))
+        XCTAssertTrue(
+            try FileManager.default.contentsOfDirectory(atPath: roots.transactions.path).isEmpty
+        )
+    }
+
     private func encryptedDirectorySnapshot(_ root: URL) throws -> [String: Data] {
         let urls = try FileManager.default.contentsOfDirectory(
             at: root,
@@ -916,16 +1344,19 @@ private actor TestPortableVaultCredentialStore: PortableVaultCredentialStoring {
     private let existingLocators: Set<String>
     private let failAfterWrite: Bool
     private let failDeletes: Bool
+    private let collisionEnvelopeOnWrite: VaultEnvelope?
     private var envelopes: [String: VaultEnvelope] = [:]
 
     init(
         existingLocators: Set<String> = [],
         failAfterWrite: Bool = false,
-        failDeletes: Bool = false
+        failDeletes: Bool = false,
+        collisionEnvelopeOnWrite: VaultEnvelope? = nil
     ) {
         self.existingLocators = existingLocators
         self.failAfterWrite = failAfterWrite
         self.failDeletes = failDeletes
+        self.collisionEnvelopeOnWrite = collisionEnvelopeOnWrite
     }
 
     func contains(locator: String) -> Bool {
@@ -933,6 +1364,10 @@ private actor TestPortableVaultCredentialStore: PortableVaultCredentialStoring {
     }
 
     func writeIfAbsent(_ envelope: VaultEnvelope, locator: String) throws {
+        if let collisionEnvelopeOnWrite {
+            envelopes[locator] = collisionEnvelopeOnWrite
+            throw VaultCredentialStoreError.locatorAlreadyExists
+        }
         guard envelopes[locator] == nil,
               !existingLocators.contains(locator) else {
             throw StoreError.forcedFailure
@@ -957,6 +1392,42 @@ private actor TestPortableVaultCredentialStore: PortableVaultCredentialStoring {
     func envelope(for locator: String) -> VaultEnvelope? {
         envelopes[locator]
     }
+}
+
+private actor PausingPortableVaultCredentialStore: PortableVaultCredentialStoring {
+    private var containsContinuation: CheckedContinuation<Bool, Never>?
+    private var containsStarted = false
+    private var startWaiters: [CheckedContinuation<Void, Never>] = []
+
+    func contains(locator: String) async -> Bool {
+        containsStarted = true
+        let waiters = startWaiters
+        startWaiters.removeAll()
+        waiters.forEach { $0.resume() }
+        return await withCheckedContinuation { continuation in
+            containsContinuation = continuation
+        }
+    }
+
+    func waitUntilContainsStarts() async {
+        guard !containsStarted else { return }
+        await withCheckedContinuation { continuation in
+            startWaiters.append(continuation)
+        }
+    }
+
+    func resumeContains(returning result: Bool) {
+        containsContinuation?.resume(returning: result)
+        containsContinuation = nil
+    }
+
+    func read(locator: String) -> VaultEnvelope? { nil }
+
+    func writeIfAbsent(_ envelope: VaultEnvelope, locator: String) throws {
+        XCTFail("A cancelled install attempted to persist credentials")
+    }
+
+    func delete(locator: String) throws {}
 }
 
 private func XCTAssertThrowsErrorAsync(

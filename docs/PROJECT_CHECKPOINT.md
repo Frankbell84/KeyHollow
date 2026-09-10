@@ -1,8 +1,10 @@
-# KeyHollow Development Checkpoint
+# Historical KeyHollow Build 38 Checkpoint
 
 **Updated:** September 9, 2026
-**Purpose:** Durable restart point after the accepted Build 38 gallery
-performance release and before roadmap add-on #4, Encrypted Video Support.
+**Purpose:** Frozen historical evidence for the accepted Build 38 gallery
+performance release. This is not the current resume point or release policy.
+Use `WORK_STATUS.md` for current work and `docs/ADDON_RELEASE_POLICY.md` for the
+mandatory release sequence.
 
 ## Executive status
 
@@ -51,7 +53,9 @@ performance release and before roadmap add-on #4, Encrypted Video Support.
 - Mixed photo/file selection, select all, deletion, individual export, folder
   creation/navigation, and batch moves are operational.
 - Mixed photo/file `.khvault` export and restore preserve general files and
-  existing vault compatibility.
+  existing vault compatibility. The current archive version does not preserve
+  Folder Presentation names or membership; both transfer screens disclose that
+  restored items appear at the new vault's top level.
 - Warm and cold mixed-gallery scrolling, repeated image opening, dismissal and
   lock recovery, folder navigation and moves, non-image routing, and the largest
   representative image all passed physical-device validation in Build 38.
@@ -77,72 +81,10 @@ performance release and before roadmap add-on #4, Encrypted Video Support.
 - Refreshed remote ancestry verifies accepted head `d85c338` is contained in
   merged `origin/main` at `3df3e1c`.
 
-## Roadmap order from this checkpoint
+## Historical scope boundary
 
-1. **Encrypted Video Support (roadmap add-on #4).** Adapt the already validated
-   modular video concepts onto a fresh branch from current `main`.
-2. **Backup Verification Center (roadmap add-on #2).** Add read-only archive
-   health/authenticity reporting over the existing authenticated validator;
-   do not add an install operation or another unlock route.
-3. **Unified media navigation.** Add swipe navigation through compatible media
-   after video behavior is settled so photos, Files-origin images, and videos
-   can share one deliberately designed pager.
-4. **Catalog and organization refinements.** Metadata/details editing,
-   authenticated search/sort, cycle-safe nested folders, honest import progress,
-   and—only if still useful—lightweight cross-vault references rather than
-   recursively embedding complete `.khvault` archives.
-5. **Later security and migration add-ons.** Break-in Reports / Intruder
-   Capture, App Icon Camouflage, and the Vault Escape Hatch share extension.
-6. **Architecture Addendum program.** Secure manifest/policy and Protected View;
-   Direct and Advanced Transfer; Backup/Sync; Identity/Recovery; Legacy Center;
-   Secure Threads; Hollow Workspace; integrity/sealing; and later organization,
-   intelligence, and automation capabilities. Each remains a separately mapped
-   module, not authorization for a broad rewrite.
-
-## Encrypted Video integration rule
-
-The historical `feature/encrypted-video-support` branch contains three useful,
-previously green milestones: compiled module boundary (`1c02979`), secure
-playback (`37f0e2c`), and bounded encrypted-at-rest thumbnails (`dcef6d5`), with
-evidence recorded at `c56edff`. That branch predates the accepted Build 38
-gallery, folders, and performance behavior and must not be merged wholesale.
-
-Create a fresh feature branch from current `main`. First map the historical
-video diff against the current target graph and gallery contracts. Transfer or
-rewrite only the isolated video target, policy, coordinators, and tests, then
-adapt current gallery wiring deliberately. Preserve existing vaults and
-byte-compatible `.khvault` behavior.
-
-## Required gates for the next add-on
-
-1. Fresh isolated feature branch and draft review.
-2. Narrow-interface, capability-lifetime, and dependency-direction review.
-3. Architecture and release-hygiene checks before and after implementation.
-4. Tests for accepted types and size policy, thumbnail bounds, temporary-file
-   cleanup, cancellation, locking, malformed input, and non-video routing.
-5. Complete Mac simulator build, unit, lifecycle, transfer, security, and launch
-   tests with warnings treated as errors.
-6. Swift CodeQL with no unresolved findings.
-7. Guarded TestFlight delivery from a separately reviewed delivery branch.
-8. Physical-iPhone playback, interruption/background lock, low-storage,
-   thumbnail, export/restore, and data-integrity testing.
-9. Explicit owner approval before signed upload, tester-group changes, merge,
-   or App Store review action.
-
-## Current blockers and decisions
-
-There is no known code, modularity, security, performance, delivery, or roadmap
-blocker. Windows cannot run the Apple simulator, so the Mac CI and physical
-iPhone gates remain mandatory. No owner decision is required to begin the
-already-approved isolated Encrypted Video adaptation. Signed delivery, tester
-assignment, feature merge, and App Store review remain later explicit decision
-boundaries.
-
-## Resume instruction
-
-Fetch `origin/main` and verify it contains merge commit `3df3e1c` plus accepted
-head `d85c338`. Read this file, `WORK_STATUS.md`,
-`docs/ARCHITECTURE_BOUNDARIES.md`, and `docs/ADDON_RELEASE_POLICY.md`. Start the
-Encrypted Video work on a new branch from that verified baseline. Do not reuse
-or wholesale merge the historical video, general-file, folder, performance, or
-delivery branches.
+The roadmap, Encrypted Video integration instructions, release branch model,
+and resume directions that originally followed this checkpoint were consumed
+by later work and intentionally removed. Build 39 supersedes this operationally.
+The evidence above remains useful for provenance only; it must never override
+the current status, architecture contract, or protected-main release policy.

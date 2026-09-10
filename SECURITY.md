@@ -8,12 +8,13 @@ public.
 
 | Version | Security updates |
 |---|---|
-| Current App Store release | Supported |
+| Current internal TestFlight build | Supported |
 | Current `main` branch | Supported |
 | Older builds and development branches | Not supported |
 
-The `security/vault-hardening` branch and its draft pull request are active
-review work, not a production release.
+Hardening branches and draft pull requests are review work, not production
+releases. Only a signed build whose exact source has passed the protected
+release workflow is treated as a production candidate.
 
 ## Reporting a vulnerability
 

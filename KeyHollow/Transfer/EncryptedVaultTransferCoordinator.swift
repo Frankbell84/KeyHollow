@@ -31,8 +31,6 @@ public protocol PortableVaultExportAccess: VaultPhotoCryptographicAccess {
         credential: PortableArchiveCredential,
         keyDeriver: any PortableArchiveKeyDeriving
     ) throws -> PreparedEncryptedVaultArchive
-
-    func checkAccess() throws
 }
 
 public struct PortableVaultSupplementalValidation: Sendable {
@@ -67,6 +65,113 @@ public struct EncryptedVaultExportReceipt: Equatable, Sendable {
     public let archiveByteCount: UInt64
 }
 
+/// Process-scoped ownership for private archive-extraction directories.
+///
+/// Every directory KeyHollow creates below `TransferWorking` has a canonical
+/// lowercase UUID name. A new transfer removes canonical directories that are
+/// not owned by another live transfer in this process, which converges storage
+/// left behind by a crash without racing a concurrent validation.
+fileprivate final class PortableArchiveWorkingDirectoryLease: @unchecked Sendable {
+    let directoryURL: URL
+
+    private let rootKey: String
+    private let identifier: String
+    private let registry: PortableArchiveWorkingDirectoryRegistry
+
+    fileprivate init(
+        directoryURL: URL,
+        rootKey: String,
+        identifier: String,
+        registry: PortableArchiveWorkingDirectoryRegistry
+    ) {
+        self.directoryURL = directoryURL
+        self.rootKey = rootKey
+        self.identifier = identifier
+        self.registry = registry
+    }
+
+    deinit {
+        registry.release(rootKey: rootKey, identifier: identifier)
+    }
+}
+
+fileprivate final class PortableArchiveWorkingDirectoryRegistry: @unchecked Sendable {
+    static let shared = PortableArchiveWorkingDirectoryRegistry()
+
+    private let lock = NSLock()
+    private var activeIdentifiersByRoot: [String: Set<String>] = [:]
+
+    func acquire(at rootURL: URL) throws -> PortableArchiveWorkingDirectoryLease {
+        let root = rootURL.standardizedFileURL
+        let rootKey = root.resolvingSymlinksInPath().path
+        let identifier = UUID().uuidString.lowercased()
+
+        lock.lock()
+        do {
+            try removeAbandonedItems(
+                at: root,
+                preserving: activeIdentifiersByRoot[rootKey] ?? []
+            )
+            activeIdentifiersByRoot[rootKey, default: []].insert(identifier)
+            lock.unlock()
+        } catch {
+            lock.unlock()
+            throw error
+        }
+
+        return PortableArchiveWorkingDirectoryLease(
+            directoryURL: root.appendingPathComponent(identifier, isDirectory: true),
+            rootKey: rootKey,
+            identifier: identifier,
+            registry: self
+        )
+    }
+
+    func removeAbandonedItems(at rootURL: URL) throws {
+        let root = rootURL.standardizedFileURL
+        let rootKey = root.resolvingSymlinksInPath().path
+        lock.lock()
+        defer { lock.unlock() }
+        try removeAbandonedItems(
+            at: root,
+            preserving: activeIdentifiersByRoot[rootKey] ?? []
+        )
+    }
+
+    fileprivate func release(rootKey: String, identifier: String) {
+        lock.lock()
+        defer { lock.unlock() }
+        activeIdentifiersByRoot[rootKey]?.remove(identifier)
+        if activeIdentifiersByRoot[rootKey]?.isEmpty == true {
+            activeIdentifiersByRoot.removeValue(forKey: rootKey)
+        }
+    }
+
+    private func removeAbandonedItems(
+        at rootURL: URL,
+        preserving activeIdentifiers: Set<String>
+    ) throws {
+        let items = try FileManager.default.contentsOfDirectory(
+            at: rootURL,
+            includingPropertiesForKeys: [.isDirectoryKey, .isSymbolicLinkKey],
+            options: []
+        )
+        for itemURL in items {
+            let name = itemURL.lastPathComponent
+            guard Self.isCanonicalWorkingIdentifier(name),
+                  !activeIdentifiers.contains(name) else {
+                continue
+            }
+            try FileManager.default.removeItem(at: itemURL)
+        }
+    }
+
+    private static func isCanonicalWorkingIdentifier(_ value: String) -> Bool {
+        guard let identifier = UUID(uuidString: value) else { return false }
+        return identifier.uuidString.lowercased() == value
+    }
+}
+
 /// Validation results are immutable. A lock serializes the only two ownership
 /// transitions (commit or discard), allowing this single-use object to cross
 /// into `VaultUnlockService` without racing its protected staging directory.
@@ -77,20 +182,27 @@ public final class ValidatedPortableVaultRestore: @unchecked Sendable {
     public let destinationVaultPayload: VaultPayload
     public let manifest: VaultPhotoManifest
     public let supplementalItemCount: Int
+    public let legacyOversizedPhotoCount: Int
     public let catalog: PortableArchivePayloadCatalog
 
     private let stagedPayload: PortableArchiveStagedPayload
     private let ownershipLock = NSLock()
     private var ownsStagingDirectory = true
+    private var workingDirectoryLease: PortableArchiveWorkingDirectoryLease?
 
-    public var stagingURL: URL { stagedPayload.directoryURL }
+    // Internal for diagnostics and tests only. App-layer callers cannot obtain
+    // a path with which to mutate authenticated staging between validation and
+    // the single commit/discard ownership transition below.
+    var stagingURL: URL { stagedPayload.directoryURL }
 
     fileprivate init(
         secrets: PortableArchiveSecrets,
         manifest: VaultPhotoManifest,
         supplementalItemCount: Int,
+        legacyOversizedPhotoCount: Int,
         catalog: PortableArchivePayloadCatalog,
-        stagedPayload: PortableArchiveStagedPayload
+        stagedPayload: PortableArchiveStagedPayload,
+        workingDirectoryLease: PortableArchiveWorkingDirectoryLease
     ) {
         archiveID = secrets.archiveID
         sourceVaultID = secrets.sourceVaultID
@@ -102,8 +214,10 @@ public final class ValidatedPortableVaultRestore: @unchecked Sendable {
         )
         self.manifest = manifest
         self.supplementalItemCount = supplementalItemCount
+        self.legacyOversizedPhotoCount = legacyOversizedPhotoCount
         self.catalog = catalog
         self.stagedPayload = stagedPayload
+        self.workingDirectoryLease = workingDirectoryLease
     }
 
     public func discard() {
@@ -112,6 +226,7 @@ public final class ValidatedPortableVaultRestore: @unchecked Sendable {
         guard ownsStagingDirectory else { return }
         stagedPayload.discard()
         ownsStagingDirectory = false
+        workingDirectoryLease = nil
     }
 
     func commitEncryptedFiles(
@@ -128,6 +243,7 @@ public final class ValidatedPortableVaultRestore: @unchecked Sendable {
             generalFileDestinationURL: generalFileDestinationURL
         )
         ownsStagingDirectory = false
+        workingDirectoryLease = nil
     }
 }
 
@@ -161,7 +277,9 @@ public struct PortableVaultRestoreInstaller {
     ) async throws -> VaultPayload {
         let payload = restore.destinationVaultPayload
         let locator = VaultLocator.derive(from: localUnlockKey)
-        guard !(await credentialStore.contains(locator: locator)) else {
+        let credentialAlreadyExists = await credentialStore.contains(locator: locator)
+        try Task.checkCancellation()
+        guard !credentialAlreadyExists else {
             throw PortableVaultRestoreInstallationError.credentialAlreadyUsed
         }
 
@@ -188,6 +306,7 @@ public struct PortableVaultRestoreInstaller {
             using: localUnlockKey
         )
 
+        try Task.checkCancellation()
         let transaction = try transactionJournal.begin(
             destinationVaultID: payload.vaultID,
             credentialLocator: locator,
@@ -205,6 +324,19 @@ public struct PortableVaultRestoreInstaller {
             )
             try await credentialStore.writeIfAbsent(envelope, locator: locator)
             try transactionJournal.finish(transaction)
+        } catch VaultCredentialStoreError.locatorAlreadyExists {
+            // Another operation won the LowKey locator after the preflight
+            // check. Roll back only this restore's ciphertext; the journal's
+            // envelope digest prevents deleting the winning credential.
+            do {
+                try await transactionJournal.rollback(
+                    transaction,
+                    credentialStore: credentialStore
+                )
+            } catch {
+                throw PortableVaultRestoreInstallationError.credentialCommitFailed
+            }
+            throw PortableVaultRestoreInstallationError.credentialAlreadyUsed
         } catch {
             // If immediate rollback cannot complete, leave the authenticated
             // journal in place so startup recovery can try again and fail closed.
@@ -225,6 +357,16 @@ public struct PortableVaultRestoreInstaller {
 
 public struct EncryptedVaultTransferCoordinator {
     public init() {}
+
+    /// Removes extraction directories left by an interrupted prior process.
+    /// Unknown names are preserved because this cleanup owns only KeyHollow's
+    /// canonical UUID-named children.
+    public static func cleanUpAbandonedWorkingDirectories(
+        workingRootOverride: URL? = nil
+    ) throws {
+        let root = try workingRoot(override: workingRootOverride)
+        try PortableArchiveWorkingDirectoryRegistry.shared.removeAbandonedItems(at: root)
+    }
 
     /// The caller must re-authenticate the currently open vault before invoking
     /// this operation. This layer accepts only an already-unlocked vault and
@@ -271,7 +413,7 @@ public struct EncryptedVaultTransferCoordinator {
             access: access,
             storageRoot: sourceRoot
         )
-        let sourceManifest = try await sourceStore.loadManifest()
+        let sourceManifest = try await sourceStore.prepareArchiveManifest()
         let supplementalInventory = try await supplementalContent?.authenticatedArchiveInventory(
             vaultID: vaultID,
             sourceRootOverride: supplementalSourceRootOverride
@@ -353,9 +495,12 @@ public struct EncryptedVaultTransferCoordinator {
         keyDeriver: any PortableArchiveKeyDeriving = PortableArchiveArgon2idKeyDeriver()
     ) async throws -> ValidatedPortableVaultRestore {
         let workingRoot = try Self.workingRoot(override: workingRootOverride)
-        let stagingURL = workingRoot
-            .appendingPathComponent(UUID().uuidString.lowercased(), isDirectory: true)
-        let extractor = try PortableArchivePayloadExtractor(stagingURL: stagingURL)
+        let workingDirectoryLease = try PortableArchiveWorkingDirectoryRegistry.shared.acquire(
+            at: workingRoot
+        )
+        let extractor = try PortableArchivePayloadExtractor(
+            stagingURL: workingDirectoryLease.directoryURL
+        )
         let reader = try PortableArchiveContainerReader(sourceURL: archiveURL)
 
         let secrets = try reader.streamAuthenticatedContent(
@@ -403,18 +548,49 @@ public struct EncryptedVaultTransferCoordinator {
 
             // Authenticate every inner AES-GCM blob. Decrypted media exists only
             // transiently in memory and is never written during this validation.
+            // Shipped v1/v2 archives could contain photos larger than the
+            // current whole-item memory policy. Their outer container and
+            // per-entry catalog digest are still authenticated here, while the
+            // item stays encrypted and reports an explicit per-item legacy-size
+            // error if opened. V3 never permits that deferred legacy case.
+            let entriesByStorageName = Dictionary(
+                uniqueKeysWithValues: stagedPayload.catalog.entries.map {
+                    ($0.storageName, $0)
+                }
+            )
+            var legacyOversizedPhotoIDs = Set<UUID>()
             for photo in manifest.photos {
                 try Task.checkCancellation()
-                _ = try await stagedStore.loadPhoto(photo)
-                _ = try await stagedStore.loadThumbnail(photo)
+                guard let originalEntry = entriesByStorageName[photo.blobName],
+                      let thumbnailEntry = entriesByStorageName[photo.thumbnailName] else {
+                    throw EncryptedVaultTransferError.restoredCatalogMismatch
+                }
+                if Self.requiresImmediateInnerAuthentication(
+                    originalEntry,
+                    catalogVersion: stagedPayload.catalog.version
+                ) {
+                    _ = try await stagedStore.loadPhoto(photo)
+                } else {
+                    legacyOversizedPhotoIDs.insert(photo.id)
+                }
+                if Self.requiresImmediateInnerAuthentication(
+                    thumbnailEntry,
+                    catalogVersion: stagedPayload.catalog.version
+                ) {
+                    _ = try await stagedStore.loadThumbnail(photo)
+                } else {
+                    legacyOversizedPhotoIDs.insert(photo.id)
+                }
             }
 
             return ValidatedPortableVaultRestore(
                 secrets: secrets,
                 manifest: manifest,
                 supplementalItemCount: supplementalValidation.itemCount,
+                legacyOversizedPhotoCount: legacyOversizedPhotoIDs.count,
                 catalog: stagedPayload.catalog,
-                stagedPayload: stagedPayload
+                stagedPayload: stagedPayload,
+                workingDirectoryLease: workingDirectoryLease
             )
         } catch {
             stagedPayload.discard()
@@ -474,6 +650,15 @@ public struct EncryptedVaultTransferCoordinator {
         }
     }
 
+    private static func requiresImmediateInnerAuthentication(
+        _ entry: PortableArchivePayloadEntry,
+        catalogVersion: Int
+    ) -> Bool {
+        catalogVersion >= PortableArchivePayloadCatalog.currentVersion
+            || entry.ciphertextByteCount
+                <= PortableArchivePayloadFormat.maximumCiphertextByteCount(for: entry.role)
+    }
+
     private static func photoRoot(vaultID: UUID, override: URL?) throws -> URL {
         if let override { return override.standardizedFileURL }
         let appSupport = try FileManager.default.url(
@@ -511,6 +696,17 @@ public struct EncryptedVaultTransferCoordinator {
                 attributes: [.protectionKey: FileProtectionType.complete]
             )
         }
+        let rootValues = try root.resourceValues(
+            forKeys: [.isDirectoryKey, .isSymbolicLinkKey]
+        )
+        guard rootValues.isDirectory == true,
+              rootValues.isSymbolicLink != true else {
+            throw EncryptedVaultTransferError.invalidDestination
+        }
+        try FileManager.default.setAttributes(
+            [.protectionKey: FileProtectionType.complete],
+            ofItemAtPath: root.path
+        )
         var values = URLResourceValues()
         values.isExcludedFromBackup = true
         var protectedRoot = root

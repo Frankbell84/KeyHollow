@@ -1,0 +1,16 @@
+# Release controls and cryptographic/data boundaries require Frank's review.
+/.github/CODEOWNERS @Frankbell84
+/.github/workflows/ @Frankbell84
+/scripts/ @Frankbell84
+/project.yml @Frankbell84
+/SECURITY.md @Frankbell84
+/KeyHollow/Security/ @Frankbell84
+/KeyHollow/Session/ @Frankbell84
+/KeyHollow/Storage/ @Frankbell84
+/KeyHollow/Transfer/ @Frankbell84
+/KeyHollow/Photos/ @Frankbell84
+/KeyHollow/ThirdParty/ @Frankbell84
+/KeyHollow/AddOns/ @Frankbell84
+/KeyHollow/Resources/PrivacyInfo.xcprivacy @Frankbell84
+/KeyHollowVaultThumbnailExtension/ @Frankbell84
+/KeyHollowTests/ @Frankbell84

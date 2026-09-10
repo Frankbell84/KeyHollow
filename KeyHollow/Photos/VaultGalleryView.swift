@@ -411,6 +411,7 @@ struct VaultGalleryView: View {
     @State private var preparedImagePreview: VaultSecureImagePreview?
     @State private var previewTaskID: UUID?
     @State private var generalFileExport: PreparedGeneralFileExport?
+    @State private var generalFileExportTaskID: UUID?
     @State private var isSavingPreview = false
     @State private var previewMessage: String?
     @State private var showingImportOptions = false
@@ -523,7 +524,9 @@ struct VaultGalleryView: View {
                 .environmentObject(session)
         }
         .sheet(isPresented: $showingVaultFiles, onDismiss: {
-            Task { await reloadGeneralFiles() }
+            session.startSensitiveTask { _ in
+                await reloadGeneralFiles()
+            }
         }) {
             VaultGeneralFilesView()
                 .environmentObject(session)
@@ -643,8 +646,11 @@ struct VaultGalleryView: View {
             generalFileThumbnails = [:]
             clearActiveImagePreview()
             leaveSelectionMode()
-            await initializeStores()
-            contentStoresLoaded = true
+            await session.performSensitiveTask { capability in
+                guard session.activeVaultID == capability.vaultID else { return }
+                await initializeStores(expectedVaultID: capability.vaultID)
+            }
+            contentStoresLoaded = session.hasActiveAccess
         }
         .onChange(of: session.securityEpoch) { _, _ in
             videoPlayback.dismiss()
@@ -1104,16 +1110,20 @@ struct VaultGalleryView: View {
         }
     }
 
-    private func initializeStores() async {
-        guard let context = session.activeVaultContext() else { return }
+    private func initializeStores(expectedVaultID: UUID) async {
+        guard !Task.isCancelled,
+              let context = session.activeVaultContext(),
+              context.id == expectedVaultID else { return }
 
         if store == nil {
             do {
                 let createdStore = try VaultPhotoStore(vaultID: context.id, access: context.access)
                 store = createdStore
                 try await reload(using: createdStore)
+                try Task.checkCancellation()
             } catch {
                 store = nil
+                guard !Task.isCancelled, session.activeVaultID == expectedVaultID else { return }
                 message = "The encrypted photo store could not be opened."
             }
         }
@@ -1127,8 +1137,10 @@ struct VaultGalleryView: View {
                 )
                 presentationStore = createdStore
                 folderManifest = try await createdStore.loadManifest()
+                try Task.checkCancellation()
             } catch {
                 presentationStore = nil
+                guard !Task.isCancelled, session.activeVaultID == expectedVaultID else { return }
                 message = "The encrypted presentation store could not be opened."
             }
         }
@@ -1139,8 +1151,10 @@ struct VaultGalleryView: View {
                 let createdStore = try VaultGeneralFileStore(vaultID: context.id, access: access)
                 generalFileStore = createdStore
                 generalFileRecords = try await createdStore.loadManifest().files
+                try Task.checkCancellation()
             } catch {
                 generalFileStore = nil
+                guard !Task.isCancelled, session.activeVaultID == expectedVaultID else { return }
                 message = "The encrypted file store could not be opened."
             }
         }
@@ -1150,9 +1164,14 @@ struct VaultGalleryView: View {
 
     @MainActor
     private func reloadGeneralFiles() async {
-        guard let generalFileStore else { return }
+        guard !Task.isCancelled,
+              let generalFileStore,
+              session.hasActiveAccess else { return }
         do {
-            generalFileRecords = try await generalFileStore.loadManifest().files
+            let loadedRecords = try await generalFileStore.loadManifest().files
+            try Task.checkCancellation()
+            guard session.hasActiveAccess else { return }
+            generalFileRecords = loadedRecords
             let validIDs = Set(generalFileRecords.map(\.id))
             generalFileThumbnails = generalFileThumbnails.filter { validIDs.contains($0.key) }
             reconcileSelection()
@@ -1160,14 +1179,18 @@ struct VaultGalleryView: View {
                 leaveSelectionMode()
             }
             await reconcilePresentationStore()
+        } catch is CancellationError {
+            return
         } catch {
+            guard session.hasActiveAccess else { return }
             message = "The encrypted file list could not be refreshed."
         }
     }
 
     @MainActor
     private func reconcilePresentationStore() async {
-        guard let presentationStore,
+        guard !Task.isCancelled,
+              let presentationStore,
               store != nil,
               generalFileStore != nil,
               session.isUnlocked else { return }
@@ -1181,7 +1204,10 @@ struct VaultGalleryView: View {
 
         do {
             try await presentationStore.reconcile(validItems: Set(photoItems + fileItems))
-            folderManifest = try await presentationStore.loadManifest()
+            let loadedManifest = try await presentationStore.loadManifest()
+            try Task.checkCancellation()
+            guard session.hasActiveAccess else { return }
+            folderManifest = loadedManifest
             if let activeFolderID,
                !folderManifest.folders.contains(where: { $0.id == activeFolderID }) {
                 self.activeFolderID = nil
@@ -1375,24 +1401,29 @@ struct VaultGalleryView: View {
             importProgress = VaultImportProgress(mode: importMode, total: total)
 
         case .photo(let photo):
-            guard var progress = importProgress,
-                  let store,
-                  session.isUnlocked,
-                  !Task.isCancelled else { return }
-            do {
-                _ = try await store.importPhoto(
-                    originalData: photo.originalData,
-                    thumbnailData: photo.thumbnailData,
-                    displayName: photo.displayName
-                )
-                progress.importedCount += 1
-                if progress.mode == .move, let identifier = photo.sourceAssetIdentifier {
-                    progress.identifiersToDelete.append(identifier)
+            await session.performSensitiveTask { capability in
+                guard var progress = importProgress,
+                      let store,
+                      session.activeVaultID == capability.vaultID,
+                      !Task.isCancelled else { return }
+                do {
+                    _ = try await store.importPhoto(
+                        originalData: photo.originalData,
+                        thumbnailData: photo.thumbnailData,
+                        displayName: photo.displayName
+                    )
+                    try Task.checkCancellation()
+                    progress.importedCount += 1
+                    if progress.mode == .move, let identifier = photo.sourceAssetIdentifier {
+                        progress.identifiersToDelete.append(identifier)
+                    }
+                } catch is CancellationError {
+                    return
+                } catch {
+                    progress.failedCount += 1
                 }
-            } catch {
-                progress.failedCount += 1
+                importProgress = progress
             }
-            importProgress = progress
 
         case .failed:
             importProgress?.failedCount += 1
@@ -1404,7 +1435,13 @@ struct VaultGalleryView: View {
                 return
             }
             importProgress = nil
-            await finishImport(progress)
+            await session.performSensitiveTask { capability in
+                guard session.activeVaultID == capability.vaultID else { return }
+                await finishImport(progress)
+            }
+            if !session.hasActiveAccess {
+                isWorking = false
+            }
         }
     }
 
@@ -1418,10 +1455,18 @@ struct VaultGalleryView: View {
         do {
             try await reload(using: store)
         } catch {
+            guard !Task.isCancelled, session.hasActiveAccess else {
+                isWorking = false
+                return
+            }
             message = "Photos were encrypted, but the gallery could not be refreshed."
         }
 
         if progress.mode == .move, progress.importedCount > 0 {
+            guard !Task.isCancelled, session.hasActiveAccess else {
+                isWorking = false
+                return
+            }
             let allImportedPhotosAreDeletable =
                 progress.identifiersToDelete.count == progress.importedCount
             let result: PhotoMoveResult
@@ -1431,6 +1476,10 @@ struct VaultGalleryView: View {
                     localIdentifiers: progress.identifiersToDelete
                 )
                 session.endSystemPhotoOperation()
+                guard !Task.isCancelled, session.hasActiveAccess else {
+                    isWorking = false
+                    return
+                }
             } else {
                 result = .copiedOnly
             }
@@ -1466,17 +1515,22 @@ struct VaultGalleryView: View {
     private func loadThumbnailIfNeeded(_ record: VaultPhotoRecord) async {
         guard thumbnails[record.id] == nil,
               let store,
-              session.isUnlocked else { return }
-        guard let data = try? await store.loadThumbnail(record),
-              !Task.isCancelled,
-              let rendered = try? await thumbnailImageProcessor.decodeThumbnail(from: data),
-              !Task.isCancelled else { return }
+              let activeVaultID = session.activeVaultID,
+              session.hasActiveAccess else { return }
+        await session.performSensitiveTask { capability in
+            guard capability.vaultID == activeVaultID,
+                  let data = try? await store.loadThumbnail(record),
+                  !Task.isCancelled,
+                  let rendered = try? await thumbnailImageProcessor.decodeThumbnail(from: data),
+                  !Task.isCancelled,
+                  session.activeVaultID == activeVaultID else { return }
 
-        if thumbnails.count >= maximumCachedThumbnails,
-           let eviction = thumbnails.keys.first(where: { $0 != record.id }) {
-            thumbnails.removeValue(forKey: eviction)
+            if thumbnails.count >= maximumCachedThumbnails,
+               let eviction = thumbnails.keys.first(where: { $0 != record.id }) {
+                thumbnails.removeValue(forKey: eviction)
+            }
+            thumbnails[record.id] = rendered.image
         }
-        thumbnails[record.id] = rendered.image
     }
 
     @MainActor
@@ -1591,6 +1645,9 @@ struct VaultGalleryView: View {
                 preparedImagePreview = preview
             } catch is CancellationError {
                 return
+            } catch VaultPhotoStore.StoreError.originalTooLarge {
+                guard activeImagePreview?.source.id == item.id else { return }
+                previewMessage = "This legacy photo is larger than KeyHollow's current safe open-size limit. It remains encrypted and can be deleted, moved, or included in a compatibility export."
             } catch {
                 guard activeImagePreview?.source.id == item.id else { return }
                 previewMessage = "The image could not be authenticated, validated, and opened."
@@ -1761,29 +1818,51 @@ struct VaultGalleryView: View {
         isWorking = true
 
         let taskID = session.startSensitiveTask { _ in
-            defer { isWorking = false }
             do {
                 let prepared = try await generalFileStore.prepareExport(files)
                 guard !Task.isCancelled else {
                     await generalFileStore.discardExport(prepared)
+                    isWorking = false
                     return
                 }
                 session.beginSystemInteraction()
                 generalFileExport = prepared
+                await waitForGeneralFileExportDismissal()
+                // This task stays session-registered until plaintext cleanup,
+                // making lock/deletion barriers observe the actual lifetime of
+                // the decrypted export directory.
+                await generalFileStore.discardExport(prepared)
+                if generalFileExport?.id == prepared.id {
+                    generalFileExport = nil
+                    session.endSystemInteraction()
+                }
             } catch is CancellationError {
-                return
+                // Preparation owns cleanup when cancellation precedes a result.
             } catch {
                 message = "The selected files could not be authenticated and exported."
             }
+            generalFileExportTaskID = nil
+            isWorking = false
         }
+        generalFileExportTaskID = taskID
         if taskID == nil { isWorking = false }
     }
 
     private func finishGeneralFileExport(_ prepared: PreparedGeneralFileExport) {
         generalFileExport = nil
         session.endSystemInteraction()
-        guard let generalFileStore else { return }
-        Task { await generalFileStore.discardExport(prepared) }
+        guard let taskID = generalFileExportTaskID else { return }
+        session.cancelSensitiveTask(taskID)
+    }
+
+    private func waitForGeneralFileExportDismissal() async {
+        while !Task.isCancelled {
+            do {
+                try await Task.sleep(nanoseconds: 60_000_000_000)
+            } catch {
+                return
+            }
+        }
     }
 
     private func savePhotos(_ photos: [VaultPhotoRecord]) {

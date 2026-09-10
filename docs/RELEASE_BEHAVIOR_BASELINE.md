@@ -51,6 +51,9 @@ otherwise.
   code. That recovery code never unlocks the normal local keypad.
 - Restore validates and stages the complete archive before installing a new
   local vault identity and LowKey wrapper.
+- The current archive version preserves protected photos and general files but
+  not Folder Presentation names or membership metadata. Export and import both
+  disclose that restored items appear at the new vault's top level.
 - Wrong recovery codes, tampering, truncation, path traversal, credential
   collision, cancellation, or an interrupted restore must fail closed without
   exposing plaintext or replacing an existing vault.

@@ -141,6 +141,16 @@ def imports(source: str) -> set[str]:
     )
 
 
+def contains_in_order(source: str, markers: tuple[str, ...]) -> bool:
+    cursor = 0
+    for marker in markers:
+        position = source.find(marker, cursor)
+        if position < 0:
+            return False
+        cursor = position + len(marker)
+    return True
+
+
 def match_position(pattern: str, source: str, start: int = 0) -> int:
     match = re.search(pattern, source[start:])
     return start + match.start() if match else -1
@@ -840,6 +850,35 @@ def main() -> int:
             "returned to the scrolling grid"
         )
 
+    file_ingress_source = (
+        SOURCE_ROOT / "AddOns" / "FileRecognition" / "VaultFileRecognizer.swift"
+    ).read_text(encoding="utf-8")
+    if re.search(
+        r"public\s+init\s*\(\s*url:\s*URL,\s*displayName:\s*String,\s*byteCount:",
+        file_ingress_source,
+    ):
+        violations.append(
+            "KeyHollow/AddOns/FileRecognition/VaultFileRecognizer.swift: "
+            "staged-vault cleanup capabilities must not be publicly constructible"
+        )
+    if not contains_in_order(
+        file_ingress_source,
+        (
+            "private let cleanupRoot: URL",
+            "try? fileManager.removeItem(at: cleanupRoot)",
+            "cleanupRoot: importRoot",
+        ),
+    ):
+        violations.append(
+            "KeyHollow/AddOns/FileRecognition/VaultFileRecognizer.swift: "
+            "staged-vault cleanup must remain bound to the ingress-owned lease root"
+        )
+    if "removeItem(at: url.deletingLastPathComponent())" in file_ingress_source:
+        violations.append(
+            "KeyHollow/AddOns/FileRecognition/VaultFileRecognizer.swift: "
+            "staged-vault cleanup must not derive a deletion target from a public URL"
+        )
+
     for file in swift_files:
         path = relative(file)
         source = file.read_text(encoding="utf-8")
@@ -1176,6 +1215,104 @@ def main() -> int:
 
     gallery_file = SOURCE_ROOT / "Photos" / "VaultGalleryView.swift"
     gallery_source = gallery_file.read_text(encoding="utf-8")
+    general_files_view_source = (
+        SOURCE_ROOT / "UI" / "VaultGeneralFilesView.swift"
+    ).read_text(encoding="utf-8")
+
+    gallery_task_start = gallery_source.find(".task(id: session.activeVaultID)")
+    gallery_task_end = gallery_source.find(
+        ".onChange(of: session.securityEpoch)", gallery_task_start
+    )
+    gallery_task_source = gallery_source[gallery_task_start:gallery_task_end]
+    photo_import_start = gallery_source.find("private func handleImportEvent(")
+    photo_import_end = gallery_source.find(
+        "private func finishImport(", photo_import_start
+    )
+    photo_import_source = gallery_source[photo_import_start:photo_import_end]
+    photo_thumbnail_start = gallery_source.find(
+        "private func loadThumbnailIfNeeded(_ record: VaultPhotoRecord)"
+    )
+    photo_thumbnail_end = gallery_source.find(
+        "private func loadGeneralFileThumbnailIfNeeded(", photo_thumbnail_start
+    )
+    photo_thumbnail_source = gallery_source[
+        photo_thumbnail_start:photo_thumbnail_end
+    ]
+    general_export_start = gallery_source.find(
+        "private func exportGeneralFiles("
+    )
+    general_export_end = gallery_source.find(
+        "private func savePhotos(", general_export_start
+    )
+    general_export_source = gallery_source[
+        general_export_start:general_export_end
+    ]
+    if not (
+        gallery_task_start >= 0
+        and gallery_task_end > gallery_task_start
+        and "await session.performSensitiveTask" in gallery_task_source
+        and "initializeStores(expectedVaultID:" in gallery_task_source
+        and photo_import_start >= 0
+        and photo_import_end > photo_import_start
+        and "case .photo(let photo):" in photo_import_source
+        and "await session.performSensitiveTask" in photo_import_source
+        and "try await store.importPhoto(" in photo_import_source
+        and photo_thumbnail_start >= 0
+        and photo_thumbnail_end > photo_thumbnail_start
+        and "await session.performSensitiveTask" in photo_thumbnail_source
+        and "try? await store.loadThumbnail(record)" in photo_thumbnail_source
+        and ".sheet(isPresented: $showingVaultFiles, onDismiss:" in gallery_source
+        and "session.startSensitiveTask { _ in\n                await reloadGeneralFiles()"
+        in gallery_source
+        and general_export_start >= 0
+        and general_export_end > general_export_start
+        and "session.startSensitiveTask" in general_export_source
+        and "await waitForGeneralFileExportDismissal()" in general_export_source
+        and "await generalFileStore.discardExport(prepared)" in general_export_source
+        and "session.cancelSensitiveTask(taskID)" in general_export_source
+    ):
+        violations.append(
+            "KeyHollow/Photos/VaultGalleryView.swift: every store mutation, "
+            "plaintext thumbnail/load, manifest refresh, and prepared-export "
+            "cleanup must remain registered with the vault-session barrier"
+        )
+
+    general_files_initialization_start = general_files_view_source.find(
+        ".task(id: session.activeVaultID)"
+    )
+    general_files_initialization_end = general_files_view_source.find(
+        "private var navigationTitle", general_files_initialization_start
+    )
+    general_files_initialization_source = general_files_view_source[
+        general_files_initialization_start:general_files_initialization_end
+    ]
+    general_files_initializer_start = general_files_view_source.find(
+        "private func initializeStore("
+    )
+    general_files_initializer_end = general_files_view_source.find(
+        "private func importSelectedFiles(", general_files_initializer_start
+    )
+    general_files_initializer_source = general_files_view_source[
+        general_files_initializer_start:general_files_initializer_end
+    ]
+    if not (
+        general_files_initialization_start >= 0
+        and general_files_initialization_end > general_files_initialization_start
+        and "await session.performSensitiveTask" in general_files_initialization_source
+        and general_files_initializer_start >= 0
+        and general_files_initializer_end > general_files_initializer_start
+        and "let loadedRecords = try await created.loadManifest().files"
+        in general_files_initializer_source
+        and "currentContext.access === capability"
+        in general_files_initializer_source
+        and "try Task.checkCancellation()" in general_files_initializer_source
+    ):
+        violations.append(
+            "KeyHollow/UI/VaultGeneralFilesView.swift: initial manifest loading "
+            "must remain registered with the vault-session barrier and must not "
+            "publish decrypted metadata after capability revocation"
+        )
+
     if not (
         "lockVaultAndFinishCleanup()" in gallery_source
         and "let barrier = session.lock()" in gallery_source
@@ -1189,13 +1326,262 @@ def main() -> int:
     security_settings_source = (
         SOURCE_ROOT / "UI" / "VaultSecuritySettingsView.swift"
     ).read_text(encoding="utf-8")
+    root_view_source = (
+        SOURCE_ROOT / "UI" / "RootView.swift"
+    ).read_text(encoding="utf-8")
+    additional_vault_setup_source = (
+        SOURCE_ROOT / "UI" / "AdditionalVaultSetupView.swift"
+    ).read_text(encoding="utf-8")
+    unlock_service_source = (
+        SOURCE_ROOT / "Security" / "VaultUnlockService.swift"
+    ).read_text(encoding="utf-8")
+    portable_restore_root_markers = (
+        "private let generalFileStorageRootOverride: URL?",
+        "private let portableRestoreJournalRootOverride: URL?",
+        "private let portableRestoreWorkingRootOverride: URL?",
+        "workingRootOverride: portableRestoreWorkingRootOverride",
+        "journalRootOverride: portableRestoreJournalRootOverride",
+        "photoDataRootOverride: photoStorageRootOverride",
+        "generalFileDataRootOverride: generalFileStorageRootOverride",
+    )
+    if any(
+        marker not in unlock_service_source
+        for marker in portable_restore_root_markers
+    ) or any(
+        unlock_service_source.count(marker) < 2
+        for marker in (
+            "journalRootOverride: portableRestoreJournalRootOverride",
+            "photoDataRootOverride: photoStorageRootOverride",
+            "generalFileDataRootOverride: generalFileStorageRootOverride",
+        )
+    ) or len(
+        re.findall(
+            r"PortableVaultRestoreTransactionJournal\.recoveryRequired\(\s*"
+            r"journalRootOverride:\s*portableRestoreJournalRootOverride\s*\)",
+            unlock_service_source,
+        )
+    ) < 2:
+        violations.append(
+            "KeyHollow/Security/VaultUnlockService.swift: portable restore "
+            "install and startup recovery must share injectable journal, "
+            "working, photo, and general-file roots"
+        )
+    session_source = (
+        SOURCE_ROOT / "Session" / "VaultSession.swift"
+    ).read_text(encoding="utf-8")
+    deletion_coordinator_start = session_source.find(
+        "enum VaultDeletionSessionCoordinator"
+    )
+    deletion_coordinator_source = session_source[deletion_coordinator_start:]
+    coordinator_authorize_position = deletion_coordinator_source.find(
+        "service.authorizeVaultDeletion("
+    )
+    coordinator_revoke_position = deletion_coordinator_source.find(
+        "session.revokeAndDrainForVaultDeletion("
+    )
+    coordinator_commit_position = deletion_coordinator_source.find(
+        "service.deleteVault("
+    )
+    revocation_start = session_source.find("func revokeAndDrainForVaultDeletion(")
+    revocation_end = session_source.find(
+        "private func combinedBarrier(", revocation_start
+    )
+    revocation_source = session_source[revocation_start:revocation_end]
+    revocation_lock_position = revocation_source.find("let barrier = lock()")
+    revocation_wait_position = revocation_source.find("await barrier.wait()")
+    revocation_proof_position = revocation_source.find("return proof")
+    deletion_commit_start = unlock_service_source.find(
+        "func deleteVault(\n        authorization: VaultDeletionAuthorization,"
+    )
+    deletion_commit_end = unlock_service_source.find(
+        "private func checkCredentialLookupAllowed", deletion_commit_start
+    )
+    deletion_commit_source = unlock_service_source[
+        deletion_commit_start:deletion_commit_end
+    ]
+    deletion_proof_check_position = deletion_commit_source.find(
+        "revocationProof.authorizationID == authorization.authorizationID"
+    )
+    deletion_journal_position = deletion_commit_source.find(
+        "transaction = try journal.begin("
+    )
     if not (
-        "let barrier = session.lock()" in security_settings_source
-        and "await barrier.wait()" in security_settings_source
+        "VaultDeletionSessionCoordinator.deleteVault(" in security_settings_source
+        and "service.deleteVault(" not in security_settings_source
+        and "func revokeAndDrainForVaultDeletion(" in session_source
+        and 0 <= coordinator_authorize_position
+        < coordinator_revoke_position
+        < coordinator_commit_position
+        and 0 <= revocation_lock_position
+        < revocation_wait_position
+        < revocation_proof_position
+        and "revocationProof: VaultSession.VaultDeletionRevocationProof" in unlock_service_source
+        and "func deleteVault(currentPasscode:" not in unlock_service_source
+        and 0 <= deletion_proof_check_position < deletion_journal_position
     ):
         violations.append(
             "KeyHollow/UI/VaultSecuritySettingsView.swift: destructive vault "
-            "shutdown must await the sensitive-cleanup barrier"
+            "shutdown must require session-revocation proof after awaiting the "
+            "sensitive-cleanup barrier"
+        )
+
+    credential_flow_registrations = (
+        (
+            "KeyHollow/UI/RootView.swift LockView",
+            root_view_source,
+            "private func submit()",
+            "private struct KeyHollowLockMark",
+            "service.unlock(passcode:",
+        ),
+        (
+            "KeyHollow/UI/RootView.swift InitialVaultSetup",
+            root_view_source,
+            "private func create()",
+            "enum SecurityEpochCredentialPolicy",
+            "service.createVault(passcode:",
+        ),
+        (
+            "KeyHollow/UI/AdditionalVaultSetupView.swift",
+            additional_vault_setup_source,
+            "private func createVault()",
+            "\n}",
+            "service.createVault(passcode:",
+        ),
+        (
+            "KeyHollow/UI/VaultSecuritySettingsView.swift passcode change",
+            security_settings_source,
+            "private func changePasscode()",
+            "private func sanitize(",
+            "service.changePasscode(",
+        ),
+    )
+    for label, source, start_marker, end_marker, operation_marker in credential_flow_registrations:
+        start = source.find(start_marker)
+        end = source.find(end_marker, start + len(start_marker))
+        flow = source[start:end]
+        if not (
+            start >= 0
+            and end > start
+            and operation_marker in flow
+            and "session.startProtectedTask {" in flow
+            and "session.authorizeUnlockCompletion()" in flow
+            and "session.completeUnlock(" in flow
+        ):
+            violations.append(
+                f"{label}: passcode/KDF/key-bearing credential work must remain "
+                "registered with the vault-session protected-task barrier"
+            )
+
+    credential_service_cancellation_boundaries = (
+        (
+            "VaultUnlockService.createVault",
+            "func createVault(passcode:",
+            "/// Gives a fully validated portable vault",
+            (
+                "let unlockKey = try deriveUnlockKey(passcode: passcode)",
+                "try Task.checkCancellation()",
+                "let locatorAlreadyExists = await store.contains(locator: locator)",
+                "try Task.checkCancellation()",
+                "let created = try VaultEnvelope.create(using: unlockKey)",
+                "try Task.checkCancellation()",
+                "try await store.writeIfAbsent(created.envelope, locator: locator)",
+            ),
+        ),
+        (
+            "VaultUnlockService.installValidatedPortableVault",
+            "func installValidatedPortableVault(",
+            "func unlock(passcode:",
+            (
+                "let unlockKey = try deriveUnlockKey(passcode: newPasscode)",
+                "try Task.checkCancellation()",
+                "let locatorAlreadyExists = await store.contains(locator: locator)",
+                "try Task.checkCancellation()",
+                "let installer = try PortableVaultRestoreInstaller(",
+                "try Task.checkCancellation()",
+                "let payload = try await installer.install(",
+                "catch is CancellationError",
+            ),
+        ),
+        (
+            "VaultUnlockService.changePasscode",
+            "func changePasscode(",
+            "/// Authenticates a deletion request",
+            (
+                "let current = try await authenticateExistingVault(",
+                "try Task.checkCancellation()",
+                "let newKey = try deriveUnlockKey(passcode: newPasscode)",
+                "try Task.checkCancellation()",
+                "let replacementLocatorAlreadyExists = await store.contains(locator: newLocator)",
+                "try Task.checkCancellation()",
+                "let replacement = try VaultEnvelope.seal(",
+                "try Task.checkCancellation()",
+                "journal = try passcodeRotationJournal()",
+                "try Task.checkCancellation()",
+                "transaction = try journal.begin(",
+            ),
+        ),
+        (
+            "VaultUnlockService.authenticateExistingVault",
+            "private func authenticateExistingVault(",
+            "private func deriveUnlockKey(",
+            (
+                "let unlockKey = try deriveUnlockKey(passcode: passcode)",
+                "try Task.checkCancellation()",
+                "let persistedEnvelope = try await store.read(locator: locator)",
+                "try Task.checkCancellation()",
+                "let payload = try envelope.open(using: unlockKey)",
+                "try Task.checkCancellation()",
+                "await limiter.recordSuccess()",
+                "try Task.checkCancellation()",
+                "catch is CancellationError",
+                "catch VaultUnlockError.invalidCredentials",
+            ),
+        ),
+    )
+    for label, start_marker, end_marker, markers in credential_service_cancellation_boundaries:
+        start = unlock_service_source.find(start_marker)
+        end = unlock_service_source.find(end_marker, start + len(start_marker))
+        operation_source = unlock_service_source[start:end]
+        if not (
+            start >= 0
+            and end > start
+            and contains_in_order(operation_source, markers)
+        ):
+            violations.append(
+                f"KeyHollow/Security/VaultUnlockService.swift: {label} must "
+                "honor lifecycle cancellation before its first durable mutation "
+                "and must not charge cancellation as an authentication failure"
+            )
+
+    transfer_coordinator_source = (
+        SOURCE_ROOT / "Transfer" / "EncryptedVaultTransferCoordinator.swift"
+    ).read_text(encoding="utf-8")
+    restore_installer_start = transfer_coordinator_source.find("public func install(")
+    restore_installer_end = transfer_coordinator_source.find(
+        "public func recoverInterruptedInstalls()", restore_installer_start
+    )
+    restore_installer_source = transfer_coordinator_source[
+        restore_installer_start:restore_installer_end
+    ]
+    if not (
+        restore_installer_start >= 0
+        and restore_installer_end > restore_installer_start
+        and contains_in_order(
+            restore_installer_source,
+            (
+                "let credentialAlreadyExists = await credentialStore.contains(locator: locator)",
+                "try Task.checkCancellation()",
+                "guard !credentialAlreadyExists else",
+                "let envelope = try VaultEnvelope.seal(",
+                "try Task.checkCancellation()",
+                "let transaction = try transactionJournal.begin(",
+            ),
+        )
+    ):
+        violations.append(
+            "KeyHollow/Transfer/EncryptedVaultTransferCoordinator.swift: "
+            "portable restore must honor cancellation after credential lookup "
+            "and immediately before the journaled install begins"
         )
     video_thumbnail_integration_active = (
         "import KeyHollowEncryptedVideoAddOn" in gallery_source

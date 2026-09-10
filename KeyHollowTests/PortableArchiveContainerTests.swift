@@ -124,6 +124,103 @@ final class PortableArchiveContainerTests: XCTestCase {
         }
     }
 
+    func testAuthenticatedShortNonFinalChunkIsRejected() throws {
+        let fixture = try makeFixture()
+        defer { try? FileManager.default.removeItem(at: fixture.url) }
+        try writeRawContainer(
+            fixture: fixture,
+            chunks: [
+                (Data("short".utf8), false),
+                (Data(), true)
+            ]
+        )
+
+        let reader = try PortableArchiveContainerReader(sourceURL: fixture.url)
+        XCTAssertThrowsError(
+            try reader.streamAuthenticatedContent(
+                credential: fixture.credential,
+                keyDeriver: TestContainerKeyDeriver()
+            ) { _ in }
+        ) { error in
+            XCTAssertEqual(error as? PortableArchiveContainerError, .invalidFrame)
+        }
+    }
+
+    func testAuthenticatedEmptyNonFinalChunkIsRejected() throws {
+        let fixture = try makeFixture()
+        defer { try? FileManager.default.removeItem(at: fixture.url) }
+        try writeRawContainer(
+            fixture: fixture,
+            chunks: [
+                (Data(), false),
+                (Data(), true)
+            ]
+        )
+
+        let reader = try PortableArchiveContainerReader(sourceURL: fixture.url)
+        XCTAssertThrowsError(
+            try reader.streamAuthenticatedContent(
+                credential: fixture.credential,
+                keyDeriver: TestContainerKeyDeriver()
+            ) { _ in }
+        ) { error in
+            XCTAssertEqual(error as? PortableArchiveContainerError, .invalidFrame)
+        }
+    }
+
+    func testAuthenticatedFullSizeFinalChunkIsRejected() throws {
+        let fixture = try makeFixture()
+        defer { try? FileManager.default.removeItem(at: fixture.url) }
+        try writeRawContainer(
+            fixture: fixture,
+            chunks: [(
+                Data(
+                    repeating: 0x5a,
+                    count: PortableArchiveContainerFormat.plaintextChunkByteCount
+                ),
+                true
+            )]
+        )
+
+        let reader = try PortableArchiveContainerReader(sourceURL: fixture.url)
+        XCTAssertThrowsError(
+            try reader.streamAuthenticatedContent(
+                credential: fixture.credential,
+                keyDeriver: TestContainerKeyDeriver()
+            ) { _ in }
+        ) { error in
+            XCTAssertEqual(error as? PortableArchiveContainerError, .invalidFrame)
+        }
+    }
+
+    func testMaximumFrameCountCoversTheExistingPayloadEnvelope() {
+        let chunkSize = UInt64(PortableArchiveContainerFormat.plaintextChunkByteCount)
+        let coveredBytes = PortableArchiveContainerFormat.maximumFrameCount * chunkSize
+        XCTAssertGreaterThanOrEqual(
+            coveredBytes,
+            PortableArchiveContainerFormat.maximumAuthenticatedPlaintextByteCount
+        )
+        XCTAssertLessThan(
+            (PortableArchiveContainerFormat.maximumFrameCount - 1) * chunkSize,
+            PortableArchiveContainerFormat.maximumAuthenticatedPlaintextByteCount
+        )
+    }
+
+    func testWriterRejectsAFrameBeyondTheReadableEnvelope() {
+        XCTAssertNoThrow(
+            try PortableArchiveContainerWriter.validateWritableFrameSequence(
+                PortableArchiveContainerFormat.maximumFrameCount - 1
+            )
+        )
+        XCTAssertThrowsError(
+            try PortableArchiveContainerWriter.validateWritableFrameSequence(
+                PortableArchiveContainerFormat.maximumFrameCount
+            )
+        ) { error in
+            XCTAssertEqual(error as? PortableArchiveContainerError, .invalidFrame)
+        }
+    }
+
     func testChunkCannotBeReorderedOrRelabeledFinal() throws {
         let fixture = try makeFixture()
         let key = SymmetricKey(data: fixture.prepared.secrets.contentKey)
@@ -297,6 +394,33 @@ final class PortableArchiveContainerTests: XCTestCase {
         )
         try writer.append(plaintext)
         try writer.finish()
+    }
+
+    private func writeRawContainer(
+        fixture: Fixture,
+        chunks: [(plaintext: Data, isFinal: Bool)]
+    ) throws {
+        var bytes = PortableArchiveContainerFormat.magic
+        bytes.appendLittleEndianForTesting(PortableArchiveContainerFormat.currentVersion)
+        let encodedHeader = try JSONEncoder().encode(fixture.prepared.header)
+        bytes.appendLittleEndianForTesting(UInt32(encodedHeader.count))
+        bytes.append(encodedHeader)
+
+        let contentKey = SymmetricKey(data: fixture.prepared.secrets.contentKey)
+        for (index, input) in chunks.enumerated() {
+            let chunk = try PortableArchiveContentChunk.seal(
+                input.plaintext,
+                sequence: UInt64(index),
+                isFinal: input.isFinal,
+                archiveID: fixture.prepared.secrets.archiveID,
+                contentKey: contentKey
+            )
+            bytes.appendLittleEndianForTesting(chunk.sequence)
+            bytes.append(chunk.isFinal ? 1 : 0)
+            bytes.appendLittleEndianForTesting(UInt32(chunk.sealedContent.count))
+            bytes.append(chunk.sealedContent)
+        }
+        try bytes.write(to: fixture.url, options: .atomic)
     }
 
     private func makeFixture() throws -> Fixture {

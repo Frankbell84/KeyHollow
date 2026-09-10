@@ -98,6 +98,7 @@ public enum VaultFolderPresentationKeyPurpose: Sendable {
 public protocol VaultFolderPresentationCryptographicAccess: Sendable {
     var vaultID: UUID { get }
 
+    func checkAccess() throws
     func seal(
         _ plaintext: Data,
         for purpose: VaultFolderPresentationKeyPurpose

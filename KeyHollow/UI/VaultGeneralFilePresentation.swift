@@ -12,6 +12,10 @@ final class SessionGeneralFileAccess: VaultGeneralFileCryptographicAccess,
         self.capability = capability
     }
 
+    func checkAccess() throws {
+        try capability.checkAccess()
+    }
+
     func seal(_ plaintext: Data, for purpose: VaultGeneralFileKeyPurpose) throws -> Data {
         try capability.sealScopedData(plaintext, domain: purpose.cryptographicDomain)
     }

@@ -103,8 +103,9 @@ NUL, sequence as UInt64 LE, and the final flag byte. This binds every chunk to
 one archive and one exact position and prevents reordering, relabeling, or
 cross-archive transplantation.
 
-The content stream will package the already-encrypted vault manifest, photo
-blobs, and thumbnails. Outer content encryption hides catalog metadata while
+The content stream packages the already-encrypted photo manifest, photo blobs,
+thumbnails, and—when present—the already-encrypted supplemental general-file
+manifest and blobs. Outer content encryption hides catalog metadata while
 preserving the existing inner authenticated encryption. Export must stream
 bounded chunks rather than load an entire vault into memory.
 
@@ -126,9 +127,30 @@ Payload extraction is fail-closed: traversal attempts, changed source files,
 digest mismatches, extra bytes, missing bytes, or cancellation remove the entire
 staging directory. No partially extracted directory can become a vault.
 
-Current parser limits are 32 MiB for the catalog, 200,001 entries, 1 TiB for an
-individual encrypted entry, and 4 TiB total declared ciphertext. Before import,
-the coordinator also requires free space equal to twice the selected archive
+The payload prefix remains version one. Its authenticated catalog is versioned
+separately:
+
+- Catalog version one is the shipped photo-only layout.
+- Catalog version two is the shipped photo-and-general-file layout.
+- Catalog version three keeps the version-two layout and applies the current
+  bounded policy to new archives: at most 10,000 photos, 10,000 supplemental
+  files, 30,002 total catalog entries, a 16 MiB catalog, 100 MiB photo or
+  supplemental blobs, 4 MiB thumbnails, 16 MiB photo manifests, 8 MiB
+  supplemental manifests, and 10 GiB total declared ciphertext. Each stated
+  entry limit excludes the fixed 28-byte inner AES-GCM overhead.
+
+Current readers retain the already-shipped version-one/two compatibility
+envelope—32 MiB catalog, 200,001 entries, 1 TiB per encrypted entry, and 4 TiB
+total—so authenticated Build 39 archives remain recoverable. New exports use
+catalog version three when they satisfy current limits; an authenticated local
+legacy vault that exceeds only those newer limits falls back to catalog version
+two within the shipped envelope. Version-three exports are intentionally not
+readable by older builds that recognize only versions one and two.
+
+The outer reader additionally requires canonical framing: every non-final
+plaintext frame is exactly 1 MiB, the final frame is smaller, and the sequence
+count cannot exceed the legacy-compatible total payload envelope. Before
+import, the coordinator requires free space equal to twice the selected archive
 size plus 64 MiB. These are safety ceilings, not recommended vault sizes.
 
 Published deterministic compatibility vectors are in
