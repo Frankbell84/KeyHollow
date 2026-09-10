@@ -20,6 +20,8 @@ evidence remains in `docs/PROJECT_CHECKPOINT.md`.
   `d48d27a87808caea8a014c8e851b5770a59d174a`
 - Published compile-correction head:
   `a4906c880bba3e9dc9cf3d2af607f3733b267801`
+- Published post-revocation test-oracle correction head:
+  `239bd1da7a90327727882ddb669e44b9bcf370f9`
 - Draft review:
   [PR #51](https://github.com/Frankbell84/KeyHollow/pull/51), targeting
   refreshed `main` from `hardening/post-build39-baseline`.
@@ -47,11 +49,12 @@ evidence remains in `docs/PROJECT_CHECKPOINT.md`.
 
 ## Current task
 
-Correct the post-lock thumbnail test oracle and the remaining test-only Swift
-concurrency warning found after the first compile correction, repeat all local
-safety gates, publish the minimal correction to draft PR #51, and obtain green
-exact-head macOS/Xcode, XCTest, packaged-resource, and Swift CodeQL evidence.
-Feature work remains frozen.
+Correct the sparse-file test so it enforces the shipped legacy archive envelope
+without breaking authenticated Build 39 re-export compatibility, add direct
+source-path proof of catalog-v2 fallback, repeat all local safety gates,
+publish the correction to draft PR #51, and obtain green exact-head
+macOS/Xcode, XCTest, packaged-resource, and Swift CodeQL evidence. Feature work
+remains frozen.
 
 ## Completed work
 
@@ -107,6 +110,13 @@ The published hardening implementation now includes:
 - The same pending correction removes a Swift 6 test warning by ensuring
   isolated `UserDefaults` cleanup obtains a fresh handle after the original is
   transferred to the unlock-limiter actor.
+- Exact-head CI confirmed both of those corrections. Its next failure was an
+  archive-test contradiction, not a production filesystem defect: the test
+  treated an entry one byte above today's role limit as invalid even though the
+  documented compatibility contract deliberately re-exports authenticated
+  legacy local data within the shipped 1-TiB-per-entry envelope as catalog v2.
+  The pending correction tests rejection at the true legacy envelope and adds
+  source-level proof that a modest legacy-sized entry selects catalog v2.
 
 No broad rewrite was required. The protected modular architecture continues to
 hold, and independent compile/API and adversarial-security reviews found no
@@ -184,6 +194,20 @@ through an intentionally revoked capability. The log also reported one Swift
 the current working phase. The failure does not justify weakening production
 revocation, and no such production change was made.
 
+The next replacement run
+[#34468073067](https://github.com/Frankbell84/KeyHollow/actions/runs/34468073067)
+on exact commit `239bd1da7a90327727882ddb669e44b9bcf370f9`
+confirmed that the lifecycle test now passes and the Swift 6 `UserDefaults`
+warning is gone. The complete suite reached 287 tests with one assertion
+failure and no unexpected test crash: a sparse source only one byte above the
+current photo limit was expected to fail before hashing, even though that size
+is intentionally accepted for authenticated legacy-v2 re-export. Two
+independent reviews confirmed Foundation reported the logical sparse-file size
+correctly and that changing production to the current role limit would violate
+the documented Build 39 compatibility contract. The test is therefore moved
+to one byte above the 1-TiB legacy envelope, and a readable 4-MiB source-path
+case now proves the intended v2 fallback without excessive CI work.
+
 ## Git helper status
 
 The missing-DLL popups come from Codex's bundled Git HTTPS helper, not from the
@@ -219,9 +243,9 @@ corruption.
 ## Blockers
 
 There is no open P1/P2 review finding or known production-code defect. The
-latest exact-head CI run exposed a post-revocation test-oracle error and one
-test-only Swift concurrency warning; their minimal corrections must pass the
-full replacement run.
+latest exact-head CI run exposed an archive-test expectation that contradicted
+the documented legacy re-export contract. Its compatibility-preserving test
+correction must pass the full replacement run.
 
 Remaining proof and external-control blockers are:
 

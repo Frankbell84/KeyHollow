@@ -162,6 +162,53 @@ final class PortableArchivePayloadTests: XCTestCase {
         )
     }
 
+    func testPayloadSourcePreservesLegacySizedLocalEntryWithV2Catalog() throws {
+        let sourceRoot = temporaryURL(label: "legacy-sized-source")
+        defer { try? FileManager.default.removeItem(at: sourceRoot) }
+        try FileManager.default.createDirectory(
+            at: sourceRoot,
+            withIntermediateDirectories: true
+        )
+
+        try minimumCiphertext().write(
+            to: sourceRoot.appendingPathComponent("manifest.khm")
+        )
+        try minimumCiphertext().write(
+            to: sourceRoot.appendingPathComponent("legacy.khp")
+        )
+        let legacyThumbnailByteCount = PortableArchivePayloadFormat
+            .maximumCiphertextByteCount(for: .thumbnail) + 1
+        try createSparseFile(
+            at: sourceRoot.appendingPathComponent("legacy.kht"),
+            byteCount: legacyThumbnailByteCount
+        )
+        let photo = VaultPhotoRecord(
+            id: UUID(),
+            importedAt: Date(timeIntervalSince1970: 1_700_000_000),
+            blobName: "legacy.khp",
+            thumbnailName: "legacy.kht"
+        )
+
+        let source = try PortableArchivePayloadSource.create(
+            rootURL: sourceRoot,
+            manifest: VaultPhotoManifest(
+                version: VaultPhotoManifest.currentVersion,
+                photos: [photo]
+            )
+        )
+
+        XCTAssertEqual(
+            source.catalog.version,
+            PortableArchivePayloadCatalog.legacyGeneralFileVersion
+        )
+        XCTAssertEqual(source.catalog.entries.count, 3)
+        let thumbnailEntry = try XCTUnwrap(
+            source.catalog.entries.first { $0.storageName == "legacy.kht" }
+        )
+        XCTAssertEqual(thumbnailEntry.role, .thumbnail)
+        XCTAssertEqual(thumbnailEntry.ciphertextByteCount, legacyThumbnailByteCount)
+    }
+
     func testLegacyV1AndV2PayloadsStillExtractEndToEnd() throws {
         let fixture = try preparedFixture()
         let ciphertext = Data(repeating: 0x41, count: 28)
@@ -674,7 +721,7 @@ final class PortableArchivePayloadTests: XCTestCase {
         }
     }
 
-    func testPayloadSourceRejectsSparseOversizedEntryBeforeHashing() throws {
+    func testPayloadSourceRejectsSparseEntryBeyondLegacyEnvelopeBeforeHashing() throws {
         let sourceRoot = temporaryURL(label: "sparse-oversized-source")
         defer { try? FileManager.default.removeItem(at: sourceRoot) }
         try FileManager.default.createDirectory(
@@ -691,7 +738,7 @@ final class PortableArchivePayloadTests: XCTestCase {
         let oversizedURL = sourceRoot.appendingPathComponent("oversized.khp")
         try createSparseFile(
             at: oversizedURL,
-            byteCount: PortableArchivePayloadFormat.maximumCiphertextByteCount(for: .original) + 1
+            byteCount: PortableArchivePayloadFormat.legacyMaximumEntryByteCount + 1
         )
         try FileManager.default.setAttributes(
             [.posixPermissions: 0o000],
