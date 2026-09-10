@@ -22,6 +22,10 @@ evidence remains in `docs/PROJECT_CHECKPOINT.md`.
   `a4906c880bba3e9dc9cf3d2af607f3733b267801`
 - Published post-revocation test-oracle correction head:
   `239bd1da7a90327727882ddb669e44b9bcf370f9`
+- Published archive-compatibility test correction head:
+  `437f4f2b0210daa98faadc439fbbc1c3770ba7f7`
+- Fully green exact-correction-head CI run:
+  [#34469885087](https://github.com/Frankbell84/KeyHollow/actions/runs/34469885087).
 - Draft review:
   [PR #51](https://github.com/Frankbell84/KeyHollow/pull/51), targeting
   refreshed `main` from `hardening/post-build39-baseline`.
@@ -49,12 +53,10 @@ evidence remains in `docs/PROJECT_CHECKPOINT.md`.
 
 ## Current task
 
-Correct the sparse-file test so it enforces the shipped legacy archive envelope
-without breaking authenticated Build 39 re-export compatibility, add direct
-source-path proof of catalog-v2 fallback, repeat all local safety gates,
-publish the correction to draft PR #51, and obtain green exact-head
-macOS/Xcode, XCTest, packaged-resource, and Swift CodeQL evidence. Feature work
-remains frozen.
+Finalize the verified post-Build-39 hardening checkpoint on exact code head
+`437f4f2b0210daa98faadc439fbbc1c3770ba7f7`, preserve draft PR #51
+without merge or release action, then perform the reversible Codex managed-
+runtime/Git-helper repair before feature work resumes.
 
 ## Completed work
 
@@ -104,10 +106,10 @@ The published hardening implementation now includes:
 - The next exact-head run confirmed those files compile and link. It then
   exposed a test-oracle defect: after proving `lockAndWait()` revoked the
   session, the test tried to decrypt the presentation manifest through the
-  deliberately revoked capability. The pending correction preserves strict
+  deliberately revoked capability. The published correction preserves strict
   production revocation and instead verifies directly that cancelled work
   persisted no encrypted thumbnail blob.
-- The same pending correction removes a Swift 6 test warning by ensuring
+- The same published correction removes a Swift 6 test warning by ensuring
   isolated `UserDefaults` cleanup obtains a fresh handle after the original is
   transferred to the unlock-limiter actor.
 - Exact-head CI confirmed both of those corrections. Its next failure was an
@@ -115,8 +117,16 @@ The published hardening implementation now includes:
   treated an entry one byte above today's role limit as invalid even though the
   documented compatibility contract deliberately re-exports authenticated
   legacy local data within the shipped 1-TiB-per-entry envelope as catalog v2.
-  The pending correction tests rejection at the true legacy envelope and adds
-  source-level proof that a modest legacy-sized entry selects catalog v2.
+  Commit `437f4f2b0210daa98faadc439fbbc1c3770ba7f7` tests rejection
+  at the true legacy envelope and adds source-level proof that a modest
+  legacy-sized entry selects catalog v2. Production archive behavior was not
+  weakened or changed.
+- Exact-head run
+  [#34469885087](https://github.com/Frankbell84/KeyHollow/actions/runs/34469885087)
+  passed every preflight gate, simulator build, packaged-resource check, the
+  complete security/lifecycle XCTest job, both artifact uploads, and Swift
+  CodeQL. The pull-request security scan reported no new alerts and zero check
+  annotations.
 
 No broad rewrite was required. The protected modular architecture continues to
 hold, and independent compile/API and adversarial-security reviews found no
@@ -208,6 +218,20 @@ the documented Build 39 compatibility contract. The test is therefore moved
 to one byte above the 1-TiB legacy envelope, and a readable 4-MiB source-path
 case now proves the intended v2 fallback without excessive CI work.
 
+The authoritative correction-head run
+[#34469885087](https://github.com/Frankbell84/KeyHollow/actions/runs/34469885087)
+on exact commit `437f4f2b0210daa98faadc439fbbc1c3770ba7f7`
+completed successfully. `build-and-test` passed all architecture, release,
+workflow-security, privacy, build-number, source-evidence, environment,
+simulator-build, packaged-resource, XCTest, and artifact-upload steps with zero
+annotations. Swift CodeQL also passed; its separate security result reported
+no new alerts in code changed by PR #51. Retained run artifacts are:
+
+- `KeyHollow-Security-Tests` artifact `10149203692`, SHA-256
+  `f403710fcd8a948987469843db456125704be84d9a01e858def0f9e5c95d0ea6`.
+- `KeyHollow-Simulator` artifact `10149201668`, SHA-256
+  `6d6e617edd61584bdadb8085c9120faf95a17b29be8c89b4b0a777b1a6fa57fc`.
+
 ## Git helper status
 
 The missing-DLL popups come from Codex's bundled Git HTTPS helper, not from the
@@ -242,15 +266,13 @@ corruption.
 
 ## Blockers
 
-There is no open P1/P2 review finding or known production-code defect. The
-latest exact-head CI run exposed an archive-test expectation that contradicted
-the documented legacy re-export contract. Its compatibility-preserving test
-correction must pass the full replacement run.
+There is no open P1/P2 review finding, known production-code defect, or failed
+required repository check. The compatibility-preserving correction passed the
+complete exact-head workflow. The bundled Git helper remains an environment
+maintenance item, not a KeyHollow source blocker.
 
 Remaining proof and external-control blockers are:
 
-- The exact PR head must pass the complete
-  macOS/Xcode/XCTest/resource/CodeQL workflow.
 - GitHub's live production environment, branch protection, required checks,
   code-owner review, and secret placement cannot be proven by repository files.
 - Physical-device regression testing is required after a future TestFlight
@@ -285,24 +307,23 @@ Before the next production TestFlight upload, Frank must verify or configure:
 
 ## Next action
 
-1. Complete local verification of the minimal test-only CI correction, commit
-   it with this checkpoint, and push it to draft PR #51.
-2. Require the replacement exact-head run to pass Xcode generation and
-   compilation, the complete simulator test suite, packaged-resource checks,
-   and Swift CodeQL.
-3. Resolve any CI finding on this branch and repeat the full review/gate cycle.
-4. Once the final PR-head result is stable, pause between phases for the
-   reversible Codex managed-runtime repair and verify it across two launches.
-5. After a green exact revision, obtain Frank's explicit approval before merge.
-6. Require the eventual merged `main` commit to pass the same complete gates.
-7. Stop before signed upload, tester assignment, or App Store action until a
+1. Publish this final operational checkpoint to draft PR #51 and require its
+   status-only exact head to retain the complete green workflow.
+2. Fully quit Codex while no command is active, perform the reversible managed-
+   runtime quarantine/rehydration repair, and verify bundled Git across two
+   clean launches and a bounded read-only GitHub operation.
+3. After the helper is proven durable, recheck the clean synchronized branch
+   and present the exact green revision to Frank for explicit merge approval.
+4. Require the eventual merged `main` commit to pass the same complete gates.
+5. Stop before signed upload, tester assignment, or App Store action until a
    full commit SHA, unused build number, and tester group are authorized.
 
 ## Frank's decisions required
 
-No further decision is required for the completed local hardening, its
-publication to the assigned branch, or continued CI diagnosis and correction
-inside draft PR #51.
+No further decision is required for recording this completed hardening
+checkpoint or diagnosing and verifying the bundled Git-helper repair. Frank
+must coordinate the full Codex quit/reopen needed for that repair and later
+explicitly approve the exact verified revision before merge.
 
 Frank's action-time decision is required for:
 
