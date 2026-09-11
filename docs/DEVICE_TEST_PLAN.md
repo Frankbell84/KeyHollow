@@ -89,6 +89,71 @@ This checklist must be executed on a physical iPhone before external TestFlight 
 - Force-quit during import and verify no committed manifest entry points to missing plaintext/ciphertext data.
 - Test low-storage behavior and verify operations fail without falsely reporting success.
 
+## Backup Verification Center
+
+Run these checks with a TestFlight-delivered candidate and disposable test
+archives. Do not use the only copy of a real backup for tamper tests.
+
+- Before testing, duplicate every archive and record each good source's name,
+  byte size, SHA-256, catalog version, expected photo/file counts, and recovery
+  code. Record existing vaults, root counts, folder membership, representative
+  readable items, and iOS Settings' reported storage use for KeyHollow.
+
+- From the locked home screen, open **Verify Backup**, select a valid current
+  `.khvault`, enter its recovery code, and confirm progress is visible until a
+  sanitized report appears.
+- Confirm the report's photo count, general-file count, source creation date,
+  payload-catalog version, and compatibility limitations match the selected
+  archive. The selected backup filename may appear; confirm the report does not
+  display a LowKey, recovery code, vault key, archived-item filenames, folder
+  names, or item contents.
+- Confirm the report states that current backups do not preserve folder names
+  or folder membership and that a future restore places content at vault root.
+- Lock or dismiss the report, reopen Backup Verification, verify the same
+  archive again, and confirm the report is identical and the source archive is
+  unchanged.
+- Enter a wrong recovery code and confirm verification fails without installing
+  a vault, unlocking a vault, or exposing whether any local vault matches.
+  Confirm the recovery-code field is cleared before another attempt.
+- Verify separate corrupted and truncated copies and confirm both fail closed
+  without a success report or any change to existing vaults.
+- Cancel the picker, replace one selected archive with another, and confirm the
+  picker prevents selection of an unsupported item. If a Files provider offers
+  a mislabeled unsupported item, confirm KeyHollow rejects it. Confirm no old
+  filename, recovery code, report, or success state survives those transitions.
+- Start verification of a representative large archive and cancel once during
+  **Copying backup into protected storage...** and once during
+  **Authenticating every file...**. Repeat
+  those interruptions by backgrounding or locking KeyHollow and by force-
+  quitting once in each stage. Confirm no success report appears, the app-
+  switcher privacy shield is opaque, reopening requires the expected
+  authentication, and a fresh verification can start normally.
+- Unlock an existing vault, open Backup Verification from **Vault Security**,
+  verify a valid archive, and confirm the open vault's contents, folder
+  membership, LowKey, and session behavior are unchanged.
+- Cover a photo-only archive, a general-file-only archive, a mixed archive, and
+  an archive containing a video imported as a general file. If maintained
+  legacy v1 and v2 fixtures are available, confirm their limitations are
+  reported accurately; do not fabricate replacement fixtures on the device.
+- Repeat verify/cancel at least five times. Confirm KeyHollow storage does not
+  grow by approximately one archive per attempt; this is the physical-device
+  proxy for checked ingress and extracted-staging cleanup.
+- With less safe free space than a representative large archive requires,
+  confirm selection fails for insufficient storage without a report, install,
+  or vault mutation. Free space, relaunch, and verify a good archive normally.
+- Recalculate every good source archive's SHA-256 and compare the recorded local
+  vault, item, folder, and storage state. Require byte-identical sources and no
+  new vault, LowKey, passcode behavior, item, or folder mutation.
+- After verification tests, use the normal import flow on a disposable archive
+  and confirm verification did not replace, bypass, or change that separate
+  install path.
+- Complete a core smoke pass: lock/unlock each existing vault; scroll the
+  gallery; open a Photos-origin image, Files-origin image, non-image file, and
+  video; move a mixed selection into and out of a folder; export a general file;
+  export and restore a fresh disposable `.khvault`; then background an open
+  image/video and confirm the privacy shield and relock. Reject any lag, crash,
+  missing item, incorrect folder mutation, or plaintext-residue symptom.
+
 ## Backup/container inspection
 
 - Confirm KeyHollow encrypted storage directories/files carry complete file protection.

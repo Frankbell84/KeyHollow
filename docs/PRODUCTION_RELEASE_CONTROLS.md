@@ -14,7 +14,7 @@ Before the next production upload:
    branch rule named exactly `main`. Do not add a wildcard or tag rule.
 3. Add a nonempty, randomly generated environment secret named
    `PRODUCTION_RELEASE_GUARD`.
-4. Copy these existing credentials into that environment:
+4. Populate or safely rotate these credentials in that environment:
    - `APP_STORE_CONNECT_API_ISSUER_ID`
    - `APP_STORE_CONNECT_API_KEY_BASE64`
    - `APP_STORE_CONNECT_API_KEY_ID`
@@ -23,20 +23,37 @@ Before the next production upload:
    - `KEYCHAIN_PASSWORD`
    - `P12_PASSWORD`
    - `THUMBNAIL_PROVISION_PROFILE_BASE64`
-5. Protect `main`: require a pull request, the complete KeyHollow iOS Build and
-   CodeQL checks, stale-review dismissal, conversation resolution, and code-owner
-   review. Prevent force pushes and branch deletion.
+5. Protect `main`: require a pull request, require the exact `build-and-test`,
+   `CodeQL (Swift)`, and GitHub Advanced Security `CodeQL` checks, require the
+   branch to be current, and require conversation resolution. Apply the rule to
+   administrators and prevent force pushes and branch deletion.
 6. Neutralize the historical `delivery/v2-beta` push uploader before making any
    further push to that branch.
-7. After the protected environment has been validated, remove the repository-
-   scoped copies of the production credentials and the retired beta credential.
-   Do not delete the repository copies until the environment copies have been
-   entered and checked.
+7. After every environment credential has been entered, run the manual
+   `Verify KeyHollow Release Signing` workflow on an exact successful `main`
+   commit. This preflight must authenticate, archive, export, and validate the
+   signed product without uploading or publishing it.
+8. Only after that first preflight passes, remove the repository-scoped copies
+   of the eight production credentials and the retired beta credential, then
+   rerun the same preflight. The second run must prove no release path can fall
+   back to repository-scoped production secrets.
+9. Keep replaced Apple credentials available through the rollback window. Do
+   not retire the prior distribution certificate until a replacement-signed
+   Build 40 is processed, installed, and launched successfully. Revoke the old
+   App Store Connect API key only as the final credential-cutover action.
 
-If the GitHub plan and repository visibility support environment reviewers, add
-a trusted reviewer and disable self-review. Do not enable prevention of
-self-review when no second trusted reviewer exists, because that would make a
-legitimate release impossible.
+Configure a required environment reviewer so every release job pauses before
+signing secrets are exposed. While Frank is the sole release operator, make
+Frank the required reviewer and leave prevention of self-review disabled so the
+authorized job can be approved. When a real independent reviewer is available,
+make that reviewer required and enable prevention of self-review. Never enable
+prevention of self-review while only the initiating operator can approve.
+
+While Frank is the repository's sole reviewer and code owner, require pull
+requests but require zero approvals. Do not require code-owner review, stale-
+approval dismissal, or approval of the most recent push until an independent
+reviewer is available: GitHub does not allow a pull-request author to approve
+their own change. `CODEOWNERS` still records ownership of sensitive paths.
 
 ## Enforced in the repository
 
@@ -50,13 +67,76 @@ legitimate release impossible.
 - The same SHA must have a successful complete CI run produced by a push to
   `main`; pull-request or manually dispatched CI evidence is rejected.
 - The live `production-testflight` environment must exist and expose exactly the
-  `main` deployment branch policy, and GitHub must report `main` as protected.
+  `main` deployment branch policy, exactly one required reviewer
+  (`Frankbell84`) with self-review allowed, and no administrator bypass; GitHub
+  must also report `main` as protected.
+- Release-policy API checks send the workflow token only to their exact
+  `https://api.github.com` endpoints and reject redirects or response-URL drift.
 - The environment-only sentinel must be present before any signing/API secret is
   referenced.
+- The manual `release-signing-preflight.yml` workflow is bound to the protected
+  environment and exact `main` source. It authenticates with App Store Connect,
+  creates an unsigned archive, then exports and inspects the signed IPA, and
+  contains no upload, publication, tester-assignment, or App Store mutation
+  step.
+- Both release paths finish the unsigned archive and archive/privacy checks
+  before exposing signing material. The raw P12 is deleted immediately after
+  its exact keychain identity is validated, and the imported private key is
+  marked non-extractable; cleanup retains an always-run fixed-path fallback.
+- The production workflow retains a signed IPA artifact only after the signed
+  product is verified and the temporary signing authority has been removed.
+  Artifact retention must itself succeed before the App Store Connect key is
+  installed or any upload begins, so failed or unverified output is never
+  published and an artifact failure cannot follow an accepted Apple upload.
+- The App Store Connect private key is decoded only inside the final upload
+  step and an exit trap removes it whether the upload succeeds or fails; the
+  always-run cleanup retains a fixed-path fallback.
 - The retired beta workflow has no token permissions, no secrets, no actions,
   and an unconditional false job guard.
 - Sensitive release, cryptographic, storage, transfer, privacy, and project
   configuration paths are assigned to `@Frankbell84` in `CODEOWNERS`.
 
-`CODEOWNERS` records responsibility, but GitHub only enforces its review rule
-when branch protection is configured to require code-owner approval.
+`CODEOWNERS` records responsibility. Its approval gate should be enabled when a
+real independent reviewer is available, not while doing so would deadlock the
+sole owner.
+
+## Live control status (2026-09-10)
+
+The following controls are now configured and were verified against GitHub:
+
+- `main` is protected. Pull requests, the exact required CI and CodeQL checks,
+  an up-to-date branch, and conversation resolution are required; administrator
+  bypass, force pushes, and branch deletion are disabled.
+- The `production-testflight` environment exists and accepts deployments only
+  from the exact `main` branch.
+- Frank is the required environment reviewer. Self-review prevention remains
+  disabled while Frank is the sole release operator, and administrator bypass
+  is disabled.
+- The environment contains the nonempty random
+  `PRODUCTION_RELEASE_GUARD` sentinel. Its value was generated directly for the
+  environment and was not written to source, local files, or operational notes.
+- The environment contains a newly generated random `KEYCHAIN_PASSWORD`. This
+  value protects only the temporary CI keychain and is not tied to the Apple
+  Distribution certificate.
+- The environment contains the three App Store Connect API secrets for
+  replacement key `W3UF745JN4`. A direct read-only API request and the
+  repository's authenticated build lookup both succeeded with that key. Prior
+  key `JD6P6X8C9A` remains active as a rollback credential.
+
+The replacement Apple Distribution certificate, exportable P12, and exact app
+and thumbnail-extension App Store profiles have been validated locally. Their
+four environment secrets—`BUILD_CERTIFICATE_BASE64`,
+`BUILD_PROVISION_PROFILE_BASE64`, `P12_PASSWORD`, and
+`THUMBNAIL_PROVISION_PROFILE_BASE64`—are not yet present. Repository-scoped
+fallback copies remain in place so no credential has been destroyed. They must
+not be removed until all environment copies pass the first no-upload preflight;
+the same preflight must then pass again after removal.
+
+The reviewed release-workflow source pins the approved rotation identities:
+App Store Connect key `W3UF745JN4`, issuer
+`ba45844d-8147-4d78-932b-bfdbbbc55dc0`, distribution-certificate SHA-1
+`7E2342E196D2A56E95A05BCBDD473FE3799B7EDD`, app-profile UUID
+`b9a24dc9-04a3-40e1-b0e3-fe7538e6e341`, and thumbnail-profile UUID
+`c9564b6f-22cd-490b-9f59-f91e98a4a065`. These identifiers are public binding
+metadata, not credential values. Any rotation requires an explicit reviewed
+source change as well as replacement environment secrets.

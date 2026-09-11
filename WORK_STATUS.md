@@ -7,7 +7,9 @@ evidence remains in `docs/PROJECT_CHECKPOINT.md`.
 
 ## Provenance
 
-- Current branch: `feature/backup-verification-center`
+- Current local release-candidate branch:
+  `release/build40-backup-verification`, in a separate worktree rooted exactly
+  from `origin/main` at `de170c3e2f6a937362b39bc849302dd424476482`.
 - Published phase-entry checkpoint: `6abc6ed`.
 - Published implementation checkpoint:
   `d6d87f39f0c5fee35f7cc05333955ef86046cb7e`.
@@ -15,14 +17,19 @@ evidence remains in `docs/PROJECT_CHECKPOINT.md`.
   `488efb5fb3387bc04916b9a7fd91d3196f4a4e90`.
 - Fully green exact implementation-status-head CI run:
   [#34509180786](https://github.com/Frankbell84/KeyHollow/actions/runs/34509180786).
-- Draft review:
-  [PR #52](https://github.com/Frankbell84/KeyHollow/pull/52), targeting exact
-  baseline `0cdf04acce06fd402780eb2857e977a6872fe572` from
-  `feature/backup-verification-center`.
-- Exact protected-main baseline:
-  `0cdf04acce06fd402780eb2857e977a6872fe572`
-- Baseline tree:
-  `8da1ef0a7d7264ecc1e78382ff8e59ac8b75e2ee`
+- PR [#52](https://github.com/Frankbell84/KeyHollow/pull/52) merged approved
+  feature head `1978209680572cc807b21432b355730c5a487c27` through regular merge
+  commit `de170c3e2f6a937362b39bc849302dd424476482`.
+- The merge tree `79dfae6eafeb500700bfb807a69b2588201bafcf` is byte-for-byte
+  identical to the approved feature tree.
+- Exact Backup Verification merged-main CI run:
+  [#34515909122](https://github.com/Frankbell84/KeyHollow/actions/runs/34515909122)
+  passed build-and-test and Swift CodeQL with zero annotations in the KeyHollow
+  workflow.
+- Merged-main security-test artifact `10167947515`, SHA-256
+  `0017fce1ad253b037463bdf9f775229242061fd8bff197d168c4756a754abf98`.
+- Merged-main simulator artifact `10167944225`, SHA-256
+  `405d532656e39f9665d0ba8d317ee68491129d6fc9a72b13165f9ee0fabc426f`.
 - PR [#51](https://github.com/Frankbell84/KeyHollow/pull/51) merged the
   exact hardening head
   `b07842126ce4b7a2cf5c478a456fea2c49b38cc6` through a regular merge commit.
@@ -38,22 +45,26 @@ evidence remains in `docs/PROJECT_CHECKPOINT.md`.
 - Retained Build 39 IPA artifact: `10132108885`
 - IPA SHA-256:
   `99a3ed152df2c5bb267e5950aab27db82e51e3d22e91981f1d3d15812ced72e1`
-- Product version remains 1.0, Build 39.
+- The latest accepted product remains version 1.0, Build 39.
 - Frank verified Build 39 in App Store Connect and assigned it only to
   `KeyHollow Internal`.
-- Encrypted Video Support and the post-Build-39 hardening revision are now in
-  `main` through `0cdf04a`.
-- No binary has been signed, uploaded, assigned to testers, or submitted from
-  this new feature branch.
+- Encrypted Video Support, post-Build-39 hardening, and Backup Verification
+  Center are now in `main` through `de170c3`.
+- This isolated source candidate sets both product targets to Build 40. Build 40
+  was checked live in App Store Connect on 2026-09-10: Build 39 was the newest
+  upload and no Build 40 record existed. Build 40 has not been signed, uploaded,
+  processed, accepted, assigned to testers, or submitted for review. The
+  release workflow must repeat its API-backed build-number check immediately
+  before any upload.
 
 ## Current task
 
-Finalize the verified Backup Verification Center checkpoint on exact
-implementation-status head `488efb5fb3387bc04916b9a7fd91d3196f4a4e90`,
-preserve draft PR #52 without merge or release action, publish one status-only
-operational checkpoint, and require that new exact documentation head to retain
-the complete green workflow before presenting it for Frank's separate merge
-decision.
+Prepare a release-only Build 40 candidate from exact merged `main` without
+changing application behavior. Keep the diff limited to both synchronized build
+numbers, release workflow and verifier hardening, current operational status,
+TestFlight readiness, and the physical-device Backup Verification checklist. Do
+not push, merge, sign, upload, or assign testers until each later gate receives
+its own action-time approval.
 
 ## Completed work
 
@@ -237,9 +248,10 @@ ordinary unreachable objects and a zero-byte empty worktree `refs` directory
 warning; neither affects reachable source history. The temporary
 `.helper-test` directory was verified empty and removed non-recursively.
 
-Windows still cannot reproduce the macOS/iOS toolchain locally. The exact
-PR-head evidence below now proves this feature revision; the single status-only
-documentation head must retain the same complete workflow.
+Windows still cannot reproduce the macOS/iOS toolchain locally. The exact PR
+and merged-main evidence below prove the Backup Verification implementation.
+Any Build 40 release-preparation head and its eventual merge commit must each
+retain the same complete macOS workflow.
 
 Draft PR #51 was opened from exact reviewed head
 `42086651719f92e4001c26ef1e7b1e3c590bc0d6`. Its initial run
@@ -307,7 +319,7 @@ alerts.
 The authoritative Backup Verification Center run
 [#34509180786](https://github.com/Frankbell84/KeyHollow/actions/runs/34509180786)
 on exact commit `488efb5fb3387bc04916b9a7fd91d3196f4a4e90` completed
-successfully for draft PR #52. `build-and-test` passed every preflight gate,
+successfully for PR #52 before merge. `build-and-test` passed every preflight gate,
 project generation, simulator build, packaged-resource verification, the
 complete security/lifecycle XCTest suite, and both artifact uploads. Swift
 CodeQL passed; the separate pull-request security result reported no new alerts
@@ -318,6 +330,20 @@ Retained run artifacts are:
   `d807f1abef8f8881b1679374cb07f756111e12f1f48a4e4e5503ea76d07379e7`.
 - `KeyHollow-Simulator` artifact `10165393728`, SHA-256
   `64910e65840ca0af9a08ba043eccfe3b33c53cec96b079d1de98e07ab64ef4a1`.
+
+PR #52 then merged through `de170c3e2f6a937362b39bc849302dd424476482`.
+Exact main-push run
+[#34515909122](https://github.com/Frankbell84/KeyHollow/actions/runs/34515909122)
+passed `build-and-test` and Swift CodeQL. Both KeyHollow jobs completed with
+zero annotations, and the retained artifacts and digests are recorded in
+Provenance above.
+
+The separate GitHub-managed dynamic Pages run
+[#34515907787](https://github.com/Frankbell84/KeyHollow/actions/runs/34515907787)
+also succeeded. Its one advisory says GitHub is forcing its managed
+`actions/upload-artifact@v4` step from deprecated Node 20 to Node 24. That step
+is not declared by a checked-in KeyHollow or iOS release workflow and does not
+block Build 40; any Pages migration remains separate infrastructure work.
 
 ## Git helper status
 
@@ -353,60 +379,109 @@ corruption, and it is no longer an active blocker.
 ## Blockers
 
 There is no open P1/P2 review finding, known production-code defect, active
-Git-helper blocker, or failed required repository check on the Backup
-Verification Center implementation. Exact implementation-status head
-`488efb5fb3387bc04916b9a7fd91d3196f4a4e90` passed the complete workflow. The
-only remaining repository proof is the one status-only documentation head;
-physical-device testing remains mandatory after any separately approved
-merged-main upload.
+Git-helper blocker, or failed required repository check on the merged Backup
+Verification Center implementation.
+
+Release remains blocked, but the major external control gap has been closed.
+On 2026-09-10, `main` protection and the `production-testflight` environment
+were configured and verified live. The environment is exact-`main` only, has a
+required reviewer with administrator bypass disabled, and contains the random
+`PRODUCTION_RELEASE_GUARD`, a fresh CI-only `KEYCHAIN_PASSWORD`, and the three
+App Store Connect API secrets. Replacement API key `W3UF745JN4` authenticated
+successfully through both a direct read-only request and the repository's
+Build-40/latest-39 lookup. Prior key `JD6P6X8C9A` remains active as a rollback
+credential until the complete cutover is proven.
+
+The replacement Apple Distribution certificate, exportable P12, and exact app
+and thumbnail-extension App Store profiles have been generated and validated
+locally. The reviewed release source pins certificate SHA-1
+`7E2342E196D2A56E95A05BCBDD473FE3799B7EDD`, app-profile UUID
+`b9a24dc9-04a3-40e1-b0e3-fe7538e6e341`, and thumbnail-profile UUID
+`c9564b6f-22cd-490b-9f59-f91e98a4a065`; these are public binding identifiers,
+not secrets. The materials remain non-production until their four environment
+secrets are installed and the protected no-upload signing preflight passes.
+Build 40 remains only a candidate even though App Store Connect showed the
+number unused on 2026-09-10. Physical-device Backup Verification testing remains
+mandatory after any separately approved Internal upload.
 
 ## Required external GitHub controls
 
-Before the next production TestFlight upload, Frank must verify or configure:
+Before the next production TestFlight upload, the following status applies:
 
-1. Environment named exactly `production-testflight`.
-2. Custom deployment policy allowing only the exact `main` branch.
-3. A nonempty environment-only `PRODUCTION_RELEASE_GUARD` secret.
-4. These eight production secrets in that environment:
-   - `APP_STORE_CONNECT_API_ISSUER_ID`
-   - `APP_STORE_CONNECT_API_KEY_BASE64`
-   - `APP_STORE_CONNECT_API_KEY_ID`
+1. **Complete:** environment named exactly `production-testflight`.
+2. **Complete:** custom deployment policy allowing only the exact `main`
+   branch.
+3. **Complete:** a nonempty environment-only `PRODUCTION_RELEASE_GUARD`
+   secret.
+4. **Partially complete:** `KEYCHAIN_PASSWORD` and all three App Store Connect
+   API secrets are present. These four production signing secrets remain open
+   in that environment:
    - `BUILD_CERTIFICATE_BASE64`
    - `BUILD_PROVISION_PROFILE_BASE64`
-   - `KEYCHAIN_PASSWORD`
    - `P12_PASSWORD`
    - `THUMBNAIL_PROVISION_PROFILE_BASE64`
-5. Protected `main` requiring pull requests, complete CI and CodeQL,
-   stale-review dismissal, conversation resolution, and code-owner review,
-   with force pushes and branch deletion disabled.
-6. Neutralization or removal of the historical remote `delivery/v2-beta`
-   uploader before that branch is touched again.
-7. Removal of repository-scoped production credentials only after environment
-   copies and the release guard are entered and validated.
-8. A trusted environment reviewer only if a real second reviewer is available;
-   do not prevent self-review without one.
+5. **Complete:** protected `main` requiring pull requests, an up-to-date branch, conversation
+   resolution, and the exact `build-and-test`, `CodeQL (Swift)`, and GitHub
+   Advanced Security `CodeQL` checks, with administrator bypass, force pushes,
+   and branch deletion disabled. While Frank is the sole reviewer, approvals,
+   code-owner review, stale-approval dismissal, and latest-push approval remain
+   off so GitHub cannot create a self-review deadlock.
+6. **Contained:** the production workflow on `main` has retired the historical
+   beta uploader with an unconditional false job. The historical remote
+   `delivery/v2-beta` branch must not be pushed; removal remains a separately
+   authorized cleanup action.
+7. **Deferred intentionally:** removal of repository-scoped production
+   credentials only after every environment copy passes the first protected
+   no-upload preflight. The same preflight must pass again after removal.
+8. **Complete:** a required environment reviewer so the release pauses before secrets are
+   exposed. While Frank is the sole operator, Frank remains the reviewer and
+   self-review prevention stays off; when an independent reviewer is available,
+   require that reviewer and enable self-review prevention.
+
+GitHub does not reveal stored secret values. If the original repository-scoped
+values were not retained outside GitHub, recreate or rotate the relevant Apple
+credentials and provisioning material rather than weakening the environment-
+only boundary.
 
 ## Next action
 
-1. Publish this one final operational checkpoint to draft PR #52 and require
-   its status-only exact head to retain the complete green workflow.
-2. Recheck the clean synchronized branch and present that exact green revision
-   to Frank for explicit merge approval.
-3. Require the eventual merged `main` commit to pass the same complete gates.
-4. Stop before signing, upload, tester assignment, or App Store action until a
-   full commit SHA, unused build number, and tester group are separately
-   authorized.
+1. Review this local release-infrastructure/configuration/documentation-only
+   Build 40 candidate and require all local gates to pass without any
+   application-runtime source change.
+2. Install the four locally validated signing secrets in
+   `production-testflight` and verify all nine environment-secret names: the
+   environment-only guard plus all eight production credentials.
+3. **Complete for candidate preparation:** App Store Connect showed Build 39 as
+   the newest upload and no Build 40 record on 2026-09-10. The release workflow
+   must repeat this check immediately before upload.
+4. Publish this candidate through a normal pull request, require complete PR
+   CI, merge only the approved exact head, and require complete main-push CI.
+5. Run `Verify KeyHollow Release Signing` on the exact merged-main commit. It
+   must authenticate to App Store Connect, validate and use the new signing
+   material to create an unsigned archive, then export and inspect the signed
+   IPA, and finish without an upload or publication action.
+6. Only after that first preflight passes, remove the eight repository-scoped
+   production-credential copies and rerun the same preflight. The second run
+   must prove the protected environment is the only credential source.
+7. Only if Build 40 is unused, obtain explicit
+   authorization naming the full merged-main SHA, Build 40, and
+   `KeyHollow Internal` only.
+8. Verify the signed workflow, retained IPA digest, App Store Connect processing,
+   and Internal-only assignment; then execute the Backup Verification section of
+   `docs/DEVICE_TEST_PLAN.md` on a physical iPhone.
+9. Retain the prior Apple Distribution certificate until the replacement has
+   produced a processed Build 40 that installs and launches successfully. Keep
+   API key `JD6P6X8C9A` available through the entire rollback window and revoke
+   it only as the final credential-cutover action.
+10. Do not expand to Family or external testers without a separate decision after
+   the Internal checks pass.
 
 ## Frank's decisions required
 
-No further decision is required for recording this one completed feature
-checkpoint or verifying its exact-head CI. Frank must later explicitly approve
-the exact verified revision before merge.
-
 Frank's action-time decision is required for:
 
-- Approving and merging the exact Backup Verification Center revision into
-  `main` after all gates pass.
+- Publishing and merging the exact Build 40 release-preparation revision after
+  all gates pass.
 - Creating or changing GitHub environments, branch protection, reviewers, or
   secrets.
 - Retiring or deleting historical remote release branches or secrets.
