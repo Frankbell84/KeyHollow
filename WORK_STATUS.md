@@ -425,6 +425,22 @@ authentication. Build 40 remains only a candidate even though App Store Connect
 showed the number unused on 2026-09-10. Physical-device Backup Verification
 testing remains mandatory after any separately approved Internal upload.
 
+PR #54 merged that runner correction as exact `main` commit
+`95cd9f9deb2f99fe5f5962cc5ac96c2a47d12f33`; its complete main-push CI run
+[#34560364159](https://github.com/Frankbell84/KeyHollow/actions/runs/34560364159)
+passed both required jobs with zero annotations. The next protected no-upload
+run
+[#34561820231](https://github.com/Frankbell84/KeyHollow/actions/runs/34561820231)
+then authenticated and completed the unsigned archive, but stopped safely while
+installing signing material. The P12 imported successfully and contained one
+signing leaf plus its normal certificate chain; the workflow incorrectly
+required the isolated keychain to contain only one certificate total and saw
+three. It produced no signed IPA and performed no upload. The isolated local
+correction extracts exactly one non-CA leaf, still requires exactly one valid
+code-signing identity matching the pinned fingerprint, and leaves every profile,
+export, post-export, and cleanup gate intact. It requires its own protected PR,
+PR CI, merged-main CI, and fresh no-upload rehearsal.
+
 ## Required external GitHub controls
 
 Before the next production TestFlight upload, the following status applies:
@@ -463,9 +479,10 @@ only boundary.
 
 ## Next action
 
-1. Review and publish the isolated runner correction through a normal pull
-   request; require complete PR CI, merge only the approved exact head, and
-   require complete main-push CI. No application-runtime source may change.
+1. Review and publish the isolated certificate-chain verifier correction through
+   a normal pull request; require complete PR CI, merge only the approved exact
+   head, and require complete main-push CI. No application-runtime source may
+   change.
 2. Run `Verify KeyHollow Release Signing` on the corrected exact merged-main
    commit. It must authenticate to App Store Connect, create the unsigned
    archive, install and validate the replacement signing material, export and

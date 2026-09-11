@@ -224,10 +224,10 @@ jobs:
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
           security list-keychains -d user -s "$KEYCHAIN_PATH"
 
-          security find-certificate -a -p "$KEYCHAIN_PATH" > "$SIGNING_CERTIFICATE_PEM"
-          CERTIFICATE_COUNT=$(awk '/-----BEGIN CERTIFICATE-----/ { count += 1 } END { print count + 0 }' "$SIGNING_CERTIFICATE_PEM")
-          if [[ "$CERTIFICATE_COUNT" != 1 ]]; then
-            echo "Expected exactly one certificate in the isolated signing keychain, found $CERTIFICATE_COUNT."
+          openssl pkcs12 -in "$CERTIFICATE_PATH" -clcerts -nokeys -passin env:P12_PASSWORD -out "$SIGNING_CERTIFICATE_PEM"
+          LEAF_CERTIFICATE_COUNT=$(awk '/-----BEGIN CERTIFICATE-----/ { count += 1 } END { print count + 0 }' "$SIGNING_CERTIFICATE_PEM")
+          if [[ "$LEAF_CERTIFICATE_COUNT" != 1 ]]; then
+            echo "Expected exactly one non-CA signing certificate in the PKCS#12 archive, found $LEAF_CERTIFICATE_COUNT."
             exit 1
           fi
           openssl x509 -in "$SIGNING_CERTIFICATE_PEM" -outform DER -out "$SIGNING_CERTIFICATE_DER"
@@ -245,11 +245,18 @@ jobs:
             echo 'Signing certificate does not match the approved rotation.'
             exit 1
           fi
-          IDENTITY_MATCH_COUNT=$(security find-identity -v -p codesigning "$KEYCHAIN_PATH" | awk -v expected="$SIGNING_CERTIFICATE_SHA1" 'toupper($2) == expected { count += 1 } END { print count + 0 }')
-          if [[ "$IDENTITY_MATCH_COUNT" != 1 ]]; then
-            echo 'The imported certificate does not have exactly one matching code-signing identity.'
+          IDENTITY_LIST=$(security find-identity -v -p codesigning "$KEYCHAIN_PATH")
+          VALID_IDENTITY_COUNT=$(printf '%s\n' "$IDENTITY_LIST" | awk '$1 ~ /^[0-9]+\)$/ && length($2) == 40 && $2 ~ /^[0-9A-Fa-f]+$/ { count += 1 } END { print count + 0 }')
+          if [[ "$VALID_IDENTITY_COUNT" != 1 ]]; then
+            echo "Expected exactly one valid code-signing identity in the isolated signing keychain, found $VALID_IDENTITY_COUNT."
             exit 1
           fi
+          IDENTITY_MATCH_COUNT=$(printf '%s\n' "$IDENTITY_LIST" | awk -v expected="$SIGNING_CERTIFICATE_SHA1" '$1 ~ /^[0-9]+\)$/ && toupper($2) == expected { count += 1 } END { print count + 0 }')
+          if [[ "$IDENTITY_MATCH_COUNT" != 1 ]]; then
+            echo 'The sole valid code-signing identity does not match the approved certificate.'
+            exit 1
+          fi
+          unset IDENTITY_LIST
           rm -f "$CERTIFICATE_PATH"
           unset BUILD_CERTIFICATE_BASE64 P12_PASSWORD
 

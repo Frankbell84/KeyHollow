@@ -112,6 +112,28 @@ SIGNING_IMPORT_COMMAND = (
     '-T /usr/bin/codesign -t agg -f pkcs12 -k "$KEYCHAIN_PATH"'
 )
 
+SIGNING_LEAF_EXTRACTION_COMMAND = (
+    'openssl pkcs12 -in "$CERTIFICATE_PATH" -clcerts -nokeys '
+    '-passin env:P12_PASSWORD -out "$SIGNING_CERTIFICATE_PEM"'
+)
+
+SIGNING_IDENTITY_LIST_COMMAND = (
+    'IDENTITY_LIST=$(security find-identity -v -p codesigning "$KEYCHAIN_PATH")'
+)
+
+SIGNING_VALID_IDENTITY_COUNT_COMMAND = (
+    "VALID_IDENTITY_COUNT=$(printf '%s\\n' \"$IDENTITY_LIST\" | awk "
+    "'$1 ~ /^[0-9]+\\)$/ && length($2) == 40 && $2 ~ /^[0-9A-Fa-f]+$/ "
+    "{ count += 1 } END { print count + 0 }')"
+)
+
+SIGNING_MATCHING_IDENTITY_COUNT_COMMAND = (
+    "IDENTITY_MATCH_COUNT=$(printf '%s\\n' \"$IDENTITY_LIST\" | awk "
+    "-v expected=\"$SIGNING_CERTIFICATE_SHA1\" "
+    "'$1 ~ /^[0-9]+\\)$/ && toupper($2) == expected "
+    "{ count += 1 } END { print count + 0 }')"
+)
+
 STRICT_SIGNING_TEARDOWN_REQUIREMENTS = (
     'test -e "$KEYCHAIN_PATH"',
     'security lock-keychain "$KEYCHAIN_PATH"',
@@ -188,13 +210,13 @@ RELEASE_WORKFLOW_SHA256: dict[str, str] = {
         "9554afac60a5dc035799c25f30231f7685484025501d2cea25258c19d2a2e304"
     ),
     "release-signing-preflight.yml": (
-        "6a69fff1f1d897bb9fb36aacf250851ed81b556c499e0a231f7e43af8e46506c"
+        "5e9f92dd2fc22855b88496e1f024f815a9dbdda140bd6b37955094aea73940d4"
     ),
     "testflight-beta.yml": (
         "2aed9c97ea63adecbb29632b24e0286d20eb6812ea4aeb337880b16a2669e326"
     ),
     "testflight.yml": (
-        "6c35e949b23651f38d7005a6fcba8194209dad839b6e1be05888d7ef4a92d687"
+        "02611b0c5b3a31097abaca1cc49d34f7ba2e4b3218c7faf0339a1f86187efc8c"
     ),
 }
 
@@ -291,7 +313,7 @@ PREFLIGHT_RUN_BODY_SHA256 = {
     "Install XcodeGen": "eff4eba980e3da81c56fa187333d420a74b0b26390057c64bd11e2080ea1eea3",
     "Generate Xcode project": "bdda8fc016233561ae1373260c36558e5d4c306a823ed94687bc0fcd9073ba5c",
     "Verify App Store Connect authentication": "e09d3052df83a2838fb58b0fdd565569d9a5ea44ea371252b006f8adeb01e0e2",
-    "Install and verify cloud-signing material": "747a4711a4eea0e42ab94c35102038e0335eded1d6eb6f2fbf0302f5d0976cbf",
+    "Install and verify cloud-signing material": "7a7177375bd4bcb5a4417386a9dee1c6088803ac554c4e105e1c51929da9d190",
     "Archive KeyHollow without signing": "f049352141029cc0612d4498aab86ed29670cd38df175f2950fd2947a1e768d9",
     "Verify archived build and privacy manifest": "bfc8a654774502496e9edf9407f21f5516e6d6e372e1211555afb4fc31517175",
     "Create fingerprint-bound export options": "4aeb8c14cd1b15da9a6eb8d55528446b62180842687ecb8d0a8018ec85324869",
@@ -419,7 +441,7 @@ TESTFLIGHT_RUN_BODY_SHA256 = {
     "Install XcodeGen": "eff4eba980e3da81c56fa187333d420a74b0b26390057c64bd11e2080ea1eea3",
     "Generate Xcode project": "bdda8fc016233561ae1373260c36558e5d4c306a823ed94687bc0fcd9073ba5c",
     "Verify build number against App Store Connect": "7f2fc20f1403958d6c69c221918f43e8f5699e216469086b0b9394da70257e60",
-    "Install cloud-signing material": "f8cd7f173dedcf8675c57f45263806482918a0edad5bc3d409e3da56fbf63ddc",
+    "Install cloud-signing material": "b4c9ffc324d1634f9ffedd7592ca38e6df965ad8f74f7a6431b688902b353697",
     "Archive KeyHollow": "98be0d5be0e7437ee93dfa382665382b31caee427a431f7fba183c8246f4d1e5",
     "Verify archived build, privacy, and module hygiene": "29c7753fd75f215395de6817c17b39a0cd01a5d8700aa4ce4fb76b4de514bf24",
     "Create export options": "df05193769e7bc473e502e6c37d5fb3c24c7b74aa7505e54592543e28d2f2f41",
@@ -1222,14 +1244,20 @@ def audit_signing_pipeline(
     for required in (
         "python3 -I scripts/verify_signing_material.py --self-test",
         SIGNING_IMPORT_COMMAND,
-        "security find-certificate -a -p \"$KEYCHAIN_PATH\"",
-        "CERTIFICATE_COUNT=$(awk '/-----BEGIN CERTIFICATE-----/",
+        SIGNING_LEAF_EXTRACTION_COMMAND,
+        "LEAF_CERTIFICATE_COUNT=$(awk '/-----BEGIN CERTIFICATE-----/",
+        '[[ "$LEAF_CERTIFICATE_COUNT" != 1 ]]',
         'CERTIFICATE_SUBJECT=$(openssl x509 -in "$SIGNING_CERTIFICATE_PEM" -noout -subject -nameopt RFC2253)',
         '[[ "$CERTIFICATE_SUBJECT" != *"CN=Apple Distribution:"* || "$CERTIFICATE_SUBJECT" != *"OU=$TEAM_ID"* ]]',
         'SIGNING_CERTIFICATE_DER="$RUNNER_TEMP/keyhollow-distribution.cer"',
         'SIGNING_CERTIFICATE_SHA1=$(shasum -a 1 "$SIGNING_CERTIFICATE_DER"',
         '[[ ! "$SIGNING_CERTIFICATE_SHA1" =~ ^[0-9A-F]{40}$ ]]',
-        'security find-identity -v -p codesigning "$KEYCHAIN_PATH"',
+        SIGNING_IDENTITY_LIST_COMMAND,
+        SIGNING_VALID_IDENTITY_COUNT_COMMAND,
+        '[[ "$VALID_IDENTITY_COUNT" != 1 ]]',
+        SIGNING_MATCHING_IDENTITY_COUNT_COMMAND,
+        '[[ "$IDENTITY_MATCH_COUNT" != 1 ]]',
+        "unset IDENTITY_LIST",
         '--certificate-der "$SIGNING_CERTIFICATE_DER"',
         '--app-profile-plist "$APP_PROFILE_PLIST"',
         '--thumbnail-profile-plist "$THUMBNAIL_PROFILE_PLIST"',
@@ -1254,6 +1282,30 @@ def audit_signing_pipeline(
         matching_command_lines(text, "security import ")
         == [SIGNING_IMPORT_COMMAND],
         f"{name}: PKCS#12 identity import must use the canonical aggregate type exactly once",
+    )
+
+    require(
+        violations,
+        matching_command_lines(text, "openssl pkcs12 ")
+        == [SIGNING_LEAF_EXTRACTION_COMMAND],
+        f"{name}: the PKCS#12 archive must yield exactly one canonical non-CA signing certificate",
+    )
+
+    require(
+        violations,
+        matching_command_lines(text, "security find-identity ")
+        == [SIGNING_IDENTITY_LIST_COMMAND]
+        and matching_command_lines(text, "VALID_IDENTITY_COUNT=")
+        == [SIGNING_VALID_IDENTITY_COUNT_COMMAND]
+        and matching_command_lines(text, "IDENTITY_MATCH_COUNT=")
+        == [SIGNING_MATCHING_IDENTITY_COUNT_COMMAND],
+        f"{name}: the isolated keychain must contain one valid identity and it must match the approved leaf",
+    )
+
+    require(
+        violations,
+        'security find-certificate -a -p "$KEYCHAIN_PATH"' not in text,
+        f"{name}: aggregate keychain certificate enumeration must not confuse chain certificates with signing identities",
     )
 
     require(
@@ -2564,6 +2616,54 @@ def self_test() -> int:
         assert matching_command_lines(
             import_mutation, "security import "
         ) != [SIGNING_IMPORT_COMMAND]
+
+    assert matching_command_lines(
+        SIGNING_LEAF_EXTRACTION_COMMAND, "openssl pkcs12 "
+    ) == [SIGNING_LEAF_EXTRACTION_COMMAND]
+    for extraction_mutation in (
+        SIGNING_LEAF_EXTRACTION_COMMAND.replace(" -clcerts", "", 1),
+        SIGNING_LEAF_EXTRACTION_COMMAND.replace(" -nokeys", "", 1),
+        SIGNING_LEAF_EXTRACTION_COMMAND.replace(
+            "-passin env:P12_PASSWORD", "-passin pass:plaintext", 1
+        ),
+        SIGNING_LEAF_EXTRACTION_COMMAND + "\n" + SIGNING_LEAF_EXTRACTION_COMMAND,
+    ):
+        assert matching_command_lines(
+            extraction_mutation, "openssl pkcs12 "
+        ) != [SIGNING_LEAF_EXTRACTION_COMMAND]
+
+    identity_commands = "\n".join(
+        (
+            SIGNING_IDENTITY_LIST_COMMAND,
+            SIGNING_VALID_IDENTITY_COUNT_COMMAND,
+            SIGNING_MATCHING_IDENTITY_COUNT_COMMAND,
+        )
+    )
+    assert matching_command_lines(
+        identity_commands, "security find-identity "
+    ) == [SIGNING_IDENTITY_LIST_COMMAND]
+    assert matching_command_lines(
+        identity_commands, "VALID_IDENTITY_COUNT="
+    ) == [SIGNING_VALID_IDENTITY_COUNT_COMMAND]
+    assert matching_command_lines(
+        identity_commands, "IDENTITY_MATCH_COUNT="
+    ) == [SIGNING_MATCHING_IDENTITY_COUNT_COMMAND]
+    for identity_mutation in (
+        identity_commands.replace('"$KEYCHAIN_PATH"', '"login.keychain-db"', 1),
+        identity_commands.replace("length($2) == 40", "length($2) > 0", 1),
+        identity_commands.replace(
+            '-v expected="$SIGNING_CERTIFICATE_SHA1"', "", 1
+        ),
+        identity_commands + "\n" + SIGNING_IDENTITY_LIST_COMMAND,
+    ):
+        assert (
+            matching_command_lines(identity_mutation, "security find-identity ")
+            != [SIGNING_IDENTITY_LIST_COMMAND]
+            or matching_command_lines(identity_mutation, "VALID_IDENTITY_COUNT=")
+            != [SIGNING_VALID_IDENTITY_COUNT_COMMAND]
+            or matching_command_lines(identity_mutation, "IDENTITY_MATCH_COUNT=")
+            != [SIGNING_MATCHING_IDENTITY_COUNT_COMMAND]
+        )
 
     cleanup_fixture = "\n".join(
         [

@@ -63,11 +63,10 @@ their own change. `CODEOWNERS` still records ownership of sensitive paths.
   and assets declared by their catalog metadata; stray resources and symlinks fail.
 - CI has read-only token permissions except for the CodeQL result upload.
 - Production upload is manual, serialized, and restricted to `main`.
-- The Build 40 runner-correction candidate moves both privileged release jobs
-  to the same `macos-15-arm64` image family and pinned Xcode 26.0.1 build as
-  validation CI. If merged, they will fail before App Store authentication
-  unless the runner architecture, iOS 26.0 SDK, and matching available runtime
-  are all exact.
+- The merged Build 40 runner correction places both privileged release jobs on
+  the same `macos-15-arm64` image family and pinned Xcode 26.0.1 build as
+  validation CI. They fail before App Store authentication unless the runner
+  architecture, iOS 26.0 SDK, and matching available runtime are all exact.
 - The selected commit must be a lowercase 40-character SHA and must equal the
   checked-out workflow commit.
 - The same SHA must have a successful complete CI run produced by a push to
@@ -145,11 +144,23 @@ passed exact-source CI, live-environment, security, privacy, identity, project-
 generation, and App Store authentication gates. It stopped at the unsigned
 archive before signing material was installed because its `macos-26-arm64`
 image lacked the iOS 26.0 runtime required by pinned Xcode 26.0.1. No signing,
-export, upload, or publication occurred. The local correction candidate changes
-only the privileged runner to `macos-15` and adds explicit fail-closed toolchain
-and runtime assertions; it does not change application, signing, or upload
-logic. It still requires pull-request CI, exact-head approval, merge, and
-merged-main CI before another preflight.
+export, upload, or publication occurred. PR #54 merged the isolated runner
+correction as exact `main` commit
+`95cd9f9deb2f99fe5f5962cc5ac96c2a47d12f33`, and complete main-push CI run
+[#34560364159](https://github.com/Frankbell84/KeyHollow/actions/runs/34560364159)
+passed.
+
+Protected no-upload run
+[#34561820231](https://github.com/Frankbell84/KeyHollow/actions/runs/34561820231)
+then completed authentication and the unsigned archive before failing closed in
+the signing-material install step. The P12 imported successfully; its one
+signing leaf and ordinary CA chain produced three keychain certificates, while
+the workflow incorrectly required one certificate total. No signed IPA or
+upload was produced. The isolated correction selects exactly one non-CA leaf
+from the P12 and independently requires exactly one valid code-signing identity
+matching the approved fingerprint. It does not weaken the Apple-team, profile,
+export, post-export, or cleanup checks and remains subject to protected PR and
+merged-main CI before another rehearsal.
 
 The reviewed release-workflow source pins the approved rotation identities:
 App Store Connect key `W3UF745JN4`, issuer
