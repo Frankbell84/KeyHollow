@@ -39,9 +39,10 @@ Before the next production upload:
    production secrets. The retired beta credential is outside this cutover and
    requires its own explicit cleanup decision.
 9. Keep replaced Apple credentials available through the rollback window. Do
-   not retire the prior distribution certificate until a replacement-signed
-   Build 40 is processed, installed, and launched successfully. Revoke the old
-   App Store Connect API key only as the final credential-cutover action.
+   not retire a prior distribution certificate until its replacement-signed
+   build is processed, installed, launched, and device-tested successfully.
+   Revoke the prior App Store Connect API key only as the final credential-
+   cutover action. Build 40 completed this sequence on 2026-09-11.
 
 Configure a required environment reviewer so every release job pauses before
 signing secrets are exposed. While Frank is the sole release operator, make
@@ -125,8 +126,8 @@ The following controls are now configured and were verified against GitHub:
   Distribution certificate.
 - The environment contains the three App Store Connect API secrets for
   replacement key `W3UF745JN4`. A direct read-only API request and the
-  repository's authenticated build lookup both succeeded with that key. Prior
-  key `JD6P6X8C9A` remains active as a rollback credential.
+  repository's authenticated build lookup both succeeded with that key. Legacy
+  key `JD6P6X8C9A` was revoked on 2026-09-11 after Build 40 device acceptance.
 
 The replacement Apple Distribution certificate, exportable P12, and exact app
 and thumbnail-extension App Store profiles have been validated locally. Their
@@ -134,9 +135,12 @@ four environment secrets—`BUILD_CERTIFICATE_BASE64`,
 `BUILD_PROVISION_PROFILE_BASE64`, `P12_PASSWORD`, and
 `THUMBNAIL_PROVISION_PROFILE_BASE64`—are present, so all nine expected
 environment-secret names are installed. Repository-scoped fallback copies
-remain in place so no credential has been destroyed. They must not be removed
-until all environment copies pass the first no-upload preflight; the same
-preflight must then pass again after removal.
+were removed only after protected preflight
+[#34598236304](https://github.com/Frankbell84/KeyHollow/actions/runs/34598236304)
+passed. Protected preflight
+[#34600941660](https://github.com/Frankbell84/KeyHollow/actions/runs/34600941660)
+then proved that no release path can fall back to repository-scoped production
+secrets.
 
 The first protected no-upload attempt
 [#34556497300](https://github.com/Frankbell84/KeyHollow/actions/runs/34556497300)
@@ -185,3 +189,35 @@ App Store Connect key `W3UF745JN4`, issuer
 `c9564b6f-22cd-490b-9f59-f91e98a4a065`. These identifiers are public binding
 metadata, not credential values. Any rotation requires an explicit reviewed
 source change as well as replacement environment secrets.
+
+## Build 40 cutover completion
+
+- PR [#56](https://github.com/Frankbell84/KeyHollow/pull/56) merged the exact
+  reviewed release-verifier head
+  `426768238433017ea11773220c3f61378d3f7cd3` as exact `main` commit
+  `54bd2d6887f3ca0e476339fce05e90dd59ba963f`. Its PR and merged-main CI runs
+  passed all required checks.
+- Replacement-only protected preflight
+  [#34600941660](https://github.com/Frankbell84/KeyHollow/actions/runs/34600941660)
+  passed before release.
+- Protected upload
+  [#34602241254](https://github.com/Frankbell84/KeyHollow/actions/runs/34602241254)
+  produced the validated Build 40 binary, retained the verified IPA artifact,
+  and assigned the build only to `KeyHollow Internal`. Frank installed and
+  device-tested that binary successfully.
+- The legacy Apple Distribution certificate `2P45VCTJVL` was revoked after
+  device acceptance. Apple Developer then showed replacement certificate
+  `4RU4X6GAGU` as the sole active Distribution certificate.
+- Legacy App Store Connect API key `JD6P6X8C9A` was revoked last. Replacement
+  key `W3UF745JN4` remained the sole active team key.
+- Final protected no-upload preflight
+  [#34610956286](https://github.com/Frankbell84/KeyHollow/actions/runs/34610956286)
+  subsequently passed App Store Connect authentication, exact-source and live-
+  environment gates, archive and privacy checks, replacement-only signing,
+  signed-IPA verification, and cleanup. It uploaded or retained nothing.
+
+The old-credential rollback path is closed. A source rollback must be delivered
+as a new higher-numbered build using the active protected replacement set. If
+that set is lost, revoked, or compromised, recovery must issue new credentials
+and profiles through the same reviewed rotation process; it must never weaken
+the protected environment or reuse revoked material.
