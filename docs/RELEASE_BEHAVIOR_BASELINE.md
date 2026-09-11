@@ -74,6 +74,38 @@ otherwise.
 - A missing destination or failed membership write leaves the prior folder
   assignments and protected content unchanged.
 
+## Unified media navigation candidate
+
+The isolated Unified Media Navigation feature branch contains the following
+locally hardened additive candidate behavior. It is not part of the accepted
+release baseline until its review, CI, merged-main, signed-build, and
+physical-device gates pass:
+
+- A Photos-origin image, Files-origin image, or supported encrypted video opens
+  at its position in the compatible-media order of the currently visible vault
+  root or folder.
+- Horizontal navigation stays within that immutable location snapshot and does
+  not wrap beyond its first or last item. PDFs and other non-media files retain
+  their existing file-management route.
+- Photo and general-file identifiers include their source as part of identity,
+  so equal UUID values cannot alias one another.
+- The navigation add-on receives immutable identity, kind, and display-title
+  metadata only. It does not receive a vault session, key, protected store,
+  ciphertext, plaintext payload, local file location, or archive capability.
+- The pager constructs presentation for the active item only. Authentication,
+  decryption, generation control, prior-item cleanup, saving, deletion, lock and
+  background handling, and protected temporary-file lifetime remain owned by
+  the application composition layer.
+- Image replacement waits for the UIKit presentation surface to clear its image
+  reference. Video replacement continues to wait for player release and
+  protected-export removal. Save and delete temporarily disable page navigation
+  and dismissal so a prior operation cannot overlap or publish into a new item.
+- VoiceOver presentation includes the current title, media kind, position, and
+  boundary-aware previous and next controls.
+
+This section records candidate intent and implementation scope only. It does not
+record CI, build, TestFlight, or device-test acceptance.
+
 ## Automated Stage One evidence
 
 - `VaultLifecycleBaselineTests` covers create, persistence across service

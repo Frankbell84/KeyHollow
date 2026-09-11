@@ -14,6 +14,7 @@ PROJECT_FILE = ROOT / "project.yml"
 ADDON_ROOT = SOURCE_ROOT / "AddOns"
 BACKUP_VERIFICATION_ROOT = ADDON_ROOT / "BackupVerification"
 ENCRYPTED_VIDEO_ROOT = ADDON_ROOT / "EncryptedVideo"
+MEDIA_NAVIGATION_ROOT = ADDON_ROOT / "MediaNavigation"
 THUMBNAIL_EXTENSION_ROOT = ROOT / "KeyHollowVaultThumbnailExtension"
 
 PRESENTATION_FILES = {
@@ -25,6 +26,7 @@ PRESENTATION_PREFIXES = (
     "KeyHollow/UI/",
     "KeyHollow/AddOns/EncryptedVideo/",
     "KeyHollow/AddOns/BackupVerification/",
+    "KeyHollow/AddOns/MediaNavigation/",
     "KeyHollow/AddOns/SecurePreview/",
 )
 
@@ -95,6 +97,7 @@ BACKUP_VERIFICATION_PREFIX = "KeyHollow/AddOns/BackupVerification/"
 GENERAL_FILE_SUPPORT_PREFIX = "KeyHollow/AddOns/GeneralFileSupport/"
 SECURE_PREVIEW_PREFIX = "KeyHollow/AddOns/SecurePreview/"
 ENCRYPTED_VIDEO_PREFIX = "KeyHollow/AddOns/EncryptedVideo/"
+MEDIA_NAVIGATION_PREFIX = "KeyHollow/AddOns/MediaNavigation/"
 ENCRYPTED_VIDEO_MODULE_FILES = {
     "KeyHollow/AddOns/EncryptedVideo/VaultEncryptedVideoPlayerView.swift",
     "KeyHollow/AddOns/EncryptedVideo/VaultEncryptedVideoPolicy.swift",
@@ -103,6 +106,18 @@ ENCRYPTED_VIDEO_MODULE_FILES = {
 BACKUP_VERIFICATION_MODULE_FILES = {
     "KeyHollow/AddOns/BackupVerification/BackupVerificationReport.swift",
     "KeyHollow/AddOns/BackupVerification/BackupVerificationReportView.swift",
+}
+MEDIA_NAVIGATION_MODULE_FILES = {
+    "KeyHollow/AddOns/MediaNavigation/VaultMediaNavigationModels.swift",
+    "KeyHollow/AddOns/MediaNavigation/VaultMediaNavigationPager.swift",
+}
+MEDIA_NAVIGATION_IMPORTS = {
+    "KeyHollow/AddOns/MediaNavigation/VaultMediaNavigationModels.swift": {
+        "Foundation",
+    },
+    "KeyHollow/AddOns/MediaNavigation/VaultMediaNavigationPager.swift": {
+        "SwiftUI",
+    },
 }
 BACKUP_VERIFICATION_IMPORTS = {
     "KeyHollow/AddOns/BackupVerification/BackupVerificationReport.swift": {
@@ -148,16 +163,130 @@ def is_presentation(path: str) -> bool:
     return path in PRESENTATION_FILES or path.startswith(PRESENTATION_PREFIXES)
 
 
+def _mask_swift_range(
+    output: list[str], source: str, start: int, end: int
+) -> None:
+    for index in range(start, min(end, len(source))):
+        if source[index] not in "\r\n":
+            output[index] = " "
+
+
+def sanitized_swift_source(
+    source: str, *, mask_string_literals: bool
+) -> str:
+    """Masks Swift comments and optionally string literals without moving text.
+
+    The scanner understands nested block comments plus ordinary, multiline,
+    and pound-delimited raw strings. Keeping every character position stable
+    lets later brace/slice checks use indices from this executable view against
+    the original source without a second, divergent parser.
+    """
+
+    output = list(source)
+    index = 0
+    source_length = len(source)
+
+    while index < source_length:
+        if source.startswith("//", index):
+            end = source.find("\n", index + 2)
+            if end < 0:
+                end = source_length
+            _mask_swift_range(output, source, index, end)
+            index = end
+            continue
+
+        if source.startswith("/*", index):
+            depth = 1
+            end = index + 2
+            while end < source_length and depth > 0:
+                if source.startswith("/*", end):
+                    depth += 1
+                    end += 2
+                elif source.startswith("*/", end):
+                    depth -= 1
+                    end += 2
+                else:
+                    end += 1
+            _mask_swift_range(output, source, index, end)
+            index = end
+            continue
+
+        pound_end = index
+        while pound_end < source_length and source[pound_end] == "#":
+            pound_end += 1
+        if pound_end < source_length and source[pound_end] == '"':
+            quote_length = 3 if source.startswith('"""', pound_end) else 1
+            delimiter = '"' * quote_length + "#" * (pound_end - index)
+            end = pound_end + quote_length
+            while end < source_length:
+                if source.startswith(delimiter, end):
+                    end += len(delimiter)
+                    break
+                if pound_end == index and source[end] == "\\":
+                    end = min(end + 2, source_length)
+                else:
+                    end += 1
+            if mask_string_literals:
+                _mask_swift_range(output, source, index, end)
+            index = end
+            continue
+
+        index += 1
+
+    return "".join(output)
+
+
+def swift_without_comments(source: str) -> str:
+    return sanitized_swift_source(source, mask_string_literals=False)
+
+
+def swift_executable_text(source: str) -> str:
+    return sanitized_swift_source(source, mask_string_literals=True)
+
+
 def imports(source: str) -> set[str]:
+    executable = swift_executable_text(source)
     return set(
         re.findall(
             r"(?m)^(?:@preconcurrency\s+)?import\s+([A-Za-z0-9_]+)\s*$",
-            source,
+            executable,
         )
     )
 
 
+def noncanonical_swift_imports(source: str) -> list[str]:
+    executable = swift_executable_text(source)
+    statements: set[str] = set()
+    canonical = re.compile(
+        r"(?:@preconcurrency\s+)?import\s+[A-Za-z0-9_]+"
+    )
+    attribute_only = re.compile(
+        r"@[A-Za-z_][A-Za-z0-9_]*(?:\s*\([^)]*\))?"
+    )
+
+    lines = executable.splitlines()
+    for index, line in enumerate(lines):
+        stripped = line.strip()
+        if re.search(r"\bimport\b", stripped) is None:
+            continue
+        if canonical.fullmatch(stripped) is None:
+            statements.add(stripped)
+        preceding_attributes: list[str] = []
+        preceding_index = index - 1
+        while preceding_index >= 0:
+            preceding = lines[preceding_index].strip()
+            if attribute_only.fullmatch(preceding) is None:
+                break
+            preceding_attributes.insert(0, preceding)
+            preceding_index -= 1
+        if preceding_attributes:
+            statements.add(" ".join((*preceding_attributes, stripped)))
+
+    return sorted(statements)
+
+
 def contains_in_order(source: str, markers: tuple[str, ...]) -> bool:
+    source = swift_executable_text(source)
     cursor = 0
     for marker in markers:
         position = source.find(marker, cursor)
@@ -165,6 +294,147 @@ def contains_in_order(source: str, markers: tuple[str, ...]) -> bool:
             return False
         cursor = position + len(marker)
     return True
+
+
+def swift_block_body(source: str, anchor: str) -> str | None:
+    executable = swift_executable_text(source)
+    anchor_position = executable.find(anchor)
+    if anchor_position < 0:
+        return None
+
+    opening_brace = executable.find("{", anchor_position)
+    if opening_brace < 0:
+        return None
+
+    depth = 0
+    for index in range(opening_brace, len(executable)):
+        character = executable[index]
+        if character == "{":
+            depth += 1
+        elif character == "}":
+            depth -= 1
+            if depth == 0:
+                return executable[opening_brace + 1:index]
+    return None
+
+
+def yaml_key_present(body: str, key: str) -> bool:
+    return re.search(
+        rf"(?m)^[ \t]+(?:{re.escape(key)}|['\"]{re.escape(key)}['\"])\s*:",
+        body,
+    ) is not None
+
+
+def checker_probe_violations() -> list[str]:
+    failures: list[str] = []
+
+    string_delimiter_fixture = (
+        'let endpoint = "https://example.invalid/path"; VaultSession()\n'
+        'let raw = #"/* not a comment */"#; VaultPhotoStore()\n'
+        "// imagePreview.dismiss()\n"
+    )
+    comment_free_fixture = swift_without_comments(string_delimiter_fixture)
+    executable_fixture = swift_executable_text(string_delimiter_fixture)
+    if "VaultSession()" not in comment_free_fixture:
+        failures.append(
+            "checker self-test: URL string hid executable code from comment stripping"
+        )
+    if "VaultPhotoStore()" not in comment_free_fixture:
+        failures.append(
+            "checker self-test: raw string hid executable code from comment stripping"
+        )
+    if "imagePreview.dismiss()" in executable_fixture:
+        failures.append(
+            "checker self-test: line-comment marker entered executable Swift text"
+        )
+    if contains_in_order(
+        "// imagePreview.dismiss()\nvideoPlayback.dismiss()",
+        ("imagePreview.dismiss()", "videoPlayback.dismiss()"),
+    ):
+        failures.append(
+            "checker self-test: commented lifecycle marker satisfied ordering"
+        )
+
+    scoped_fixture = (
+        "await session.performSensitiveTask { _ in\n"
+        "    try await store.loadPhoto(record)\n"
+        "}\n"
+        "try await generalFileStore.loadFile(record)\n"
+    )
+    sensitive_body = swift_block_body(
+        scoped_fixture, "await session.performSensitiveTask"
+    )
+    if sensitive_body is None or "store.loadPhoto(record)" not in sensitive_body:
+        failures.append(
+            "checker self-test: sensitive-task closure body was not recovered"
+        )
+    if sensitive_body is not None and "generalFileStore.loadFile(record)" in sensitive_body:
+        failures.append(
+            "checker self-test: out-of-scope payload load entered sensitive closure"
+        )
+
+    for alternate_import in (
+        "@_implementationOnly import KeyHollowVaultCore",
+        "@_implementationOnly\nimport KeyHollowVaultCore",
+        "@_spi(Internal) import KeyHollowPhotoCore",
+        "import struct Foundation.Data",
+    ):
+        if not noncanonical_swift_imports(alternate_import):
+            failures.append(
+                "checker self-test: alternate Swift import syntax was accepted: "
+                f"{alternate_import}"
+            )
+
+    if not yaml_key_present(
+        "    dependencies: [{target: KeyHollowVaultCore}]\n", "dependencies"
+    ):
+        failures.append(
+            "checker self-test: inline target dependencies escaped detection"
+        )
+    if re.search(r"(?m)^[ \t]+<<\s*:", "    <<: [*protectedDefaults]\n") is None:
+        failures.append(
+            "checker self-test: YAML merge dependency surface escaped detection"
+        )
+
+    lifecycle_spoof_fixture = (
+        "func attach() {\n"
+        "    // guard !isFinished else { return false }\n"
+        "    let permitted = true\n"
+        "}\n"
+    )
+    lifecycle_spoof_body = swift_block_body(lifecycle_spoof_fixture, "func attach()")
+    if lifecycle_spoof_body is None or "guard !isFinished" in lifecycle_spoof_body:
+        failures.append(
+            "checker self-test: commented image-lifecycle guard entered function scope"
+        )
+
+    string_anchor_fixture = (
+        'let example = "private func saveCurrentMediaImage() { unsafe() }"\n'
+    )
+    if swift_block_body(
+        string_anchor_fixture,
+        "private func saveCurrentMediaImage()",
+    ) is not None:
+        failures.append(
+            "checker self-test: string-literal function marker created a false scope"
+        )
+
+    surface_scope_fixture = (
+        "public struct VaultSecureImageSurface: UIViewRepresentable {\n"
+        "    let safeMetadata = true\n"
+        "}\n"
+        "let escapedPayload: Data? = nil\n"
+    )
+    surface_scope_body = swift_block_body(
+        surface_scope_fixture,
+        "public struct VaultSecureImageSurface: UIViewRepresentable",
+    )
+    if surface_scope_body is None or "Data" in surface_scope_body:
+        failures.append(
+            "checker self-test: code outside secure-image surface entered its scope"
+        )
+
+    return failures
 
 
 def match_position(pattern: str, source: str, start: int = 0) -> int:
@@ -181,7 +451,7 @@ def target_body(project: str, target: str) -> str | None:
 
 
 def main() -> int:
-    violations: list[str] = []
+    violations = checker_probe_violations()
     swift_files = sorted(SOURCE_ROOT.rglob("*.swift"))
 
     project = PROJECT_FILE.read_text(encoding="utf-8")
@@ -489,6 +759,129 @@ def main() -> int:
                     "project.yml: KeyHollowGalleryUI depends on protected/content "
                     f"module {forbidden_dependency} instead of immutable presentation values"
                 )
+
+    media_navigation_target = target_body(
+        project,
+        "KeyHollowMediaNavigationAddOn",
+    )
+    media_navigation_target_count = len(
+        re.findall(r"(?m)^  KeyHollowMediaNavigationAddOn:\s*$", project)
+    )
+    if media_navigation_target is None:
+        violations.append(
+            "project.yml: KeyHollowMediaNavigationAddOn target is missing"
+        )
+    else:
+        if media_navigation_target_count != 1:
+            violations.append(
+                "project.yml: expected exactly one "
+                "KeyHollowMediaNavigationAddOn target, found "
+                f"{media_navigation_target_count}"
+            )
+
+        expected_sources = {"KeyHollow/AddOns/MediaNavigation"}
+        declared_sources = set(
+            re.findall(
+                r"(?m)^      - path: ([^\r\n]+)$",
+                media_navigation_target,
+            )
+        )
+        if declared_sources != expected_sources:
+            violations.append(
+                "project.yml: KeyHollowMediaNavigationAddOn source ownership "
+                f"changed; expected {sorted(expected_sources)}, "
+                f"got {sorted(declared_sources)}"
+            )
+
+        for marker in (
+            "type: library.static",
+            "platform: iOS",
+            "PRODUCT_NAME: KeyHollowMediaNavigationAddOn",
+            "SWIFT_STRICT_CONCURRENCY: complete",
+            "SWIFT_TREAT_WARNINGS_AS_ERRORS: YES",
+            "DEFINES_MODULE: YES",
+            "SKIP_INSTALL: YES",
+        ):
+            if marker not in media_navigation_target:
+                violations.append(
+                    "project.yml: KeyHollowMediaNavigationAddOn is missing "
+                    f"{marker!r}"
+                )
+
+        declared_dependencies = set(
+            re.findall(
+                r"(?m)^      - target: ([A-Za-z0-9_]+)\s*$",
+                media_navigation_target,
+            )
+        )
+        dependency_key_present = yaml_key_present(
+            media_navigation_target, "dependencies"
+        )
+        dependency_alias_present = re.search(
+            r"(?m)^[ \t]+<<\s*:",
+            media_navigation_target,
+        ) is not None
+        if declared_dependencies or dependency_key_present or dependency_alias_present:
+            violations.append(
+                "project.yml: KeyHollowMediaNavigationAddOn must remain "
+                "dependency-free with no dependency key or YAML merge alias; "
+                "compose protected capabilities in the app "
+                f"(found {sorted(declared_dependencies)})"
+            )
+
+    if app_target is not None:
+        app_navigation_dependencies = re.findall(
+            r"(?m)^      - target: KeyHollowMediaNavigationAddOn\s*$",
+            app_target,
+        )
+        if len(app_navigation_dependencies) != 1:
+            violations.append(
+                "project.yml: KeyHollow must compose "
+                "KeyHollowMediaNavigationAddOn exactly once"
+            )
+
+        app_navigation_exclusions = re.findall(
+            r"(?m)^          - AddOns/MediaNavigation\s*$",
+            app_target,
+        )
+        if len(app_navigation_exclusions) != 1:
+            violations.append(
+                "project.yml: KeyHollow must exclude AddOns/MediaNavigation "
+                "exactly once so those sources compile only in the add-on"
+            )
+
+    media_navigation_tests_target = target_body(project, "KeyHollowTests")
+    if media_navigation_tests_target is None:
+        violations.append("project.yml: KeyHollowTests target is missing")
+    else:
+        test_navigation_wiring = re.findall(
+            r"(?m)^      - target: KeyHollowMediaNavigationAddOn\s*$\n"
+            r"^        link: false\s*$",
+            media_navigation_tests_target,
+        )
+        if len(test_navigation_wiring) != 1:
+            violations.append(
+                "project.yml: KeyHollowTests must depend on "
+                "KeyHollowMediaNavigationAddOn exactly once with link: false"
+            )
+
+    if project.count("        KeyHollowMediaNavigationAddOn: all") != 1:
+        violations.append(
+            "project.yml: KeyHollow scheme must build "
+            "KeyHollowMediaNavigationAddOn exactly once"
+        )
+
+    media_navigation_sources = (
+        {relative(path) for path in MEDIA_NAVIGATION_ROOT.rglob("*.swift")}
+        if MEDIA_NAVIGATION_ROOT.exists()
+        else set()
+    )
+    if media_navigation_sources != MEDIA_NAVIGATION_MODULE_FILES:
+        violations.append(
+            "KeyHollow/AddOns/MediaNavigation: source ownership changed; "
+            f"expected {sorted(MEDIA_NAVIGATION_MODULE_FILES)}, "
+            f"got {sorted(media_navigation_sources)}"
+        )
 
     secure_preview_target = target_body(project, "KeyHollowSecurePreviewAddOn")
     if secure_preview_target is None:
@@ -909,13 +1302,14 @@ def main() -> int:
     secure_preview_source = (
         SOURCE_ROOT / "AddOns" / "SecurePreview" / "VaultSecureImagePreview.swift"
     ).read_text(encoding="utf-8")
+    secure_preview_executable = swift_executable_text(secure_preview_source)
     for required in (
         "public actor VaultSecureImageProcessor",
         "kCGImageSourceShouldCacheImmediately: true",
         "preview?.displayImage.image",
         "fileprivate init(image: UIImage)",
     ):
-        if required not in secure_preview_source:
+        if required not in secure_preview_executable:
             violations.append(
                 "KeyHollow/AddOns/SecurePreview/VaultSecureImagePreview.swift: "
                 f"prepared-image performance boundary is missing {required!r}"
@@ -926,7 +1320,7 @@ def main() -> int:
         "public init(image: UIImage)",
         "public init(id: UUID, displayName: String, originalData: Data)",
     ):
-        if obsolete in secure_preview_source:
+        if obsolete in secure_preview_executable:
             violations.append(
                 "KeyHollow/AddOns/SecurePreview/VaultSecureImagePreview.swift: "
                 "full-resolution image decoding returned to the SwiftUI view body"
@@ -1347,6 +1741,12 @@ def main() -> int:
         source = file.read_text(encoding="utf-8")
         imported = imports(source)
 
+        for alternate_import in noncanonical_swift_imports(source):
+            violations.append(
+                f"{path}: noncanonical Swift import syntax is forbidden: "
+                f"{alternate_import}"
+            )
+
         if (
             path.endswith("VaultVideoThumbnailCoordinator.swift")
             or "VaultVideoThumbnailCoordinator" in source
@@ -1518,7 +1918,201 @@ def main() -> int:
                         f"capability {forbidden_symbol}"
                     )
 
+        if path.startswith(MEDIA_NAVIGATION_PREFIX):
+            media_navigation_comment_free = swift_without_comments(source)
+            media_navigation_executable = swift_executable_text(source)
+            expected_imports = MEDIA_NAVIGATION_IMPORTS.get(path)
+            if expected_imports is None or imported != expected_imports:
+                violations.append(
+                    f"{path}: media-navigation imports changed; expected "
+                    f"{sorted(expected_imports or set())}, got {sorted(imported)}"
+                )
+
+            for forbidden_symbol in (
+                "VaultSession",
+                "VaultUnlockService",
+                "VaultAccessCapability",
+                "VaultPhotoRecord",
+                "VaultPhotoStore",
+                "VaultGeneralFileRecord",
+                "VaultGeneralFileStore",
+                "VaultFolderRecord",
+                "VaultFolderPresentationStore",
+                "EncryptedVaultTransferCoordinator",
+                "CryptoBox",
+                "SymmetricKey",
+                "FileManager",
+                "FileHandle",
+                "URLSession",
+                "startAccessingSecurityScopedResource",
+                "originalData",
+                "plaintext",
+                "ciphertext",
+                "fileURL",
+            ):
+                if re.search(
+                    rf"\b{re.escape(forbidden_symbol)}\b",
+                    media_navigation_comment_free,
+                ):
+                    violations.append(
+                        f"{path}: media-navigation add-on directly references "
+                        f"protected capability {forbidden_symbol}"
+                    )
+
+            for forbidden_pattern, forbidden_name in (
+                (r"\b(?:Data|URL)\s*\(", "payload/URL construction"),
+                (
+                    r":\s*(?:Data|URL)(?:[?!<\[\],\s\)])",
+                    "payload/URL storage or parameter",
+                ),
+                (r"->\s*(?:Data|URL)\b", "payload/URL return value"),
+            ):
+                if re.search(forbidden_pattern, media_navigation_comment_free):
+                    violations.append(
+                        f"{path}: media-navigation add-on exposes "
+                        f"{forbidden_name} instead of immutable metadata"
+                    )
+
+            if path.endswith("VaultMediaNavigationModels.swift"):
+                for required in (
+                    "public enum VaultMediaNavigationSource",
+                    "public let source: VaultMediaNavigationSource",
+                    "public let rawValue: UUID",
+                    "var seenIDs = Set<VaultMediaNavigationID>()",
+                    "case duplicateItemID(VaultMediaNavigationID)",
+                    "case selectionNotFound(VaultMediaNavigationID)",
+                    "guard items.indices.contains(destinationIndex) else { return nil }",
+                    "guard !remainingItems.isEmpty else { return nil }",
+                    "selectedIndex: min(removedIndex, remainingItems.count - 1)",
+                    "public var accessibilityPosition: String",
+                ):
+                    if required not in media_navigation_executable:
+                        violations.append(
+                            f"{path}: typed, immutable, non-wrapping media queue "
+                            f"is missing {required!r}"
+                        )
+
+            if path.endswith("VaultMediaNavigationPager.swift"):
+                for required in (
+                    "private let isNavigationEnabled: Bool",
+                    "isNavigationEnabled: Bool = true",
+                    "self.isNavigationEnabled = isNavigationEnabled",
+                    "activeContent(queue.currentItem)",
+                    ".id(queue.currentItem.id)",
+                    ".accessibilityAdjustableAction",
+                    "handleDrag(value, viewportHeight: geometry.size.height)",
+                    "isAvailable: queue.canNavigatePrevious",
+                    "isAvailable: queue.canNavigateNext",
+                    "isAvailable: Bool",
+                    "videoControlExclusionMinimumHeight: CGFloat = 140",
+                    "videoControlExclusionHeightRatio: CGFloat = 0.24",
+                ):
+                    if required not in media_navigation_executable:
+                        violations.append(
+                            f"{path}: active-only, busy-aware media pager is missing "
+                            f"{required!r}"
+                        )
+
+                pager_body = swift_block_body(
+                    source,
+                    "public struct VaultMediaNavigationPager<ActiveContent: View>: View",
+                )
+                drag_body = swift_block_body(
+                    pager_body or "",
+                    "private func handleDrag(",
+                )
+                navigate_body = swift_block_body(
+                    pager_body or "",
+                    "private func navigate(_ direction: VaultMediaNavigationDirection)",
+                )
+                navigation_button_body = swift_block_body(
+                    pager_body or "",
+                    "private func navigationButton(",
+                )
+                if not (
+                    pager_body is not None
+                    and pager_body.count("private func navigationButton(") == 1
+                    and pager_body.count("isAvailable: Bool") == 1
+                    and navigation_button_body is not None
+                    and contains_in_order(
+                        navigation_button_body,
+                        (
+                            "Button",
+                            "navigate(direction)",
+                            ".disabled(!isNavigationEnabled || !isAvailable)",
+                        ),
+                    )
+                ):
+                    violations.append(
+                        f"{path}: both navigation arrows must share a button "
+                        "implementation that disables selection while busy or "
+                        "when the adjacent queue position is unavailable"
+                    )
+                if not (
+                    pager_body is not None
+                    and drag_body is not None
+                    and contains_in_order(
+                        drag_body,
+                        (
+                            "guard isNavigationEnabled else { return }",
+                            "if queue.currentItem.kind == .video",
+                            "let excludedHeight = max(",
+                            "VaultMediaNavigationPagerMetrics.videoControlExclusionMinimumHeight",
+                            "VaultMediaNavigationPagerMetrics.videoControlExclusionHeightRatio",
+                            "guard value.startLocation.y < viewportHeight - excludedHeight else",
+                            "let horizontalDistance = value.translation.width",
+                            "let verticalDistance = value.translation.height",
+                            "guard abs(horizontalDistance) >= VaultMediaNavigationPagerMetrics.minimumSwipeDistance",
+                            "abs(horizontalDistance) > abs(verticalDistance)",
+                            "VaultMediaNavigationPagerMetrics.horizontalDominanceRatio",
+                            "navigate(horizontalDistance < 0 ? .next : .previous)",
+                        ),
+                    )
+                    and drag_body.count(
+                        "guard isNavigationEnabled else { return }"
+                    ) == 1
+                    and drag_body.count(
+                        "guard value.startLocation.y < viewportHeight - excludedHeight else"
+                    ) == 1
+                ):
+                    violations.append(
+                        f"{path}: page drags must stop while media work is busy and "
+                        "must reserve the lower native-video-control region before "
+                        "evaluating a horizontal page gesture"
+                    )
+
+                if not (
+                    navigate_body is not None
+                    and contains_in_order(
+                        navigate_body,
+                        (
+                            "guard isNavigationEnabled else { return }",
+                            "guard let destination = queue.item(in: direction) else { return }",
+                            "onSelectionChange(destination.id)",
+                        ),
+                    )
+                    and navigate_body.count(
+                        "guard isNavigationEnabled else { return }"
+                    ) == 1
+                ):
+                    violations.append(
+                        f"{path}: arrow, accessibility, and swipe navigation must "
+                        "all enter one busy-aware, non-wrapping selection gate"
+                    )
+                for eager_page_path in (
+                    "TabView(",
+                    "ForEach(queue.items",
+                    "queue.items.map",
+                ):
+                    if eager_page_path in media_navigation_executable:
+                        violations.append(
+                            f"{path}: pager must build only the active payload; "
+                            f"found eager page path {eager_page_path!r}"
+                        )
+
         if path.startswith(SECURE_PREVIEW_PREFIX):
+            secure_preview_comment_free = swift_without_comments(source)
+            secure_preview_file_executable = swift_executable_text(source)
             unexpected = imported - {
                 "CoreFoundation",
                 "Foundation",
@@ -1547,11 +2141,201 @@ def main() -> int:
                 "URLSession",
                 "Data(contentsOf:",
             ):
-                if forbidden_symbol in source:
+                if forbidden_symbol in secure_preview_comment_free:
                     violations.append(
                         f"{path}: secure-preview add-on directly references protected "
                         f"capability {forbidden_symbol}"
                     )
+
+            if path.endswith("VaultSecureImagePreview.swift"):
+                surface_anchor = (
+                    "public struct VaultSecureImageSurface: UIViewRepresentable"
+                )
+                surface_body = swift_block_body(
+                    source,
+                    surface_anchor,
+                )
+                make_coordinator_body = swift_block_body(
+                    surface_body or "",
+                    "public func makeCoordinator() -> Coordinator",
+                )
+                make_surface_body = swift_block_body(
+                    surface_body or "",
+                    "public func makeUIView(context: Context) -> UIImageView",
+                )
+                update_surface_body = swift_block_body(
+                    surface_body or "",
+                    "public func updateUIView(_ imageView: UIImageView, context: Context)",
+                )
+                dismantle_surface_body = swift_block_body(
+                    surface_body or "",
+                    "public static func dismantleUIView(",
+                )
+                coordinator_body = swift_block_body(
+                    surface_body or "",
+                    "public final class Coordinator",
+                )
+                attach_body = swift_block_body(
+                    coordinator_body or "",
+                    "fileprivate func attachIfAllowed() -> Bool",
+                )
+                release_body = swift_block_body(
+                    coordinator_body or "",
+                    "fileprivate func release()",
+                )
+
+                for required in (
+                    "private let renderedImage: VaultSecureRenderedImage",
+                    "private let onImageWillAttach: () -> Bool",
+                    "private let onImageReleased: () -> Void",
+                    "onImageWillAttach: @escaping () -> Bool = { true }",
+                    "onImageReleased: @escaping () -> Void = {}",
+                ):
+                    if (
+                        surface_body is None
+                        or required not in secure_preview_file_executable
+                        or required not in surface_body
+                    ):
+                        violations.append(
+                            f"{path}: observable, rendered-image-only UIKit surface "
+                            f"is missing {required!r}"
+                        )
+
+                if secure_preview_file_executable.count(surface_anchor) != 1:
+                    violations.append(
+                        f"{path}: expected exactly one VaultSecureImageSurface "
+                        "declaration"
+                    )
+
+                if not (
+                    make_coordinator_body is not None
+                    and contains_in_order(
+                        make_coordinator_body,
+                        (
+                            "Coordinator(",
+                            "onImageWillAttach: onImageWillAttach",
+                            "onImageReleased: onImageReleased",
+                        ),
+                    )
+                ):
+                    violations.append(
+                        f"{path}: secure image surface must pass both lifecycle "
+                        "callbacks into its UIKit coordinator"
+                    )
+
+                if not (
+                    make_surface_body is not None
+                    and contains_in_order(
+                        make_surface_body,
+                        (
+                            "let imageView = UIImageView()",
+                            "imageView.contentMode = .scaleAspectFit",
+                            "if context.coordinator.attachIfAllowed()",
+                            "imageView.image = renderedImage.image",
+                            "return imageView",
+                        ),
+                    )
+                    and make_surface_body.count(
+                        "imageView.image = renderedImage.image"
+                    ) == 1
+                ):
+                    violations.append(
+                        f"{path}: UIKit image attachment must be approved before "
+                        "the rendered image enters the presentation surface"
+                    )
+
+                if not (
+                    update_surface_body is not None
+                    and contains_in_order(
+                        update_surface_body,
+                        (
+                            "imageView.image = context.coordinator.isAttached",
+                            "? renderedImage.image",
+                            ": nil",
+                        ),
+                    )
+                ):
+                    violations.append(
+                        f"{path}: SwiftUI updates must not reattach a rendered image "
+                        "after the surface lease has been rejected or released"
+                    )
+
+                if not (
+                    dismantle_surface_body is not None
+                    and contains_in_order(
+                        dismantle_surface_body,
+                        (
+                            "imageView.image = nil",
+                            "coordinator.release()",
+                        ),
+                    )
+                    and dismantle_surface_body.count("imageView.image = nil") == 1
+                    and dismantle_surface_body.count("coordinator.release()") == 1
+                ):
+                    violations.append(
+                        f"{path}: dismantling must synchronously clear UIImageView "
+                        "ownership before acknowledging surface release"
+                    )
+
+                if not (
+                    attach_body is not None
+                    and contains_in_order(
+                        attach_body,
+                        (
+                            "guard !isAttached, onImageWillAttach() else { return false }",
+                            "isAttached = true",
+                            "return true",
+                        ),
+                    )
+                    and attach_body.count("onImageWillAttach()") == 1
+                    and release_body is not None
+                    and contains_in_order(
+                        release_body,
+                        (
+                            "guard isAttached else { return }",
+                            "isAttached = false",
+                            "onImageReleased()",
+                        ),
+                    )
+                    and release_body.count("onImageReleased()") == 1
+                ):
+                    violations.append(
+                        f"{path}: the surface coordinator must reject duplicate or "
+                        "late attachment and emit exactly one release acknowledgement"
+                    )
+
+                surface_executable = surface_body or ""
+                for forbidden_pattern, forbidden_name in (
+                    (
+                        r"\b(?:VaultSession|VaultUnlockService|VaultAccessCapability)\b",
+                        "vault/session capability",
+                    ),
+                    (
+                        r"\b(?:VaultPhotoStore|VaultGeneralFileStore|VaultFolderPresentationStore)\b",
+                        "storage capability",
+                    ),
+                    (
+                        r"\b(?:CryptoBox|SymmetricKey|FileManager|FileHandle|URLSession)\b",
+                        "crypto, filesystem, or network capability",
+                    ),
+                    (
+                        r"\b(?:Data|NSData|NSMutableData|CFData|URL|NSURL|InputStream|OutputStream|originalData|plaintext|ciphertext)\b",
+                        "payload or location capability",
+                    ),
+                    (
+                        r"\b(?:VaultSecureImagePreview|VaultSecurePreparedThumbnail|VaultSecureImageProcessor|VaultSecureImageDecoder|CGImageSource|CGImageDestination|PHPhotoLibrary|PHAsset|PhotoLibrarySaveService)\b",
+                        "decode or persistence capability",
+                    ),
+                    (
+                        r"\bstartAccessingSecurityScopedResource\b",
+                        "security-scoped file access",
+                    ),
+                ):
+                    if re.search(forbidden_pattern, surface_executable):
+                        violations.append(
+                            f"{path}: VaultSecureImageSurface gained forbidden "
+                            f"{forbidden_name}"
+                        )
 
         if path.startswith(ENCRYPTED_VIDEO_PREFIX):
             expected_imports = ENCRYPTED_VIDEO_IMPORTS.get(path)
@@ -1717,6 +2501,275 @@ def main() -> int:
 
     gallery_file = SOURCE_ROOT / "Photos" / "VaultGalleryView.swift"
     gallery_source = gallery_file.read_text(encoding="utf-8")
+    gallery_executable = swift_executable_text(gallery_source)
+    image_preview_coordinator_file = (
+        SOURCE_ROOT / "Photos" / "VaultImagePreviewCoordinator.swift"
+    )
+    if not image_preview_coordinator_file.is_file():
+        violations.append(
+            "KeyHollow/Photos/VaultImagePreviewCoordinator.swift: app-owned "
+            "image lifetime coordinator is missing"
+        )
+    else:
+        image_preview_coordinator_source = (
+            image_preview_coordinator_file.read_text(encoding="utf-8")
+        )
+        expected_image_coordinator_imports = {
+            "Combine",
+            "Foundation",
+            "KeyHollowMediaNavigationAddOn",
+            "KeyHollowSecurePreviewAddOn",
+        }
+        actual_image_coordinator_imports = imports(
+            image_preview_coordinator_source
+        )
+        image_preview_coordinator_code = swift_without_comments(
+            image_preview_coordinator_source
+        )
+        image_preview_coordinator_executable = swift_executable_text(
+            image_preview_coordinator_source
+        )
+        if actual_image_coordinator_imports != expected_image_coordinator_imports:
+            violations.append(
+                "KeyHollow/Photos/VaultImagePreviewCoordinator.swift: imports "
+                f"changed; expected {sorted(expected_image_coordinator_imports)}, "
+                f"got {sorted(actual_image_coordinator_imports)}"
+            )
+
+        for required in (
+            "@Published private(set) var active: ActiveVaultImagePreview?",
+            "private var generation: UInt64 = 0",
+            "private var operation: PreviewOperation?",
+            "typealias SurfaceReleaseWaitObserver = @Sendable () async -> Void",
+            "let (operationGeneration, previousOperation) = beginNewGeneration()",
+            "try await previousOperation.task.value",
+            "try await withTaskCancellationHandler",
+            "operation?.task.cancel()",
+            "operation?.lifetime.finish()",
+            "func dismissAndWait() async",
+            "func imageWillAttach(_ id: VaultMediaNavigationID) -> Bool",
+            "func imageDidRelease(_ id: VaultMediaNavigationID)",
+            "await lifetime.wait()",
+            "await lifetime.waitForSurfaceRelease()",
+            "try Task.checkCancellation()",
+            "private let lock = NSLock()",
+            "private var isSurfaceAttached = false",
+            "private var surfaceReleaseWaiters: [CheckedContinuation<Void, Never>] = []",
+            "pendingWaiters.forEach { $0.resume() }",
+        ):
+            if required not in image_preview_coordinator_executable:
+                violations.append(
+                    "KeyHollow/Photos/VaultImagePreviewCoordinator.swift: "
+                    f"revocable image lifetime is missing {required!r}"
+                )
+
+        prepare_body = swift_block_body(
+            image_preview_coordinator_source,
+            "func prepare(",
+        )
+        image_will_attach_body = swift_block_body(
+            image_preview_coordinator_source,
+            "func imageWillAttach(_ id: VaultMediaNavigationID) -> Bool",
+        )
+        image_did_release_body = swift_block_body(
+            image_preview_coordinator_source,
+            "func imageDidRelease(_ id: VaultMediaNavigationID)",
+        )
+        run_body = swift_block_body(
+            image_preview_coordinator_source,
+            "private func run(",
+        )
+        lifetime_body = swift_block_body(
+            image_preview_coordinator_source,
+            "private final class VaultImagePreviewLifetime",
+        )
+        begin_surface_body = swift_block_body(
+            lifetime_body or "",
+            "func beginSurfaceUse() -> Bool",
+        )
+        end_surface_body = swift_block_body(
+            lifetime_body or "",
+            "func endSurfaceUse()",
+        )
+        wait_surface_body = swift_block_body(
+            lifetime_body or "",
+            "func waitForSurfaceRelease() async",
+        )
+        finish_lifetime_body = swift_block_body(
+            lifetime_body or "",
+            "func finish()",
+        )
+
+        if not (
+            prepare_body is not None
+            and contains_in_order(
+                prepare_body,
+                (
+                    "let (operationGeneration, previousOperation) = beginNewGeneration()",
+                    "if let previousOperation",
+                    "try await previousOperation.task.value",
+                    "try requireCurrent(operationGeneration)",
+                    "let lifetime = VaultImagePreviewLifetime(",
+                    "let task: Task<Void, Error> = Task",
+                    "operation = PreviewOperation(",
+                ),
+            )
+        ):
+            violations.append(
+                "KeyHollow/Photos/VaultImagePreviewCoordinator.swift: image "
+                "replacement must await the prior operation's terminal surface "
+                "release before it constructs or publishes a new image lifetime"
+            )
+
+        if not (
+            image_will_attach_body is not None
+            and contains_in_order(
+                image_will_attach_body,
+                (
+                    "guard let operation, operation.id == id else { return false }",
+                    "return operation.lifetime.beginSurfaceUse()",
+                ),
+            )
+            and image_will_attach_body.count("beginSurfaceUse()") == 1
+            and image_did_release_body is not None
+            and contains_in_order(
+                image_did_release_body,
+                (
+                    "guard let operation, operation.id == id else { return }",
+                    "operation.lifetime.endSurfaceUse()",
+                ),
+            )
+            and image_did_release_body.count("endSurfaceUse()") == 1
+        ):
+            violations.append(
+                "KeyHollow/Photos/VaultImagePreviewCoordinator.swift: surface "
+                "attach/release callbacks must be ID-scoped to the current image "
+                "operation"
+            )
+
+        run_catch_position = (run_body or "").find("} catch {")
+        run_success_body = (
+            (run_body or "")[:run_catch_position]
+            if run_catch_position >= 0
+            else ""
+        )
+        run_failure_body = (
+            (run_body or "")[run_catch_position:]
+            if run_catch_position >= 0
+            else ""
+        )
+        if not (
+            run_body is not None
+            and run_catch_position >= 0
+            and run_body.count("try requireCurrent(operationGeneration)") == 3
+            and run_body.count("await lifetime.waitForSurfaceRelease()") == 2
+            and contains_in_order(
+                run_success_body,
+                (
+                    "try requireCurrent(operationGeneration)",
+                    "let originalData = try await loadOriginalData()",
+                    "try requireCurrent(operationGeneration)",
+                    "let preview = try await processor.preparePreview(",
+                    "try requireCurrent(operationGeneration)",
+                    "active = ActiveVaultImagePreview(id: id, preview: preview)",
+                    "activeGeneration = operationGeneration",
+                    "await waitForDismissal(lifetime)",
+                    "await lifetime.waitForSurfaceRelease()",
+                    "try Task.checkCancellation()",
+                    "clearActiveIfOwned(by: operationGeneration)",
+                ),
+            )
+            and contains_in_order(
+                run_failure_body,
+                (
+                    "await lifetime.waitForSurfaceRelease()",
+                    "clearActiveIfOwned(by: operationGeneration)",
+                    "throw error",
+                ),
+            )
+        ):
+            violations.append(
+                "KeyHollow/Photos/VaultImagePreviewCoordinator.swift: success and "
+                "failure completion must both await UIKit surface release after "
+                "the dismissal lifetime and before clearing or returning"
+            )
+
+        if not (
+            begin_surface_body is not None
+            and contains_in_order(
+                begin_surface_body,
+                (
+                    "lock.lock()",
+                    "defer { lock.unlock() }",
+                    "guard !isFinished, !isSurfaceAttached else { return false }",
+                    "isSurfaceAttached = true",
+                    "return true",
+                ),
+            )
+            and end_surface_body is not None
+            and contains_in_order(
+                end_surface_body,
+                (
+                    "lock.lock()",
+                    "guard isSurfaceAttached else",
+                    "isSurfaceAttached = false",
+                    "let pendingWaiters = surfaceReleaseWaiters",
+                    "surfaceReleaseWaiters.removeAll()",
+                    "lock.unlock()",
+                    "pendingWaiters.forEach { $0.resume() }",
+                ),
+            )
+            and wait_surface_body is not None
+            and contains_in_order(
+                wait_surface_body,
+                (
+                    "if isSurfaceAttachedSnapshot()",
+                    "await surfaceReleaseWaitObserver()",
+                    "await withCheckedContinuation",
+                    "if !isSurfaceAttached",
+                    "continuation.resume()",
+                    "surfaceReleaseWaiters.append(continuation)",
+                ),
+            )
+            and finish_lifetime_body is not None
+            and contains_in_order(
+                finish_lifetime_body,
+                (
+                    "lock.lock()",
+                    "guard !isFinished else",
+                    "isFinished = true",
+                ),
+            )
+        ):
+            violations.append(
+                "KeyHollow/Photos/VaultImagePreviewCoordinator.swift: image "
+                "lifetime leases must reject late attachment, publish release "
+                "only after detachment, and resolve waiters under the lock"
+            )
+
+        for forbidden_capability in (
+            "VaultSession",
+            "VaultUnlockService",
+            "VaultPhotoRecord",
+            "VaultPhotoStore",
+            "VaultGeneralFileRecord",
+            "VaultGeneralFileStore",
+            "EncryptedVaultTransferCoordinator",
+            "CryptoBox",
+            "SymmetricKey",
+            "FileManager",
+            "FileHandle",
+            "URLSession",
+            "Data(contentsOf:",
+            "startAccessingSecurityScopedResource",
+        ):
+            if forbidden_capability in image_preview_coordinator_code:
+                violations.append(
+                    "KeyHollow/Photos/VaultImagePreviewCoordinator.swift: "
+                    "image lifetime coordinator bypasses its injected loader "
+                    f"boundary ({forbidden_capability})"
+                )
+
     general_files_view_source = (
         SOURCE_ROOT / "UI" / "VaultGeneralFilesView.swift"
     ).read_text(encoding="utf-8")
@@ -2086,23 +3139,24 @@ def main() -> int:
             "and immediately before the journaled install begins"
         )
     video_thumbnail_integration_active = (
-        "import KeyHollowEncryptedVideoAddOn" in gallery_source
-        or "VaultEncryptedVideoThumbnailRenderer.render(" in gallery_source
+        "import KeyHollowEncryptedVideoAddOn" in gallery_executable
+        or "VaultEncryptedVideoThumbnailRenderer.render(" in gallery_executable
     )
     video_playback_integration_active = (
-        "VaultVideoPlaybackCoordinator" in gallery_source
-        or "case .videoPlayback:" in gallery_source
-        or "VaultEncryptedVideoPlayerView(" in gallery_source
+        "VaultVideoPlaybackCoordinator" in gallery_executable
+        or "case .videoPlayback:" in gallery_executable
+        or "VaultEncryptedVideoPlayerView(" in gallery_executable
     )
     for required in (
         "import KeyHollowGalleryUI",
+        "import KeyHollowMediaNavigationAddOn",
         "import KeyHollowSecurePreviewAddOn",
         "VaultGalleryGridView(",
         "VaultGalleryItemTileView(",
-        "VaultSecureImagePreviewView(",
+        "VaultMediaNavigationPager(",
         "case .imagePreview:",
         "case .fileManagement:",
-        "data = try await generalFileStore.loadFile(record)",
+        "generalFileStore.loadFile(record)",
         "generalFileStore.prepareExport(files)",
         "GeneralFileShareSheet(urls: prepared.urls)",
         'Label("Export to Files", systemImage: "square.and.arrow.up")',
@@ -2112,7 +3166,7 @@ def main() -> int:
         "selectedPresentedReferences",
         "let snapshot = makeVisibleGallerySnapshot()",
         "VaultGalleryContentSnapshot",
-        "sourceByID: snapshot.sourceByID",
+        "galleryItemCell(item, snapshot: snapshot)",
         "folders: visibleGalleryFolders",
         "items: snapshot.presentations",
         "priority: .utility",
@@ -2121,10 +3175,12 @@ def main() -> int:
         "@State private var thumbnailImageProcessor = VaultSecureImageProcessor()",
         "@State private var previewImageProcessor = VaultSecureImageProcessor()",
         "@State private var generalFileThumbnailPipeline = VaultGeneralFileThumbnailPipeline()",
+        "@StateObject private var imagePreview = VaultImagePreviewCoordinator()",
         "let renderedImage = try await generalFileThumbnailPipeline.image(",
         "cacheMissImageProcessor.prepareThumbnail(",
-        "previewImageProcessor.preparePreview(",
-        "session.cancelSensitiveTask(previewTaskID)",
+        "try await imagePreview.prepare(",
+        "retiringTask?.cancel()",
+        "await imagePreview.dismissAndWait()",
         "await session.performSensitiveTask { capability in",
     ):
         if required not in gallery_source:
@@ -2132,6 +3188,403 @@ def main() -> int:
                 f"KeyHollow/Photos/VaultGalleryView.swift: unified gallery "
                 f"composition is missing {required!r}"
             )
+
+    for required in (
+        "VaultMediaNavigationID(source: .photo, rawValue: record.id)",
+        "VaultMediaNavigationID(source: .generalFile, rawValue: record.id)",
+        "case .fileManagement:\n            return nil",
+        "orderedSources.compactMap(\\.mediaNavigationItem)",
+        "uniqueKeysWithValues: orderedSources.compactMap { source in",
+        "try VaultMediaNavigationQueue(",
+        "items: mediaNavigationItems",
+        "@State private var mediaNavigationQueue: VaultMediaNavigationQueue?",
+        "@State private var mediaNavigationSources: [VaultMediaNavigationID: VaultGalleryContentItem] = [:]",
+        "@State private var mediaNavigationGeneration: UInt64 = 0",
+        "@State private var mediaNavigationTask: Task<Void, Never>?",
+        "@State private var failedMediaID: VaultMediaNavigationID?",
+        "@State private var isDeletingMedia = false",
+        "@State private var isSavingPreview = false",
+        "@State private var imageSaveTaskID: UUID?",
+        "@StateObject private var imagePreview = VaultImagePreviewCoordinator()",
+        "@StateObject private var videoPlayback = VaultVideoPlaybackCoordinator()",
+        "get: { mediaNavigationQueue != nil }",
+        ".interactiveDismissDisabled()",
+        "onSelectionChange: selectMediaNavigationItem",
+        "mediaNavigationActiveContent(item)",
+        "VaultSecureImageSurface(",
+        "imagePreview.imageWillAttach(item.id)",
+        "imagePreview.imageDidRelease(item.id)",
+    ):
+        if required not in gallery_executable:
+            violations.append(
+                "KeyHollow/Photos/VaultGalleryView.swift: source-aware, "
+                "single-surface media navigation is missing "
+                f"{required!r}"
+            )
+
+    media_viewer_body = swift_block_body(
+        gallery_source,
+        "private var mediaNavigationViewer: some View",
+    )
+    media_toolbar_body = swift_block_body(
+        gallery_source,
+        "private func mediaNavigationToolbar(",
+    )
+    media_active_content_body = swift_block_body(
+        gallery_source,
+        "private func mediaNavigationActiveContent(",
+    )
+    media_load_state_body = swift_block_body(
+        gallery_source,
+        "private func mediaNavigationLoadState(",
+    )
+    if not (
+        media_viewer_body is not None
+        and contains_in_order(
+            media_viewer_body,
+            (
+                "VaultMediaNavigationPager(",
+                "queue: queue",
+                "isNavigationEnabled: !isSavingPreview",
+                "&& !isDeletingMedia",
+                "&& !isClosingMediaNavigation",
+                "onSelectionChange: selectMediaNavigationItem",
+            ),
+        )
+    ):
+        violations.append(
+            "KeyHollow/Photos/VaultGalleryView.swift: the pager must disable "
+            "all navigation while image save, active deletion, or terminal "
+            "dismissal work owns the current selection"
+        )
+
+    if not (
+        media_toolbar_body is not None
+        and contains_in_order(
+            media_toolbar_body,
+            (
+                "Button(",
+                "action: beginMediaNavigationDismissal",
+                ".disabled(",
+                "isSavingPreview",
+                "|| isDeletingMedia",
+                "|| isClosingMediaNavigation",
+            ),
+        )
+    ):
+        violations.append(
+            "KeyHollow/Photos/VaultGalleryView.swift: the visible Done action "
+            "must be disabled while image save, deletion, or dismissal is active"
+        )
+
+    if not (
+        media_active_content_body is not None
+        and contains_in_order(
+            media_active_content_body,
+            (
+                "case .image:",
+                "if let active = imagePreview.active",
+                "active.id == item.id",
+                "VaultSecureImageSurface(",
+                "renderedImage: active.preview.displayImage",
+                "onImageWillAttach:",
+                "imagePreview.imageWillAttach(item.id)",
+                "onImageReleased:",
+                "imagePreview.imageDidRelease(item.id)",
+            ),
+        )
+        and media_active_content_body.count("VaultSecureImageSurface(") == 1
+        and "Image(uiImage:" not in media_active_content_body
+        and "VaultSecureImagePreviewView(" not in media_active_content_body
+    ):
+        violations.append(
+            "KeyHollow/Photos/VaultGalleryView.swift: unified images must use "
+            "exactly one observable VaultSecureImageSurface wired to the "
+            "app-owned image lifetime coordinator"
+        )
+
+    if not (
+        media_load_state_body is not None
+        and contains_in_order(
+            media_load_state_body,
+            (
+                "if failedMediaID == item.id",
+                "Button(",
+                "retryMediaNavigationItem(item.id)",
+                "} else",
+                "ProgressView(",
+            ),
+        )
+        and media_load_state_body.count("retryMediaNavigationItem(item.id)") == 1
+        and media_load_state_body.count("ProgressView(") == 1
+    ):
+        violations.append(
+            "KeyHollow/Photos/VaultGalleryView.swift: failed media opens must "
+            "replace the opening spinner with one retry route"
+        )
+
+    gallery_tap_start = gallery_executable.find(
+        "private func handleGalleryItemTap("
+    )
+    gallery_tap_end = gallery_executable.find(
+        "private func thumbnail(", gallery_tap_start
+    )
+    gallery_tap_source = gallery_executable[gallery_tap_start:gallery_tap_end]
+    if not (
+        gallery_tap_start >= 0
+        and gallery_tap_end > gallery_tap_start
+        and contains_in_order(
+            gallery_tap_source,
+            (
+                "case .imagePreview, .videoPlayback:",
+                "openMediaNavigation(startingAt: item, snapshot: snapshot)",
+                "case .fileManagement:",
+                "showingVaultFiles = true",
+            ),
+        )
+    ):
+        violations.append(
+            "KeyHollow/Photos/VaultGalleryView.swift: image and video taps "
+            "must share media navigation while non-media files retain the "
+            "file-management route"
+        )
+
+    media_open_start = gallery_executable.find(
+        "private func openMediaNavigation("
+    )
+    media_select_start = gallery_executable.find(
+        "private func selectMediaNavigationItem(", media_open_start
+    )
+    media_retry_start = gallery_executable.find(
+        "private func retryMediaNavigationItem(", media_select_start
+    )
+    media_prepare_start = gallery_executable.find(
+        "private func prepareSelectedMedia(", media_retry_start
+    )
+    media_image_start = gallery_executable.find(
+        "private func prepareMediaImage(", media_prepare_start
+    )
+    media_video_start = gallery_executable.find(
+        "private func prepareMediaVideo(", media_image_start
+    )
+    media_current_start = gallery_executable.find(
+        "private func isCurrentMediaSelection(", media_video_start
+    )
+    media_delete_photo_start = gallery_executable.find(
+        "private func delete(_ record: VaultPhotoRecord)", media_current_start
+    )
+
+    media_open_source = gallery_executable[media_open_start:media_select_start]
+    media_select_source = gallery_executable[media_select_start:media_retry_start]
+    media_retry_source = gallery_executable[media_retry_start:media_prepare_start]
+    media_prepare_source = gallery_executable[media_prepare_start:media_image_start]
+    media_image_source = gallery_executable[media_image_start:media_video_start]
+    media_video_source = gallery_executable[media_video_start:media_current_start]
+    media_current_source = gallery_executable[
+        media_current_start:media_delete_photo_start
+    ]
+
+    if not (
+        media_open_start >= 0
+        and media_select_start > media_open_start
+        and contains_in_order(
+            media_open_source,
+            (
+                "guard !isWorking",
+                "!isSavingPreview",
+                "!isDeletingMedia",
+                "!isClosingMediaNavigation",
+                "let item = source.mediaNavigationItem",
+                "mediaNavigationQueue = try snapshot.mediaNavigationQueue(",
+                "startingAt: item.id",
+                "mediaNavigationSources = snapshot.mediaNavigationSourceByID",
+                "prepareSelectedMedia(id: item.id)",
+            ),
+        )
+    ):
+        violations.append(
+            "KeyHollow/Photos/VaultGalleryView.swift: viewer opening must "
+            "publish one immutable visible-location queue and its typed source "
+            "map before preparing the selected item"
+        )
+
+    if not (
+        media_select_start >= 0
+        and media_prepare_start > media_select_start
+        and contains_in_order(
+            media_select_source,
+            (
+                "guard !isSavingPreview",
+                "!isDeletingMedia",
+                "!isClosingMediaNavigation",
+                "let selectedQueue = try? queue.selecting(id)",
+                "mediaNavigationQueue = selectedQueue",
+                "failedMediaID = nil",
+                "prepareSelectedMedia(id: id)",
+            ),
+        )
+    ):
+        violations.append(
+            "KeyHollow/Photos/VaultGalleryView.swift: adjacent selection must "
+            "advance the immutable metadata queue before payload preparation"
+        )
+
+    if not (
+        media_retry_start >= 0
+        and media_prepare_start > media_retry_start
+        and contains_in_order(
+            media_retry_source,
+            (
+                "guard !isSavingPreview",
+                "!isDeletingMedia",
+                "!isClosingMediaNavigation",
+                "mediaNavigationQueue?.selectedID == id",
+                "previewMessage = nil",
+                "failedMediaID = nil",
+                "prepareSelectedMedia(id: id)",
+            ),
+        )
+    ):
+        violations.append(
+            "KeyHollow/Photos/VaultGalleryView.swift: retry must be current-item "
+            "scoped, blocked by save/delete/dismiss work, clear the failure, and "
+            "re-enter the normal preparation pipeline"
+        )
+
+    if not (
+        media_prepare_start >= 0
+        and media_image_start > media_prepare_start
+        and contains_in_order(
+            media_prepare_source,
+            (
+                "failedMediaID = nil",
+                "mediaNavigationGeneration &+= 1",
+                "let generation = mediaNavigationGeneration",
+                "let retiringTask = mediaNavigationTask",
+                "mediaNavigationTask = nil",
+                "retiringTask?.cancel()",
+                "imagePreview.dismiss()",
+                "videoPlayback.dismiss()",
+                "mediaNavigationTask = Task { @MainActor in",
+                "await retiringTask.value",
+                "await imagePreview.dismissAndWait()",
+                "await videoPlayback.dismissAndWait()",
+                "guard !Task.isCancelled",
+                "isCurrentMediaSelection(id, generation: generation)",
+                "switch descriptor.kind",
+                "case .image:",
+                "await prepareMediaImage(",
+                "case .video:",
+                "await prepareMediaVideo(",
+            ),
+        )
+    ):
+        violations.append(
+            "KeyHollow/Photos/VaultGalleryView.swift: media replacement must "
+            "revoke both payload types, await the retiring lifetime, revalidate "
+            "typed selection, and only then prepare the new active payload"
+        )
+
+    media_image_sensitive_body = swift_block_body(
+        media_image_source,
+        "await session.performSensitiveTask",
+    )
+    if not (
+        media_image_start >= 0
+        and media_video_start > media_image_start
+        and media_image_source.count("await session.performSensitiveTask { _ in") == 1
+        and media_image_sensitive_body is not None
+        and media_image_source.count("try await imagePreview.prepare(") == 2
+        and media_image_sensitive_body.count("try await imagePreview.prepare(") == 2
+        and media_image_source.count("try await store.loadPhoto(record)") == 1
+        and media_image_sensitive_body.count("try await store.loadPhoto(record)") == 1
+        and media_image_source.count(
+            "try await generalFileStore.loadFile(record)"
+        ) == 1
+        and media_image_sensitive_body.count(
+            "try await generalFileStore.loadFile(record)"
+        ) == 1
+        and media_image_source.count("failedMediaID = descriptor.id") == 2
+        and contains_in_order(
+            media_image_source,
+            (
+                "case .photo(let record):",
+                "try await imagePreview.prepare(",
+                "loadOriginalData: {",
+                "try await store.loadPhoto(record)",
+                "case .generalFile(let record):",
+                "try await imagePreview.prepare(",
+                "loadOriginalData: {",
+                "try await generalFileStore.loadFile(record)",
+                "catch VaultPhotoStore.StoreError.originalTooLarge",
+                "guard isCurrentMediaSelection(",
+                "failedMediaID = descriptor.id",
+                "catch",
+                "guard isCurrentMediaSelection(",
+                "failedMediaID = descriptor.id",
+            ),
+        )
+    ):
+        violations.append(
+            "KeyHollow/Photos/VaultGalleryView.swift: photo and Files-origin "
+            "images must load through injected closures inside one session "
+            "sensitive task and the app-owned image lifetime coordinator"
+        )
+
+    media_video_sensitive_body = swift_block_body(
+        media_video_source,
+        "await session.performSensitiveTask",
+    )
+    if not (
+        media_video_start >= 0
+        and media_current_start > media_video_start
+        and media_video_source.count("await session.performSensitiveTask { _ in") == 1
+        and media_video_sensitive_body is not None
+        and media_video_source.count(
+            "try await videoPlayback.prepare(record, using: generalFileStore)"
+        ) == 1
+        and media_video_sensitive_body.count(
+            "try await videoPlayback.prepare(record, using: generalFileStore)"
+        ) == 1
+        and media_video_source.count("failedMediaID = descriptor.id") == 2
+        and contains_in_order(
+            media_video_source,
+            (
+                "guard case .generalFile(let record) = source",
+                "if isCurrentMediaSelection(descriptor.id, generation: generation)",
+                "failedMediaID = descriptor.id",
+                "await session.performSensitiveTask { _ in",
+                "try await videoPlayback.prepare(record, using: generalFileStore)",
+                "catch",
+                "guard isCurrentMediaSelection(",
+                "failedMediaID = descriptor.id",
+            ),
+        )
+    ):
+        violations.append(
+            "KeyHollow/Photos/VaultGalleryView.swift: video payloads must enter "
+            "through the app-owned playback coordinator inside a session "
+            "sensitive task"
+        )
+
+    if not (
+        media_current_start >= 0
+        and media_delete_photo_start > media_current_start
+        and contains_in_order(
+            media_current_source,
+            (
+                "!Task.isCancelled",
+                "mediaNavigationGeneration == generation",
+                "mediaNavigationQueue?.selectedID == id",
+                "!isClosingMediaNavigation",
+            ),
+        )
+    ):
+        violations.append(
+            "KeyHollow/Photos/VaultGalleryView.swift: asynchronous media "
+            "publication must reject cancellation, stale generation, stale "
+            "selection, and closing presentation state"
+        )
 
     pipeline_start = gallery_source.find(
         "actor VaultGeneralFileThumbnailPipeline {"
@@ -2377,6 +3830,87 @@ def main() -> int:
                     f"({forbidden_capability})"
                 )
 
+    image_save_body = swift_block_body(
+        gallery_source,
+        "private func saveCurrentMediaImage()",
+    )
+    image_save_sensitive_body = swift_block_body(
+        image_save_body or "",
+        "session.startSensitiveTask",
+    )
+    playback_failure_body = swift_block_body(
+        gallery_source,
+        "private func handleMediaPlaybackFailure(",
+    )
+    if not (
+        image_save_body is not None
+        and image_save_sensitive_body is not None
+        and image_save_body.count("session.startSensitiveTask") == 1
+        and image_save_body.count("PhotoLibrarySaveService.savePhoto(") == 1
+        and image_save_sensitive_body.count(
+            "PhotoLibrarySaveService.savePhoto("
+        ) == 1
+        and contains_in_order(
+            image_save_body,
+            (
+                "guard !isSavingPreview",
+                "!isDeletingMedia",
+                "!isClosingMediaNavigation",
+                "let selectedID = mediaNavigationQueue?.selectedID",
+                "let active = imagePreview.active",
+                "active.id == selectedID",
+                "let saveGeneration = mediaNavigationGeneration",
+                "let preview = active.preview",
+                "isSavingPreview = true",
+                "let taskID = session.startSensitiveTask",
+                "imageSaveTaskID = taskID",
+                "if taskID == nil { isSavingPreview = false }",
+            ),
+        )
+        and contains_in_order(
+            image_save_sensitive_body,
+            (
+                "session.beginSystemPhotoOperation()",
+                "defer",
+                "session.endSystemPhotoOperation()",
+                "if mediaNavigationGeneration == saveGeneration",
+                "imageSaveTaskID = nil",
+                "isSavingPreview = false",
+                "let result = await PhotoLibrarySaveService.savePhoto(",
+                "preview.originalData",
+                "guard isCurrentMediaSelection(",
+                "selectedID",
+                "generation: saveGeneration",
+                "switch result",
+            ),
+        )
+        and "imageSaveTaskID = taskID" not in image_save_sensitive_body
+    ):
+        violations.append(
+            "KeyHollow/Photos/VaultGalleryView.swift: image saving must be one "
+            "session-tracked task whose UI/result publication remains bound to "
+            "the captured generation and selected item"
+        )
+
+    if not (
+        playback_failure_body is not None
+        and contains_in_order(
+            playback_failure_body,
+            (
+                "guard mediaNavigationQueue?.selectedID == id",
+                "!isClosingMediaNavigation",
+                "videoPlayback.dismiss()",
+                "failedMediaID = id",
+                "previewMessage =",
+            ),
+        )
+    ):
+        violations.append(
+            "KeyHollow/Photos/VaultGalleryView.swift: runtime video failures "
+            "must dismiss playback and publish retryable failure state only for "
+            "the current selection"
+        )
+
     if video_playback_integration_active:
         if not video_playback_coordinator_file.exists():
             violations.append(
@@ -2417,14 +3951,14 @@ def main() -> int:
                 "player release acknowledgement wiring",
             ),
         ):
-            if re.search(pattern, gallery_source) is None:
+            if re.search(pattern, gallery_executable) is None:
                 violations.append(
                     "KeyHollow/Photos/VaultGalleryView.swift: encrypted-video "
                     f"playback lifecycle integration is missing {requirement}"
                 )
         if re.search(
             r"try\s+await\s+videoPlayback\.(?:run|prepare)\(",
-            gallery_source,
+            gallery_executable,
         ) is None:
             violations.append(
                 "KeyHollow/Photos/VaultGalleryView.swift: video playback must "
@@ -2433,13 +3967,13 @@ def main() -> int:
 
         open_route_start = match_position(
             r"\bvar\s+openRoute\s*:\s*VaultGalleryOpenRoute\b",
-            gallery_source,
+            gallery_executable,
         )
-        open_route_end = gallery_source.find(
+        open_route_end = gallery_executable.find(
             "private static func",
             open_route_start,
         )
-        open_route_source = gallery_source[
+        open_route_source = gallery_executable[
             open_route_start:open_route_end
             if open_route_start >= 0 and open_route_end > open_route_start
             else open_route_start
@@ -2459,23 +3993,23 @@ def main() -> int:
         for lifecycle_pattern, cleanup_pattern, lifecycle_name in (
             (
                 r"\.task\s*\(\s*id\s*:\s*session\.activeVaultID\s*\)",
-                r"await\s+videoPlayback\.dismissAndWait\s*\(",
+                r"await\s+resetMediaNavigationAndWait\s*\(",
                 "active-vault change",
             ),
             (
                 r"\.onChange\s*\(\s*of\s*:\s*session\.securityEpoch\b",
-                r"videoPlayback\.dismiss\s*\(",
+                r"cancelMediaNavigationForLifecycle\s*\(",
                 "session security epoch",
             ),
             (
                 r"\.onDisappear\b",
-                r"videoPlayback\.dismiss\s*\(",
+                r"cancelMediaNavigationForLifecycle\s*\(",
                 "gallery disappearance",
             ),
         ):
-            lifecycle_match = re.search(lifecycle_pattern, gallery_source)
+            lifecycle_match = re.search(lifecycle_pattern, gallery_executable)
             lifecycle_window = (
-                gallery_source[
+                gallery_executable[
                     lifecycle_match.start():lifecycle_match.start() + 900
                 ]
                 if lifecycle_match
@@ -2487,8 +4021,207 @@ def main() -> int:
             ):
                 violations.append(
                     "KeyHollow/Photos/VaultGalleryView.swift: "
-                    f"{lifecycle_name} must revoke and clean up video playback"
+                    f"{lifecycle_name} must enter the unified media cleanup path"
                 )
+
+        media_dismiss_start = gallery_executable.find(
+            "private func beginMediaNavigationDismissal()"
+        )
+        media_delete_start = gallery_executable.find(
+            "private func deleteCurrentMedia()", media_dismiss_start
+        )
+        media_reset_start = gallery_executable.find(
+            "private func resetMediaNavigationAndWait()", media_delete_start
+        )
+        media_cancel_start = gallery_executable.find(
+            "private func cancelMediaNavigationForLifecycle()", media_reset_start
+        )
+        media_clear_start = gallery_executable.find(
+            "private func clearMediaNavigationState()", media_cancel_start
+        )
+        post_media_clear_start = gallery_executable.find(
+            "private var selectedPhotoRecords", media_clear_start
+        )
+
+        media_dismiss_source = gallery_executable[
+            media_dismiss_start:media_delete_start
+        ]
+        media_delete_source = gallery_executable[
+            media_delete_start:media_reset_start
+        ]
+        media_reset_source = gallery_executable[media_reset_start:media_cancel_start]
+        media_cancel_source = gallery_executable[media_cancel_start:media_clear_start]
+        media_clear_source = gallery_executable[
+            media_clear_start:post_media_clear_start
+        ]
+
+        if not (
+            media_dismiss_start >= 0
+            and media_delete_start > media_dismiss_start
+            and contains_in_order(
+                media_dismiss_source,
+                (
+                    "guard mediaNavigationQueue != nil",
+                    "!isSavingPreview",
+                    "!isDeletingMedia",
+                    "!isClosingMediaNavigation",
+                    "isClosingMediaNavigation = true",
+                    "mediaNavigationGeneration &+= 1",
+                    "let dismissalGeneration = mediaNavigationGeneration",
+                    "let retiringTask = mediaNavigationTask",
+                    "mediaNavigationTask = nil",
+                    "retiringTask?.cancel()",
+                    "imagePreview.dismiss()",
+                    "videoPlayback.dismiss()",
+                    "mediaNavigationTask = Task { @MainActor in",
+                    "await retiringTask.value",
+                    "await imagePreview.dismissAndWait()",
+                    "await videoPlayback.dismissAndWait()",
+                    "guard mediaNavigationGeneration == dismissalGeneration else { return }",
+                    "clearMediaNavigationState()",
+                ),
+            )
+        ):
+            violations.append(
+                "KeyHollow/Photos/VaultGalleryView.swift: interactive media "
+                "dismissal must revoke both payloads immediately, await both "
+                "terminal lifetimes, reject a stale generation, and only then "
+                "clear presentation state"
+            )
+
+        media_delete_sensitive_body = swift_block_body(
+            media_delete_source,
+            "await session.performSensitiveTask",
+        )
+        if not (
+            media_delete_start >= 0
+            and media_reset_start > media_delete_start
+            and media_delete_source.count(
+                "await session.performSensitiveTask { _ in"
+            ) == 1
+            and media_delete_sensitive_body is not None
+            and media_delete_source.count("try await store.delete(record)") == 1
+            and media_delete_sensitive_body.count(
+                "try await store.delete(record)"
+            ) == 1
+            and media_delete_source.count(
+                "try await generalFileStore.delete([record])"
+            ) == 1
+            and media_delete_sensitive_body.count(
+                "try await generalFileStore.delete([record])"
+            ) == 1
+            and contains_in_order(
+                media_delete_source,
+                (
+                    "guard !isDeletingMedia",
+                    "!isSavingPreview",
+                    "!isClosingMediaNavigation",
+                    "isDeletingMedia = true",
+                    "let deletingID = queue.selectedID",
+                    "let retiringTask = mediaNavigationTask",
+                    "mediaNavigationTask = nil",
+                    "retiringTask?.cancel()",
+                    "imagePreview.dismiss()",
+                    "videoPlayback.dismiss()",
+                    "await retiringTask.value",
+                    "await imagePreview.dismissAndWait()",
+                    "await videoPlayback.dismissAndWait()",
+                    "guard !Task.isCancelled",
+                    "mediaNavigationQueue?.selectedID == deletingID",
+                    "await session.performSensitiveTask { _ in",
+                    "mediaNavigationSources.removeValue(forKey: deletingID)",
+                    "queue.removing(deletingID)",
+                    "mediaNavigationQueue = remainingQueue",
+                    "prepareSelectedMedia(id: remainingQueue.selectedID)",
+                ),
+            )
+        ):
+            violations.append(
+                "KeyHollow/Photos/VaultGalleryView.swift: deleting the active "
+                "item must finish image/video plaintext lifetimes before store "
+                "mutation, preserve typed selection guards, and advance or "
+                "dismiss the immutable queue"
+            )
+
+        if not (
+            media_reset_start >= 0
+            and media_cancel_start > media_reset_start
+            and contains_in_order(
+                media_reset_source,
+                (
+                    "mediaNavigationGeneration &+= 1",
+                    "let retiringTask = mediaNavigationTask",
+                    "let retiringSaveTaskID = imageSaveTaskID",
+                    "mediaNavigationTask = nil",
+                    "imageSaveTaskID = nil",
+                    "retiringTask?.cancel()",
+                    "mediaNavigationQueue = nil",
+                    "imagePreview.dismiss()",
+                    "videoPlayback.dismiss()",
+                    "if let retiringSaveTaskID",
+                    "await session.cancelSensitiveTaskAndWait(retiringSaveTaskID)",
+                    "await retiringTask.value",
+                    "await imagePreview.dismissAndWait()",
+                    "await videoPlayback.dismissAndWait()",
+                    "isSavingPreview = false",
+                    "clearMediaNavigationState()",
+                ),
+            )
+        ):
+            violations.append(
+                "KeyHollow/Photos/VaultGalleryView.swift: active-vault reset "
+                "must revoke navigation first and await both terminal payload "
+                "lifetimes before clearing state"
+            )
+
+        if not (
+            media_cancel_start >= 0
+            and media_clear_start > media_cancel_start
+            and contains_in_order(
+                media_cancel_source,
+                (
+                    "mediaNavigationGeneration &+= 1",
+                    "mediaNavigationTask?.cancel()",
+                    "mediaNavigationTask = nil",
+                    "if let imageSaveTaskID",
+                    "session.cancelSensitiveTask(imageSaveTaskID)",
+                    "self.imageSaveTaskID = nil",
+                    "mediaNavigationQueue = nil",
+                    "mediaNavigationSources = [:]",
+                    "isSavingPreview = false",
+                    "imagePreview.dismiss()",
+                    "videoPlayback.dismiss()",
+                ),
+            )
+        ):
+            violations.append(
+                "KeyHollow/Photos/VaultGalleryView.swift: synchronous lock or "
+                "disappearance cleanup must revoke queue, task, source map, "
+                "image preview, and video playback together"
+            )
+
+        if not (
+            media_clear_start >= 0
+            and post_media_clear_start > media_clear_start
+            and contains_in_order(
+                media_clear_source,
+                (
+                    "mediaNavigationTask = nil",
+                    "if let imageSaveTaskID",
+                    "session.cancelSensitiveTask(imageSaveTaskID)",
+                    "self.imageSaveTaskID = nil",
+                    "mediaNavigationQueue = nil",
+                    "mediaNavigationSources = [:]",
+                    "isSavingPreview = false",
+                    "imagePreview.dismiss()",
+                    "videoPlayback.dismiss()",
+                ),
+            )
+        ):
+            violations.append(
+                "KeyHollow/Photos/VaultGalleryView.swift: terminal media state "
+                "clearing must not retain either payload coordinator"
+            )
 
     for obsolete in (
         "LazyVGrid(columns:",
@@ -2500,8 +4233,15 @@ def main() -> int:
         "visibleGalleryContentItems.first(where:",
         "private let thumbnailImageProcessor = VaultSecureImageProcessor()",
         "private let previewImageProcessor = VaultSecureImageProcessor()",
+        "VaultSecureImagePreviewView(",
+        "@State private var activeImagePreview",
+        "@State private var preparedImagePreview",
+        "@State private var previewTaskID",
+        "private func openImage(",
+        "private func openVideo(",
+        "private func clearActiveImagePreview(",
     ):
-        if obsolete in gallery_source:
+        if obsolete in gallery_executable:
             violations.append(
                 f"KeyHollow/Photos/VaultGalleryView.swift: parallel gallery "
                 f"presentation path returned ({obsolete})"
@@ -2519,6 +4259,10 @@ def main() -> int:
         "KeyHollowVaultCore, KeyHollowPhotoCore, KeyHollowPhotosAdapter, and "
         "KeyHollowTransferCore remain separately compiled; KeyHollowGalleryUI "
         "owns the visible gallery without protected capabilities; "
+        "KeyHollowMediaNavigationAddOn remains metadata-only, active-payload-only, "
+        "busy-aware, native-video-control-aware, and independently compiled; "
+        "unified image presentation retains observable UIKit release, late-attach "
+        "rejection, session-tracked saves, and retryable failure state; "
         "KeyHollowEncryptedVideoAddOn remains capability-free and independently "
         "compiled; KeyHollowBackupVerificationAddOn remains report-only and "
         "independently compiled; registered add-ons remain independently compiled; "

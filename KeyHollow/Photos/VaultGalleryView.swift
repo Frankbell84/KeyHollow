@@ -5,6 +5,7 @@ import KeyHollowEncryptedVideoAddOn
 import KeyHollowFolderPresentationAddOn
 import KeyHollowGalleryUI
 import KeyHollowGeneralFileSupportAddOn
+import KeyHollowMediaNavigationAddOn
 import KeyHollowPhotoCore
 import KeyHollowPhotosAdapter
 import KeyHollowSecurePreviewAddOn
@@ -24,7 +25,7 @@ private struct VaultImportProgress {
 
 /// App-owned routing record. Storage models stop here and are translated into
 /// immutable, source-neutral values before crossing into `KeyHollowGalleryUI`.
-enum VaultGalleryContentItem: Identifiable, Equatable {
+enum VaultGalleryContentItem: Identifiable, Equatable, Sendable {
     case photo(VaultPhotoRecord)
     case generalFile(VaultGeneralFileRecord)
 
@@ -43,6 +44,15 @@ enum VaultGalleryContentItem: Identifiable, Equatable {
             record.id
         case .generalFile(let record):
             record.id
+        }
+    }
+
+    var mediaNavigationID: VaultMediaNavigationID {
+        switch self {
+        case .photo(let record):
+            VaultMediaNavigationID(source: .photo, rawValue: record.id)
+        case .generalFile(let record):
+            VaultMediaNavigationID(source: .generalFile, rawValue: record.id)
         }
     }
 
@@ -113,6 +123,24 @@ enum VaultGalleryContentItem: Identifiable, Equatable {
         }
     }
 
+    var mediaNavigationItem: VaultMediaNavigationItem? {
+        let kind: VaultMediaNavigationKind
+        switch openRoute {
+        case .imagePreview:
+            kind = .image
+        case .videoPlayback:
+            kind = .video
+        case .fileManagement:
+            return nil
+        }
+
+        return VaultMediaNavigationItem(
+            id: mediaNavigationID,
+            kind: kind,
+            title: presentationItem.title
+        )
+    }
+
     private static func isImage(_ record: VaultGeneralFileRecord) -> Bool {
         VaultSecurePreviewPolicy.kind(
             for: VaultSecurePreviewDescriptor(
@@ -128,6 +156,10 @@ enum VaultGalleryOpenRoute: Equatable {
     case imagePreview
     case videoPlayback
     case fileManagement
+}
+
+private enum VaultMediaNavigationPresentationError: Error {
+    case storeUnavailable
 }
 
 /// One immutable bridge between protected source records and the compiled,
@@ -159,13 +191,28 @@ struct VaultGalleryContentSnapshot {
     var selectableItems: [VaultGallerySelection.Item] {
         presentations.map(\.id)
     }
-}
 
-private struct ActiveVaultImagePreview: Identifiable {
-    let source: VaultGalleryContentItem
-    let placeholder: UIImage?
+    var mediaNavigationItems: [VaultMediaNavigationItem] {
+        orderedSources.compactMap(\.mediaNavigationItem)
+    }
 
-    var id: UUID { source.sourceID }
+    var mediaNavigationSourceByID: [VaultMediaNavigationID: VaultGalleryContentItem] {
+        Dictionary(
+            uniqueKeysWithValues: orderedSources.compactMap { source in
+                guard let item = source.mediaNavigationItem else { return nil }
+                return (item.id, source)
+            }
+        )
+    }
+
+    func mediaNavigationQueue(
+        startingAt id: VaultMediaNavigationID
+    ) throws -> VaultMediaNavigationQueue {
+        try VaultMediaNavigationQueue(
+            items: mediaNavigationItems,
+            selectedID: id
+        )
+    }
 }
 
 /// Gives encrypted thumbnail cache hits a responsive lane while bounding the
@@ -407,12 +454,17 @@ struct VaultGalleryView: View {
     @State private var contentStoresLoaded = false
     @State private var thumbnails: [UUID: UIImage] = [:]
     @State private var generalFileThumbnails: [UUID: UIImage] = [:]
-    @State private var activeImagePreview: ActiveVaultImagePreview?
-    @State private var preparedImagePreview: VaultSecureImagePreview?
-    @State private var previewTaskID: UUID?
+    @State private var mediaNavigationQueue: VaultMediaNavigationQueue?
+    @State private var mediaNavigationSources: [VaultMediaNavigationID: VaultGalleryContentItem] = [:]
+    @State private var mediaNavigationGeneration: UInt64 = 0
+    @State private var mediaNavigationTask: Task<Void, Never>?
+    @State private var failedMediaID: VaultMediaNavigationID?
+    @State private var isClosingMediaNavigation = false
+    @State private var isDeletingMedia = false
     @State private var generalFileExport: PreparedGeneralFileExport?
     @State private var generalFileExportTaskID: UUID?
     @State private var isSavingPreview = false
+    @State private var imageSaveTaskID: UUID?
     @State private var previewMessage: String?
     @State private var showingImportOptions = false
     @State private var showingPicker = false
@@ -434,6 +486,7 @@ struct VaultGalleryView: View {
     @State private var isWorking = false
     @State private var message: String?
     @State private var importProgress: VaultImportProgress?
+    @StateObject private var imagePreview = VaultImagePreviewCoordinator()
     @StateObject private var videoPlayback = VaultVideoPlaybackCoordinator()
 
     // SwiftUI recreates View values freely. State preserves these actor
@@ -470,7 +523,7 @@ struct VaultGalleryView: View {
                     delete: { requestFolderDeletion(id: folder.id) }
                 )
             } itemContent: { item in
-                galleryItemCell(item, sourceByID: snapshot.sourceByID)
+                galleryItemCell(item, snapshot: snapshot)
             }
 
             if isSelecting {
@@ -541,48 +594,18 @@ struct VaultGalleryView: View {
                 finishGeneralFileExport(prepared)
             }
         }
-        .sheet(item: $activeImagePreview, onDismiss: clearActiveImagePreview) { active in
-            VaultSecureImagePreviewView(
-                preview: $preparedImagePreview,
-                placeholder: active.placeholder,
-                displayName: active.source.presentationItem.title,
-                isLoading: isWorking && preparedImagePreview == nil,
-                isSaving: isSavingPreview,
-                message: $previewMessage,
-                onDismiss: clearActiveImagePreview,
-                onSave: {
-                    if let preparedImagePreview {
-                        savePreviewToPhotos(preparedImagePreview)
-                    }
-                },
-                onDelete: { deletePreviewSource(active.source) }
-            )
-        }
         .sheet(
-            item: Binding(
-                get: { videoPlayback.active },
-                set: { active in
-                    if active == nil {
-                        videoPlayback.dismiss()
+            isPresented: Binding(
+                get: { mediaNavigationQueue != nil },
+                set: { isPresented in
+                    if !isPresented {
+                        beginMediaNavigationDismissal()
                     }
                 }
-            ),
-            onDismiss: { videoPlayback.dismiss() }
-        ) { active in
-            VaultEncryptedVideoPlayerView(
-                playback: active.playback,
-                onPlayerWillAttach: {
-                    videoPlayback.playerWillAttach(active.playback.id)
-                },
-                onPlayerReleased: {
-                    videoPlayback.playerDidRelease(active.playback.id)
-                },
-                onDismiss: { videoPlayback.dismiss() },
-                onFailure: { _ in
-                    videoPlayback.dismiss()
-                    message = "The video stopped because iOS could not continue secure playback."
-                }
             )
+        ) {
+            mediaNavigationViewer
+                .interactiveDismissDisabled()
         }
         .confirmationDialog(
             "Delete Selected Items?",
@@ -638,7 +661,7 @@ struct VaultGalleryView: View {
             Text(message ?? "")
         }
         .task(id: session.activeVaultID) {
-            await videoPlayback.dismissAndWait()
+            await resetMediaNavigationAndWait()
             store = nil
             records = []
             generalFileStore = nil
@@ -649,7 +672,6 @@ struct VaultGalleryView: View {
             contentStoresLoaded = false
             thumbnails = [:]
             generalFileThumbnails = [:]
-            clearActiveImagePreview()
             leaveSelectionMode()
             await session.performSensitiveTask { capability in
                 guard session.activeVaultID == capability.vaultID else { return }
@@ -658,10 +680,191 @@ struct VaultGalleryView: View {
             contentStoresLoaded = session.hasActiveAccess
         }
         .onChange(of: session.securityEpoch) { _, _ in
-            videoPlayback.dismiss()
+            cancelMediaNavigationForLifecycle()
         }
         .onDisappear {
-            videoPlayback.dismiss()
+            cancelMediaNavigationForLifecycle()
+        }
+    }
+
+    @ViewBuilder
+    private var mediaNavigationViewer: some View {
+        if let queue = mediaNavigationQueue {
+            VaultMediaNavigationPager(
+                queue: queue,
+                isNavigationEnabled: !isSavingPreview
+                    && !isDeletingMedia
+                    && !isClosingMediaNavigation,
+                onSelectionChange: selectMediaNavigationItem
+            ) { item in
+                mediaNavigationActiveContent(item)
+            }
+            .safeAreaInset(edge: .top, spacing: 0) {
+                mediaNavigationToolbar(for: queue)
+            }
+            .alert("KeyHollow", isPresented: Binding(
+                get: { previewMessage != nil },
+                set: { if !$0 { previewMessage = nil } }
+            )) {
+                Button("OK") { previewMessage = nil }
+            } message: {
+                Text(previewMessage ?? "")
+            }
+        } else {
+            Color.black.ignoresSafeArea()
+        }
+    }
+
+    private func mediaNavigationToolbar(
+        for queue: VaultMediaNavigationQueue
+    ) -> some View {
+        HStack(spacing: 18) {
+            Button("Done", action: beginMediaNavigationDismissal)
+                .disabled(
+                    isSavingPreview
+                        || isDeletingMedia
+                        || isClosingMediaNavigation
+                )
+
+            Spacer()
+
+            if isSavingPreview || isDeletingMedia || isClosingMediaNavigation {
+                ProgressView()
+                    .tint(.white)
+            } else if queue.currentItem.kind == .image {
+                Button {
+                    saveCurrentMediaImage()
+                } label: {
+                    Image(systemName: "square.and.arrow.down")
+                }
+                .accessibilityLabel("Save to Photos")
+                .disabled(imagePreview.active?.id != queue.selectedID)
+            }
+
+            Button(role: .destructive) {
+                deleteCurrentMedia()
+            } label: {
+                Image(systemName: "trash")
+            }
+            .accessibilityLabel("Delete from Vault")
+            .disabled(isSavingPreview || isDeletingMedia || isClosingMediaNavigation)
+        }
+        .padding(.horizontal)
+        .padding(.vertical, 10)
+        .background(.ultraThinMaterial)
+    }
+
+    @ViewBuilder
+    private func mediaNavigationActiveContent(
+        _ item: VaultMediaNavigationItem
+    ) -> some View {
+        if isClosingMediaNavigation {
+            ProgressView("Closing…")
+                .tint(.white)
+                .foregroundStyle(.white)
+        } else {
+            switch item.kind {
+            case .image:
+                ZStack {
+                    mediaNavigationPlaceholder(for: item.id)
+
+                    if let active = imagePreview.active,
+                       active.id == item.id {
+                        VaultSecureImageSurface(
+                            renderedImage: active.preview.displayImage,
+                            accessibilityLabel: item.accessibilityTitle,
+                            onImageWillAttach: {
+                                imagePreview.imageWillAttach(item.id)
+                            },
+                            onImageReleased: {
+                                imagePreview.imageDidRelease(item.id)
+                            }
+                        )
+                    } else {
+                        mediaNavigationLoadState(for: item)
+                    }
+                }
+
+            case .video:
+                if let active = videoPlayback.active,
+                   active.source.mediaNavigationID == item.id {
+                    VaultEncryptedVideoPlayerView(
+                        playback: active.playback,
+                        showsChrome: false,
+                        onPlayerWillAttach: {
+                            videoPlayback.playerWillAttach(active.playback.id)
+                        },
+                        onPlayerReleased: {
+                            videoPlayback.playerDidRelease(active.playback.id)
+                        },
+                        onDismiss: beginMediaNavigationDismissal,
+                        onFailure: { _ in
+                            handleMediaPlaybackFailure(for: item.id)
+                        }
+                    )
+                } else {
+                    ZStack {
+                        mediaNavigationPlaceholder(for: item.id)
+                        mediaNavigationLoadState(for: item)
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func mediaNavigationLoadState(
+        for item: VaultMediaNavigationItem
+    ) -> some View {
+        if failedMediaID == item.id {
+            VStack(spacing: 12) {
+                Image(systemName: "exclamationmark.triangle")
+                    .font(.title)
+                Text("Unable to Open")
+                    .font(.headline)
+                Button("Try Again") {
+                    retryMediaNavigationItem(item.id)
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(
+                    isSavingPreview
+                        || isDeletingMedia
+                        || isClosingMediaNavigation
+                )
+            }
+            .padding()
+            .foregroundStyle(.white)
+            .background(
+                .regularMaterial,
+                in: RoundedRectangle(cornerRadius: 12)
+            )
+            .accessibilityElement(children: .contain)
+        } else {
+            ProgressView("Opening…")
+                .padding()
+                .background(
+                    .regularMaterial,
+                    in: RoundedRectangle(cornerRadius: 12)
+                )
+        }
+    }
+
+    @ViewBuilder
+    private func mediaNavigationPlaceholder(
+        for id: VaultMediaNavigationID
+    ) -> some View {
+        if let source = mediaNavigationSources[id],
+           let placeholder = thumbnail(for: source) {
+            Image(uiImage: placeholder)
+                .resizable()
+                .scaledToFit()
+                .opacity(0.72)
+                .accessibilityHidden(true)
+        } else {
+            Image(systemName: "photo.on.rectangle.angled")
+                .font(.system(size: 52))
+                .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
         }
     }
 
@@ -1006,14 +1209,14 @@ struct VaultGalleryView: View {
     @ViewBuilder
     private func galleryItemCell(
         _ presentationItem: VaultGalleryPresentationItem,
-        sourceByID: [VaultGallerySelection.Item: VaultGalleryContentItem]
+        snapshot: VaultGalleryContentSnapshot
     ) -> some View {
-        if let item = sourceByID[presentationItem.id] {
+        if let item = snapshot.sourceByID[presentationItem.id] {
             VaultGalleryItemTileView(
                 item: presentationItem,
                 thumbnail: thumbnail(for: item),
                 selectionState: isSelecting ? selection.contains(item.id) : nil,
-                action: { handleGalleryItemTap(item) }
+                action: { handleGalleryItemTap(item, snapshot: snapshot) }
             )
             .contextMenu {
                 galleryItemContextMenu(item)
@@ -1073,18 +1276,18 @@ struct VaultGalleryView: View {
         }
     }
 
-    private func handleGalleryItemTap(_ item: VaultGalleryContentItem) {
+    private func handleGalleryItemTap(
+        _ item: VaultGalleryContentItem,
+        snapshot: VaultGalleryContentSnapshot
+    ) {
         if isSelecting {
             selection.toggle(item.id)
             return
         }
 
         switch item.openRoute {
-        case .imagePreview:
-            openImage(item)
-        case .videoPlayback:
-            guard case .generalFile(let record) = item else { return }
-            openVideo(record)
+        case .imagePreview, .videoPlayback:
+            openMediaNavigation(startingAt: item, snapshot: snapshot)
         case .fileManagement:
             showingVaultFiles = true
         }
@@ -1615,66 +1818,191 @@ struct VaultGalleryView: View {
         return "No photos were imported. \(count) selected \(noun) could not be read."
     }
 
-    private func openImage(_ item: VaultGalleryContentItem) {
-        guard item.openRoute == .imagePreview, !isWorking else { return }
-        preparedImagePreview = nil
-        previewMessage = nil
-        activeImagePreview = ActiveVaultImagePreview(
-            source: item,
-            placeholder: thumbnail(for: item)
-        )
-        isWorking = true
+    private func openMediaNavigation(
+        startingAt source: VaultGalleryContentItem,
+        snapshot: VaultGalleryContentSnapshot
+    ) {
+        guard !isWorking,
+              !isSavingPreview,
+              !isDeletingMedia,
+              !isClosingMediaNavigation,
+              let item = source.mediaNavigationItem else { return }
 
-        let taskID = session.startSensitiveTask { _ in
-            defer {
-                previewTaskID = nil
-                isWorking = false
+        do {
+            mediaNavigationQueue = try snapshot.mediaNavigationQueue(
+                startingAt: item.id
+            )
+            mediaNavigationSources = snapshot.mediaNavigationSourceByID
+            previewMessage = nil
+            failedMediaID = nil
+            isClosingMediaNavigation = false
+            isDeletingMedia = false
+            prepareSelectedMedia(id: item.id)
+        } catch {
+            message = "The media viewer could not be opened."
+        }
+    }
+
+    private func selectMediaNavigationItem(_ id: VaultMediaNavigationID) {
+        guard !isSavingPreview,
+              !isDeletingMedia,
+              !isClosingMediaNavigation,
+              let queue = mediaNavigationQueue,
+              queue.selectedID != id,
+              let selectedQueue = try? queue.selecting(id) else { return }
+
+        mediaNavigationQueue = selectedQueue
+        previewMessage = nil
+        failedMediaID = nil
+        prepareSelectedMedia(id: id)
+    }
+
+    private func retryMediaNavigationItem(_ id: VaultMediaNavigationID) {
+        guard !isSavingPreview,
+              !isDeletingMedia,
+              !isClosingMediaNavigation,
+              mediaNavigationQueue?.selectedID == id else { return }
+        previewMessage = nil
+        failedMediaID = nil
+        prepareSelectedMedia(id: id)
+    }
+
+    private func prepareSelectedMedia(id: VaultMediaNavigationID) {
+        failedMediaID = nil
+        mediaNavigationGeneration &+= 1
+        let generation = mediaNavigationGeneration
+        let retiringTask = mediaNavigationTask
+        mediaNavigationTask = nil
+        retiringTask?.cancel()
+        imagePreview.dismiss()
+        videoPlayback.dismiss()
+
+        mediaNavigationTask = Task { @MainActor in
+            if let retiringTask {
+                await retiringTask.value
             }
+            await imagePreview.dismissAndWait()
+            await videoPlayback.dismissAndWait()
+
+            guard !Task.isCancelled,
+                  isCurrentMediaSelection(id, generation: generation),
+                  let source = mediaNavigationSources[id],
+                  let descriptor = source.mediaNavigationItem,
+                  session.hasActiveAccess else { return }
+
+            switch descriptor.kind {
+            case .image:
+                await prepareMediaImage(
+                    source,
+                    descriptor: descriptor,
+                    generation: generation
+                )
+            case .video:
+                await prepareMediaVideo(
+                    source,
+                    descriptor: descriptor,
+                    generation: generation
+                )
+            }
+        }
+    }
+
+    private func prepareMediaImage(
+        _ source: VaultGalleryContentItem,
+        descriptor: VaultMediaNavigationItem,
+        generation: UInt64
+    ) async {
+        await session.performSensitiveTask { _ in
             do {
-                let data: Data
-                switch item {
+                switch source {
                 case .photo(let record):
                     guard let store else {
-                        message = "The encrypted photo store is unavailable."
-                        return
+                        throw VaultMediaNavigationPresentationError.storeUnavailable
                     }
-                    data = try await store.loadPhoto(record)
+                    try await imagePreview.prepare(
+                        id: descriptor.id,
+                        displayName: descriptor.title,
+                        processor: previewImageProcessor,
+                        loadOriginalData: {
+                            try await store.loadPhoto(record)
+                        }
+                    )
                 case .generalFile(let record):
                     guard let generalFileStore else {
-                        message = "The encrypted file store is unavailable."
-                        return
+                        throw VaultMediaNavigationPresentationError.storeUnavailable
                     }
-                    data = try await generalFileStore.loadFile(record)
+                    try await imagePreview.prepare(
+                        id: descriptor.id,
+                        displayName: descriptor.title,
+                        processor: previewImageProcessor,
+                        loadOriginalData: {
+                            try await generalFileStore.loadFile(record)
+                        }
+                    )
                 }
-                guard !Task.isCancelled else { return }
-                let preview = try await previewImageProcessor.preparePreview(
-                    id: item.sourceID,
-                    displayName: item.presentationItem.title,
-                    originalData: data
-                )
-                guard !Task.isCancelled,
-                      activeImagePreview?.source.id == item.id else { return }
-                preparedImagePreview = preview
             } catch is CancellationError {
                 return
             } catch VaultPhotoStore.StoreError.originalTooLarge {
-                guard activeImagePreview?.source.id == item.id else { return }
+                guard isCurrentMediaSelection(
+                    descriptor.id,
+                    generation: generation
+                ) else { return }
+                failedMediaID = descriptor.id
                 previewMessage = "This legacy photo is larger than KeyHollow's current safe open-size limit. It remains encrypted and can be deleted, moved, or included in a compatibility export."
             } catch {
-                guard activeImagePreview?.source.id == item.id else { return }
+                guard isCurrentMediaSelection(
+                    descriptor.id,
+                    generation: generation
+                ) else { return }
+                failedMediaID = descriptor.id
                 previewMessage = "The image could not be authenticated, validated, and opened."
             }
         }
-        previewTaskID = taskID
-        if taskID == nil {
-            isWorking = false
-            clearActiveImagePreview()
+    }
+
+    private func prepareMediaVideo(
+        _ source: VaultGalleryContentItem,
+        descriptor: VaultMediaNavigationItem,
+        generation: UInt64
+    ) async {
+        guard case .generalFile(let record) = source,
+              let generalFileStore else {
+            if isCurrentMediaSelection(descriptor.id, generation: generation) {
+                failedMediaID = descriptor.id
+                previewMessage = "The encrypted video store is unavailable."
+            }
+            return
         }
+
+        await session.performSensitiveTask { _ in
+            do {
+                try await videoPlayback.prepare(record, using: generalFileStore)
+            } catch is CancellationError {
+                return
+            } catch {
+                guard isCurrentMediaSelection(
+                    descriptor.id,
+                    generation: generation
+                ) else { return }
+                failedMediaID = descriptor.id
+                previewMessage = "The video could not be authenticated, validated, and opened."
+            }
+        }
+    }
+
+    private func isCurrentMediaSelection(
+        _ id: VaultMediaNavigationID,
+        generation: UInt64
+    ) -> Bool {
+        !Task.isCancelled
+            && mediaNavigationGeneration == generation
+            && mediaNavigationQueue?.selectedID == id
+            && !isClosingMediaNavigation
     }
 
     private func delete(_ record: VaultPhotoRecord) {
         guard let store, !isWorking else { return }
-        clearActiveImagePreview()
+        imagePreview.dismiss()
         isWorking = true
 
         session.startSensitiveTask { _ in
@@ -1692,7 +2020,7 @@ struct VaultGalleryView: View {
 
     private func delete(_ record: VaultGeneralFileRecord) {
         guard let generalFileStore, !isWorking else { return }
-        clearActiveImagePreview()
+        imagePreview.dismiss()
         isWorking = true
 
         session.startSensitiveTask { _ in
@@ -1710,18 +2038,36 @@ struct VaultGalleryView: View {
         }
     }
 
-    private func savePreviewToPhotos(_ preview: VaultSecureImagePreview) {
-        guard !isSavingPreview else { return }
+    private func saveCurrentMediaImage() {
+        guard !isSavingPreview,
+              !isDeletingMedia,
+              !isClosingMediaNavigation,
+              let selectedID = mediaNavigationQueue?.selectedID,
+              let active = imagePreview.active,
+              active.id == selectedID else { return }
+
+        let saveGeneration = mediaNavigationGeneration
+        let preview = active.preview
         isSavingPreview = true
 
         let taskID = session.startSensitiveTask { _ in
             session.beginSystemPhotoOperation()
             defer {
                 session.endSystemPhotoOperation()
-                isSavingPreview = false
+                if mediaNavigationGeneration == saveGeneration {
+                    imageSaveTaskID = nil
+                    isSavingPreview = false
+                }
             }
-            let result = await PhotoLibrarySaveService.savePhoto(preview.originalData)
-            guard !Task.isCancelled else { return }
+
+            let result = await PhotoLibrarySaveService.savePhoto(
+                preview.originalData
+            )
+            guard isCurrentMediaSelection(
+                selectedID,
+                generation: saveGeneration
+            ) else { return }
+
             switch result {
             case .saved:
                 previewMessage = "Saved to Photos. The encrypted vault copy was kept."
@@ -1731,28 +2077,185 @@ struct VaultGalleryView: View {
                 previewMessage = "This image could not be saved to Photos."
             }
         }
+        imageSaveTaskID = taskID
         if taskID == nil { isSavingPreview = false }
     }
 
-    private func deletePreviewSource(_ source: VaultGalleryContentItem) {
-        clearActiveImagePreview()
-        switch source {
-        case .photo(let record):
-            delete(record)
-        case .generalFile(let record):
-            delete(record)
+    private func handleMediaPlaybackFailure(for id: VaultMediaNavigationID) {
+        guard mediaNavigationQueue?.selectedID == id,
+              !isClosingMediaNavigation else { return }
+        videoPlayback.dismiss()
+        failedMediaID = id
+        previewMessage = "The video stopped because iOS could not continue secure playback."
+    }
+
+    private func beginMediaNavigationDismissal() {
+        guard mediaNavigationQueue != nil,
+              !isSavingPreview,
+              !isDeletingMedia,
+              !isClosingMediaNavigation else { return }
+
+        isClosingMediaNavigation = true
+        mediaNavigationGeneration &+= 1
+        let dismissalGeneration = mediaNavigationGeneration
+        let retiringTask = mediaNavigationTask
+        mediaNavigationTask = nil
+        retiringTask?.cancel()
+        imagePreview.dismiss()
+        videoPlayback.dismiss()
+
+        mediaNavigationTask = Task { @MainActor in
+            if let retiringTask {
+                await retiringTask.value
+            }
+            await imagePreview.dismissAndWait()
+            await videoPlayback.dismissAndWait()
+            guard mediaNavigationGeneration == dismissalGeneration else { return }
+            clearMediaNavigationState()
         }
     }
 
-    private func clearActiveImagePreview() {
-        if let previewTaskID {
-            session.cancelSensitiveTask(previewTaskID)
-            self.previewTaskID = nil
+    private func deleteCurrentMedia() {
+        guard !isDeletingMedia,
+              !isSavingPreview,
+              !isClosingMediaNavigation,
+              let queue = mediaNavigationQueue,
+              let source = mediaNavigationSources[queue.selectedID] else { return }
+
+        isDeletingMedia = true
+        mediaNavigationGeneration &+= 1
+        let deletionGeneration = mediaNavigationGeneration
+        let deletingID = queue.selectedID
+        let retiringTask = mediaNavigationTask
+        mediaNavigationTask = nil
+        retiringTask?.cancel()
+        imagePreview.dismiss()
+        videoPlayback.dismiss()
+
+        mediaNavigationTask = Task { @MainActor in
+            if let retiringTask {
+                await retiringTask.value
+            }
+            await imagePreview.dismissAndWait()
+            await videoPlayback.dismissAndWait()
+
+            guard !Task.isCancelled,
+                  mediaNavigationGeneration == deletionGeneration,
+                  mediaNavigationQueue?.selectedID == deletingID,
+                  session.hasActiveAccess else { return }
+
+            var didDelete = false
+            var failureMessage: String?
+            await session.performSensitiveTask { _ in
+                do {
+                    switch source {
+                    case .photo(let record):
+                        guard let store else {
+                            throw VaultMediaNavigationPresentationError.storeUnavailable
+                        }
+                        try await store.delete(record)
+                        try await reload(using: store)
+                    case .generalFile(let record):
+                        guard let generalFileStore else {
+                            throw VaultMediaNavigationPresentationError.storeUnavailable
+                        }
+                        try await generalFileStore.delete([record])
+                        generalFileRecords = try await generalFileStore.loadManifest().files
+                        generalFileThumbnails.removeValue(forKey: record.id)
+                        await reconcilePresentationStore()
+                    }
+                    didDelete = true
+                } catch is CancellationError {
+                    return
+                } catch {
+                    failureMessage = source.openRoute == .videoPlayback
+                        ? "The video could not be deleted from the vault."
+                        : "The image could not be deleted from the vault."
+                }
+            }
+
+            guard !Task.isCancelled,
+                  mediaNavigationGeneration == deletionGeneration,
+                  mediaNavigationQueue?.selectedID == deletingID else { return }
+
+            mediaNavigationTask = nil
+            isDeletingMedia = false
+
+            guard didDelete else {
+                previewMessage = failureMessage
+                    ?? "The item could not be deleted from the vault."
+                prepareSelectedMedia(id: deletingID)
+                return
+            }
+
+            mediaNavigationSources.removeValue(forKey: deletingID)
+            guard let remainingQueue = queue.removing(deletingID) else {
+                clearMediaNavigationState()
+                return
+            }
+
+            mediaNavigationQueue = remainingQueue
+            prepareSelectedMedia(id: remainingQueue.selectedID)
         }
-        activeImagePreview = nil
-        preparedImagePreview = nil
+    }
+
+    private func resetMediaNavigationAndWait() async {
+        mediaNavigationGeneration &+= 1
+        let retiringTask = mediaNavigationTask
+        let retiringSaveTaskID = imageSaveTaskID
+        mediaNavigationTask = nil
+        imageSaveTaskID = nil
+        retiringTask?.cancel()
+        mediaNavigationQueue = nil
+        imagePreview.dismiss()
+        videoPlayback.dismiss()
+
+        if let retiringSaveTaskID {
+            await session.cancelSensitiveTaskAndWait(retiringSaveTaskID)
+        }
+        if let retiringTask {
+            await retiringTask.value
+        }
+        await imagePreview.dismissAndWait()
+        await videoPlayback.dismissAndWait()
+        isSavingPreview = false
+        clearMediaNavigationState()
+    }
+
+    private func cancelMediaNavigationForLifecycle() {
+        mediaNavigationGeneration &+= 1
+        mediaNavigationTask?.cancel()
+        mediaNavigationTask = nil
+        if let imageSaveTaskID {
+            session.cancelSensitiveTask(imageSaveTaskID)
+            self.imageSaveTaskID = nil
+        }
+        mediaNavigationQueue = nil
+        mediaNavigationSources = [:]
+        failedMediaID = nil
+        isClosingMediaNavigation = false
+        isDeletingMedia = false
+        isSavingPreview = false
+        imagePreview.dismiss()
+        videoPlayback.dismiss()
         previewMessage = nil
-        if !session.isUnlocked { isSavingPreview = false }
+    }
+
+    private func clearMediaNavigationState() {
+        mediaNavigationTask = nil
+        if let imageSaveTaskID {
+            session.cancelSensitiveTask(imageSaveTaskID)
+            self.imageSaveTaskID = nil
+        }
+        mediaNavigationQueue = nil
+        mediaNavigationSources = [:]
+        failedMediaID = nil
+        isClosingMediaNavigation = false
+        isDeletingMedia = false
+        isSavingPreview = false
+        imagePreview.dismiss()
+        videoPlayback.dismiss()
+        previewMessage = nil
     }
 
     private var selectedPhotoRecords: [VaultPhotoRecord] {
@@ -1761,27 +2264,6 @@ struct VaultGalleryView: View {
 
     private var selectedGeneralFileRecords: [VaultGeneralFileRecord] {
         visibleGeneralFileRecords.filter { selection.contains(.generalFile($0.id)) }
-    }
-
-    private func openVideo(_ record: VaultGeneralFileRecord) {
-        guard !isWorking, let generalFileStore else { return }
-        message = nil
-        isWorking = true
-
-        let taskID = session.startSensitiveTask { _ in
-            defer { isWorking = false }
-            do {
-                try await videoPlayback.prepare(record, using: generalFileStore)
-            } catch is CancellationError {
-                return
-            } catch {
-                guard session.isUnlocked else { return }
-                message = "The video could not be authenticated, validated, and opened."
-            }
-        }
-        if taskID == nil {
-            isWorking = false
-        }
     }
 
     private var selectedPresentedReferences: Set<VaultPresentedContentReference> {

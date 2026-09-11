@@ -179,6 +179,93 @@ public struct VaultSecureImagePreview: Identifiable, Sendable {
     }
 }
 
+/// A single UIKit-backed presentation surface whose release is observable by
+/// the application. Clearing the UIImageView before acknowledging dismantling
+/// gives the app a concrete boundary before it prepares another full payload.
+@MainActor
+public struct VaultSecureImageSurface: UIViewRepresentable {
+    private let renderedImage: VaultSecureRenderedImage
+    private let accessibilityLabel: String
+    private let onImageWillAttach: () -> Bool
+    private let onImageReleased: () -> Void
+
+    public init(
+        renderedImage: VaultSecureRenderedImage,
+        accessibilityLabel: String,
+        onImageWillAttach: @escaping () -> Bool = { true },
+        onImageReleased: @escaping () -> Void = {}
+    ) {
+        self.renderedImage = renderedImage
+        self.accessibilityLabel = accessibilityLabel
+        self.onImageWillAttach = onImageWillAttach
+        self.onImageReleased = onImageReleased
+    }
+
+    public func makeCoordinator() -> Coordinator {
+        Coordinator(
+            onImageWillAttach: onImageWillAttach,
+            onImageReleased: onImageReleased
+        )
+    }
+
+    public func makeUIView(context: Context) -> UIImageView {
+        let imageView = UIImageView()
+        imageView.backgroundColor = .clear
+        imageView.clipsToBounds = true
+        imageView.contentMode = .scaleAspectFit
+        imageView.isAccessibilityElement = true
+        imageView.accessibilityTraits = .image
+        imageView.accessibilityLabel = accessibilityLabel
+
+        if context.coordinator.attachIfAllowed() {
+            imageView.image = renderedImage.image
+        }
+        return imageView
+    }
+
+    public func updateUIView(_ imageView: UIImageView, context: Context) {
+        imageView.accessibilityLabel = accessibilityLabel
+        imageView.image = context.coordinator.isAttached
+            ? renderedImage.image
+            : nil
+    }
+
+    public static func dismantleUIView(
+        _ imageView: UIImageView,
+        coordinator: Coordinator
+    ) {
+        imageView.image = nil
+        coordinator.release()
+    }
+
+    @MainActor
+    public final class Coordinator {
+        private let onImageWillAttach: () -> Bool
+        private let onImageReleased: () -> Void
+        private(set) var isAttached = false
+
+        fileprivate init(
+            onImageWillAttach: @escaping () -> Bool,
+            onImageReleased: @escaping () -> Void
+        ) {
+            self.onImageWillAttach = onImageWillAttach
+            self.onImageReleased = onImageReleased
+        }
+
+        fileprivate func attachIfAllowed() -> Bool {
+            guard !isAttached, onImageWillAttach() else { return false }
+            isAttached = true
+            return true
+        }
+
+        fileprivate func release() {
+            guard isAttached else { return }
+            isAttached = false
+            onImageReleased()
+        }
+    }
+}
+
 private enum VaultSecureImageDecoder {
     static func renderedImage(
         from encodedData: Data,

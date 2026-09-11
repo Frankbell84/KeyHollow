@@ -21,6 +21,7 @@ small local core with narrow adapters around it.
 | `AddOns/GeneralFileSupport` | Encrypted general-file records, manifests, blobs, and protected ingress/egress staging | Vault keys, photo storage, SwiftUI/UIKit, portable archive formats |
 | `AddOns/FolderPresentation` | Folder metadata, neutral content references, and encrypted presentation thumbnails | Vault keys, protected photo/file content, SwiftUI/UIKit, portable archive formats |
 | `UI/VaultGallery*` | Source-neutral grid layout, tile metadata, folder presentation, and selection behavior | Vault keys, ciphertext, protected stores, decryption, portable archive formats |
+| `AddOns/MediaNavigation` | Immutable typed media descriptors, bounded non-wrapping paging rules, active-page presentation, and navigation accessibility | Vault keys, encrypted records or stores, ciphertext, plaintext payloads, file URLs, sessions, folder persistence, portable archive formats |
 | `AddOns/SecurePreview` | Bounded image type/size policy, off-main image preparation, and secure preview presentation | Vault keys, encrypted persistence, session ownership, portable archive formats |
 | `AddOns/EncryptedVideo` | Conservative video classification, reference-restricted and source-bounded media validation, bounded thumbnail rendering, and local-only player presentation | Vault keys, encrypted persistence, temporary-file creation, session ownership, portable archive formats |
 
@@ -110,6 +111,23 @@ composition layer converts protected photo and general-file records into
 immutable tile values and supplies typed actions. The module never receives a
 store, vault key, ciphertext, decryption operation, or portable archive
 capability. Removing or replacing it cannot make protected content readable.
+
+`KeyHollowMediaNavigationAddOn` owns the immutable, typed queue and the
+active-page swipe presentation for compatible images and videos. The app
+composition layer builds that queue from the already ordered current-root or
+current-folder gallery snapshot and supplies the active content plus action
+closures. The add-on never receives an encrypted record, store, vault key,
+ciphertext, plaintext bytes, local file URL, session, folder store, or transfer
+capability. It invokes the content builder for the active item only; the app
+retains authentication, decryption, protected temporary-file lifetime,
+generation control, save/delete behavior, and lifecycle cleanup. The existing
+secure-preview module supplies a UIKit-backed image surface that clears its
+image reference before acknowledging release; the app-owned coordinator waits
+for that acknowledgement just as video cleanup waits for player release.
+Removing or replacing the add-on requires only application-composition and
+project-wiring changes; secure image preview, encrypted video playback, file
+management, protected storage, and `.khvault` behavior remain independent of
+its implementation.
 
 `KeyHollowSecurePreviewAddOn` owns bounded image acceptance policy, eager image
 preparation away from the main actor, and the authenticated-session preview

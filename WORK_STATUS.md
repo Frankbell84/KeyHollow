@@ -89,12 +89,42 @@ evidence remains in `docs/PROJECT_CHECKPOINT.md`.
 
 Build 40 is accepted and its production credential cutover is complete. Preserve
 exact accepted source `54bd2d6887f3ca0e476339fce05e90dd59ba963f`
-as the release baseline while selecting the next roadmap add-on. Any subsequent
-feature or release change must begin on a new branch and follow the normal
-compiled-module, pull-request, exact-main CI, and device-test sequence.
+as the release baseline. The current in-progress task is Unified Media
+Navigation on isolated branch `feature/unified-media-navigation`, created from
+repository baseline `c8fa6dc1076f8ee4b2f7dca543e97072687758eb`.
+
+The proposal is mapped in `docs/UNIFIED_MEDIA_NAVIGATION.md`. The branch now
+contains a separately targeted, presentation-only module with immutable
+source-qualified media IDs, image/video descriptors, ordered non-wrapping queue
+state, active-page swipe presentation, and accessibility metadata. Application
+composition, explicit image/video release barriers, lifecycle integration,
+save/delete serialization, retryable failures, and local security gates are
+complete in the working tree. Swift compilation and the complete XCTest suite
+remain pending macOS pull-request CI. No merged-main result, signed candidate,
+TestFlight assignment, or physical-device acceptance is recorded for this
+feature yet.
+
+## Unified Media Navigation candidate
+
+- Preserve Photos-origin and general-file identity as separate typed namespaces
+  even when UUID values collide.
+- Build each navigation queue only from compatible images and videos in the
+  already ordered current-root or current-folder gallery snapshot.
+- Keep PDFs and other non-media files on the established file-management route.
+- Construct only the active full-resolution page. Adjacent navigation entries
+  remain immutable metadata and may reuse existing bounded thumbnails only.
+- Keep authentication, decryption, sensitive-task generation checks, image and
+  player cleanup, protected temporary exports, save/delete behavior, and
+  lock/background/session-replacement handling in the application composition
+  layer.
+- Require automated pure-state, architecture, lifecycle, and integration tests
+  plus the complete device checks in `docs/DEVICE_TEST_PLAN.md` before this
+  candidate can become accepted behavior.
 
 ## Completed work
 
+The following completion record applies to Backup Verification Center and its
+inherited hardening, not the in-progress Unified Media Navigation candidate.
 Implementation, local hardening, and exact-source CI are complete:
 
 - Added a TransferCore verify-and-discard facade over the existing authenticated
@@ -521,13 +551,13 @@ only boundary.
 1. Preserve exact accepted Build 40 source
    `54bd2d6887f3ca0e476339fce05e90dd59ba963f` as the rollback and comparison
    baseline.
-2. Select the next roadmap add-on and map it onto the current compiled-module
-   boundaries before implementation.
-3. Develop it on one new single-purpose branch, require complete local and PR
-   gates, merge only the reviewed head through protected `main`, and require
-   complete exact-main CI.
-4. Produce a separately authorized Internal TestFlight build for physical-device
-   testing. Do not expand to Family or external testers without a separate
+2. Publish the locally hardened Unified Media Navigation checkpoint through a
+   draft pull request and require the complete macOS build, test, security, and
+   CodeQL gates.
+3. Merge only that reviewed head through protected `main` after required PR
+   checks pass, then require complete exact-main CI.
+4. Produce a separately authorized Internal TestFlight build for the physical-
+   device plan. Do not expand to Family or external testers without a separate
    decision.
 
 ## Frank's decisions required

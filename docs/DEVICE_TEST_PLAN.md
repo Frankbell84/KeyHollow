@@ -89,6 +89,55 @@ This checklist must be executed on a physical iPhone before external TestFlight 
 - Force-quit during import and verify no committed manifest entry points to missing plaintext/ciphertext data.
 - Test low-storage behavior and verify operations fail without falsely reporting success.
 
+## Unified Media Navigation candidate
+
+Run these checks only after the isolated feature branch has passed its automated
+review gates and a separately authorized Internal TestFlight build is available.
+Completing this written plan does not itself record a pass.
+
+- In the vault root, open a Photos-origin image, a Files-origin image, and an
+  encrypted video from several different grid positions. Confirm each viewer
+  starts on the item that was tapped, presents the correct media type, and
+  reports the correct title and one-based position in the compatible-media
+  sequence.
+- Swipe forward and backward through mixed portrait images, landscape images,
+  screenshots, Files-origin images, and supported videos. Confirm every item
+  preserves aspect ratio, transitions in visible-grid order, and never wraps at
+  the first or last item.
+- While a video is playing, drag its native timeline/scrubber horizontally.
+  Confirm playback seeks without changing pages; then swipe in the upper video
+  region and confirm normal page navigation still works.
+- Place compatible media into two different folders. Open and navigate from the
+  vault root and from each folder; confirm navigation never crosses between the
+  root, either folder, or another hidden location.
+- Tap a PDF and another unsupported non-media file. Confirm both continue to use
+  the established file-management route and do not enter the swipe queue.
+- Rapidly alternate forward and backward swipes while image and video content is
+  loading. Confirm stale content never replaces the newest selection, playback
+  does not overlap, controls remain responsive, and the viewer can always be
+  dismissed.
+- Move repeatedly between image and video pages, then dismiss, lock, background,
+  and force-quit during loading and playback. Confirm the privacy shield appears,
+  re-entry requires the LowKey, audio stops, and no prior media flashes after
+  unlock.
+- Save the active Photos-origin and Files-origin images from the viewer. Dismiss
+  a supported video and confirm its established grid selection/context export
+  route still works. Delete an active middle item and confirm the following
+  compatible item becomes current; delete a final item and confirm the viewer
+  dismisses safely. Confirm actions never target an adjacent item.
+- Exercise corrupt or unreadable image/video fixtures and a low-storage video
+  preparation failure. Confirm the failure is scoped to the active item, does
+  not expose partial content, replaces the loading spinner with an actionable
+  failure state, and leaves retry, dismissal, deletion, and adjacent navigation
+  safe.
+- Enable VoiceOver. Confirm it announces the active title, Image or Video kind,
+  position such as "2 of 7," and usable Previous item and Next item controls;
+  confirm unavailable boundary controls are reported as unavailable.
+- Repeat the accepted mixed 26-item performance case. Scroll the gallery, open
+  and dismiss media repeatedly, and swipe through at least seven consecutive
+  items. Reject the candidate for new gallery lag, swipe hitching, runaway memory
+  growth, a crash, missing thumbnails, or delayed cleanup symptoms.
+
 ## Backup Verification Center
 
 Run these checks with a TestFlight-delivered candidate and disposable test
