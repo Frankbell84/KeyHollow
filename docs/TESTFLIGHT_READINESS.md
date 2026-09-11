@@ -12,10 +12,10 @@
   39 as the newest upload and no Build 40 record. The release workflow must
   still repeat its API-backed build-number check immediately before release.
 - Reproducible XcodeGen project generation with a pinned XcodeGen release and
-  pinned Xcode 26.0.1 (`17A400`) release toolchain. The local runner-correction
-  candidate moves both privileged release jobs to `macos-15` and makes them fail
-  before authentication unless the ARM64 runner, iOS 26.0 SDK, and matching
-  available runtime are all present. It is not active until reviewed and merged.
+  pinned Xcode 26.0.1 (`17A400`) release toolchain. The merged runner correction
+  places both privileged release jobs on `macos-15` and makes them fail before
+  authentication unless the ARM64 runner, iOS 26.0 SDK, and matching available
+  runtime are all present.
 - Release archive configuration present
 - Full simulator CI, security/lifecycle tests, and Swift CodeQL
 - Photos permission strings
@@ -75,9 +75,10 @@ These cannot be stored or guessed in source control and must be supplied through
 
 ## Build 40 candidate gate
 
-- The Build 40 preparation is merged through exact `main` commit
-  `569a5ef343c8a368676b054ef48443823d10fdd5`. The runner correction must remain
-  release-infrastructure and documentation only; it must not change application-
+- The runner-corrected Build 40 preparation is merged through exact `main`
+  commit `95cd9f9deb2f99fe5f5962cc5ac96c2a47d12f33`, whose complete main-push CI
+  run passed. The certificate-chain correction remains release infrastructure,
+  verifier coverage, and documentation only; it does not change application-
   runtime behavior.
 - `CURRENT_PROJECT_VERSION` must be exactly `40` for both the KeyHollow app and
   the KeyHollow Vault Thumbnail extension.
@@ -98,6 +99,15 @@ These cannot be stored or guessed in source control and must be supplied through
   Xcode 26.0.1. It signed and uploaded nothing. The isolated correction aligns
   both privileged workflows with the proven `macos-15` runner and adds an early
   fail-closed runtime check.
+- Protected no-upload run
+  [#34561820231](https://github.com/Frankbell84/KeyHollow/actions/runs/34561820231)
+  proved the corrected runner, completed App Store Connect authentication and
+  the unsigned archive, and then failed closed before signed export. The P12
+  imported successfully with one signing leaf and its ordinary CA chain, but
+  the workflow counted all three certificates as potential signers. The
+  isolated correction selects one non-CA leaf while still requiring one valid
+  code-signing identity, the pinned fingerprint, exact profiles, and all
+  post-export checks. The failed run signed and uploaded nothing.
 - The first distribution is `KeyHollow Internal` only. Family expansion needs
   a separate decision after the Backup Verification device checks pass.
 
