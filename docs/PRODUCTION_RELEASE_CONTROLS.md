@@ -105,7 +105,7 @@ their own change. `CODEOWNERS` still records ownership of sensitive paths.
 real independent reviewer is available, not while doing so would deadlock the
 sole owner.
 
-## Live control status (2026-09-10)
+## Live control status (2026-09-11)
 
 The following controls are now configured and were verified against GitHub:
 
@@ -159,8 +159,7 @@ the workflow incorrectly required one certificate total. No signed IPA or
 upload was produced. The isolated correction selects exactly one non-CA leaf
 from the P12 and independently requires exactly one valid code-signing identity
 matching the approved fingerprint. It does not weaken the Apple-team, profile,
-export, post-export, or cleanup checks and remains subject to protected PR and
-merged-main CI before another rehearsal.
+export, post-export, or cleanup checks.
 
 PR #55 merged that leaf-selection correction as exact `main` commit
 `015823d3ee69d8e52a668800ce9ee35d001221a8`; complete main-push CI run
