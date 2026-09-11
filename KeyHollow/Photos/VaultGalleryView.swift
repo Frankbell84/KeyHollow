@@ -787,7 +787,7 @@ struct VaultGalleryView: View {
 
             case .video:
                 if let active = videoPlayback.active,
-                   active.source.mediaNavigationID == item.id {
+                   VaultGalleryContentItem.generalFile(active.source).mediaNavigationID == item.id {
                     VaultEncryptedVideoPlayerView(
                         playback: active.playback,
                         showsChrome: false,
