@@ -209,7 +209,7 @@ public struct VaultSecureImageSurface: UIViewRepresentable {
     }
 
     public func makeUIView(context: Context) -> UIImageView {
-        let imageView = UIImageView()
+        let imageView = VaultSecureAspectFitImageView()
         imageView.backgroundColor = .clear
         imageView.clipsToBounds = true
         imageView.contentMode = .scaleAspectFit
@@ -224,10 +224,22 @@ public struct VaultSecureImageSurface: UIViewRepresentable {
     }
 
     public func updateUIView(_ imageView: UIImageView, context: Context) {
+        imageView.contentMode = .scaleAspectFit
+        imageView.clipsToBounds = true
         imageView.accessibilityLabel = accessibilityLabel
         imageView.image = context.coordinator.isAttached
             ? renderedImage.image
             : nil
+    }
+
+    public func sizeThatFits(
+        _ proposal: ProposedViewSize,
+        uiView: UIImageView,
+        context: Context
+    ) -> CGSize? {
+        guard let width = proposal.width,
+              let height = proposal.height else { return nil }
+        return CGSize(width: max(0, width), height: max(0, height))
     }
 
     public static func dismantleUIView(
@@ -263,6 +275,21 @@ public struct VaultSecureImageSurface: UIViewRepresentable {
             isAttached = false
             onImageReleased()
         }
+    }
+}
+
+/// UIImageView normally exposes the attached image's pixel dimensions as its
+/// intrinsic size. A secure preview attaches after SwiftUI has already laid out
+/// the placeholder, so that behavior can replace the fitted viewport with the
+/// decoded image's natural size and crop it from the top-left. The presentation
+/// surface instead accepts only the viewport proposed by SwiftUI.
+@MainActor
+final class VaultSecureAspectFitImageView: UIImageView {
+    override var intrinsicContentSize: CGSize {
+        CGSize(
+            width: UIView.noIntrinsicMetric,
+            height: UIView.noIntrinsicMetric
+        )
     }
 }
 
