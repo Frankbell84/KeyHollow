@@ -5,12 +5,11 @@
 - Native iOS target: KeyHollow
 - Bundle identifier: `com.keyhollow.app`
 - Minimum iOS version: 17.0
-- Version: 1.0; latest accepted internal binary is Build 39
-- Build 40 is the next source candidate for Backup Verification Center device
-  validation. It has not been signed, uploaded, processed, accepted, or assigned
-  to any tester group. A live App Store Connect check on 2026-09-10 showed Build
-  39 as the newest upload and no Build 40 record. The release workflow must
-  still repeat its API-backed build-number check immediately before release.
+- Version: 1.0; latest accepted internal binary is Build 40
+- Build 40 was produced from exact `main` commit
+  `54bd2d6887f3ca0e476339fce05e90dd59ba963f`, processed and validated by App
+  Store Connect, assigned only to `KeyHollow Internal`, and successfully
+  installed and device-tested by Frank.
 - Reproducible XcodeGen project generation with a pinned XcodeGen release and
   pinned Xcode 26.0.1 (`17A400`) release toolchain. The merged runner correction
   places both privileged release jobs on `macos-15` and makes them fail before
@@ -31,15 +30,15 @@ These cannot be stored or guessed in source control and must be supplied through
 2. Apple Developer Team `P38X56QHU9`. **Confirmed.**
 3. Registration of `com.keyhollow.app`. **Complete.**
 4. Apple Distribution certificate and App Store provisioning profiles for the
-   app and thumbnail extension. **The prior set delivered Build 39. A replacement
-   certificate, exportable P12, and both exact profiles are validated locally
-   and installed in the protected environment for Build 40. End-to-end signing
-   verification remains pending.**
+   app and thumbnail extension. **Complete. Replacement certificate
+   `4RU4X6GAGU`, its exportable P12, and both exact profiles passed protected
+   preflight, Build 40 upload, post-export verification, and the final post-
+   cutover preflight. Legacy certificate `2P45VCTJVL` is revoked.**
 5. App Store Connect record for KeyHollow (Apple ID `6807022780`). **Complete.**
 6. App Store Connect API access and upload key for the cloud release workflow.
-   **Replacement key `W3UF745JN4` is installed in the protected environment and
-   passed read-only authentication. Prior key `JD6P6X8C9A` remains active until
-   the complete cutover is proven.**
+   **Complete. Replacement key `W3UF745JN4` is installed in the protected
+   environment and passed authentication after cutover. Legacy key
+   `JD6P6X8C9A` is revoked.**
 
 ## Required product assets before external TestFlight/App Store review
 
@@ -69,58 +68,46 @@ These cannot be stored or guessed in source control and must be supplied through
    internal group.
 9. Complete `DEVICE_TEST_PLAN.md` on the TestFlight-delivered binary. Any
    failure returns to a new pull request and a new exact-commit validation.
-10. Retain the prior distribution certificate until replacement-signed Build 40
-    processes, installs, and launches successfully. Revoke prior API key
-    `JD6P6X8C9A` only as the final credential-cutover action.
+10. Retain prior credentials until the replacement-signed build processes,
+    installs, launches, and passes device testing. Build 40 completed this
+    sequence; legacy certificate `2P45VCTJVL` was revoked first and legacy API
+    key `JD6P6X8C9A` was revoked last.
 
-## Build 40 candidate gate
+## Build 40 acceptance evidence
 
-- The certificate-chain-corrected Build 40 preparation is merged through exact
-  `main` commit `015823d3ee69d8e52a668800ce9ee35d001221a8`, whose complete main-push
-  CI run passed. The remaining `codesign` extraction correction is release
-  infrastructure, verifier coverage, and documentation only; it does not
-  change application-runtime behavior.
-- `CURRENT_PROJECT_VERSION` must be exactly `40` for both the KeyHollow app and
-  the KeyHollow Vault Thumbnail extension.
-- Build 40 was absent from App Store Connect on 2026-09-10 and remains
-  provisional until the release workflow repeats that check immediately before
-  upload.
-- `main` protection, the `production-testflight` environment, its exact-main
-  deployment policy, required-reviewer gate, and random release guard are live.
-- All eight production credentials plus the environment-only guard are present
-  in the protected environment. Do not dispatch the upload workflow until the
-  two-pass no-upload preflight validates the signing material and proves there
-  is no repository-secret fallback.
-- Protected no-upload run
-  [#34556497300](https://github.com/Frankbell84/KeyHollow/actions/runs/34556497300)
-  passed every source, CI, environment, architecture, privacy, identity, and App
-  Store authentication gate, then failed before signing-material installation
-  because its `macos-26-arm64` image lacked the iOS 26.0 runtime required by
-  Xcode 26.0.1. It signed and uploaded nothing. The isolated correction aligns
-  both privileged workflows with the proven `macos-15` runner and adds an early
-  fail-closed runtime check.
-- Protected no-upload run
-  [#34561820231](https://github.com/Frankbell84/KeyHollow/actions/runs/34561820231)
-  proved the corrected runner, completed App Store Connect authentication and
-  the unsigned archive, and then failed closed before signed export. The P12
-  imported successfully with one signing leaf and its ordinary CA chain, but
-  the workflow counted all three certificates as potential signers. The
-  isolated correction selects one non-CA leaf while still requiring one valid
-  code-signing identity, the pinned fingerprint, exact profiles, and all
-  post-export checks. The failed run signed and uploaded nothing.
-- Protected no-upload run
-  [#34566854574](https://github.com/Frankbell84/KeyHollow/actions/runs/34566854574)
-  passed all gates through signed export and validation of both code
-  signatures. It then failed safely at the first of the two post-export leaf-
-  certificate extraction commands because the optional
-  `codesign --extract-certificates` output prefix was separated by a space
-  instead of bound with `=`. The final exact-leaf comparisons therefore did not
-  complete. Cleanup passed; the no-upload workflow could not publish, and
-  nothing was uploaded or retained. The isolated correction changes only those
-  two option bindings and adds exact-command regression coverage before another
-  rehearsal.
-- The first distribution is `KeyHollow Internal` only. Family expansion needs
-  a separate decision after the Backup Verification device checks pass.
+- PR [#56](https://github.com/Frankbell84/KeyHollow/pull/56) merged the exact
+  reviewed head `426768238433017ea11773220c3f61378d3f7cd3` as exact `main`
+  commit `54bd2d6887f3ca0e476339fce05e90dd59ba963f`. PR CI run
+  [#34569439188](https://github.com/Frankbell84/KeyHollow/actions/runs/34569439188)
+  and merged-main CI run
+  [#34595760793](https://github.com/Frankbell84/KeyHollow/actions/runs/34595760793)
+  passed all required checks.
+- Protected preflight
+  [#34598236304](https://github.com/Frankbell84/KeyHollow/actions/runs/34598236304)
+  first passed end to end. After all eight repository-scoped production-secret
+  copies were removed, preflight
+  [#34600941660](https://github.com/Frankbell84/KeyHollow/actions/runs/34600941660)
+  proved environment-only operation.
+- Protected upload
+  [#34602241254](https://github.com/Frankbell84/KeyHollow/actions/runs/34602241254)
+  completed with Apple's `UPLOAD SUCCEEDED` result. App Store Connect reports
+  Build 40 as validated and assigned only to `KeyHollow Internal`; no Family or
+  external assignment was made.
+- Frank installed and device-tested Build 40 successfully, including the Backup
+  Verification flow.
+- Legacy certificate `2P45VCTJVL` and legacy API key `JD6P6X8C9A` were revoked
+  after device acceptance. Replacement certificate `4RU4X6GAGU` and key
+  `W3UF745JN4` remain active.
+- Final post-cutover preflight
+  [#34610956286](https://github.com/Frankbell84/KeyHollow/actions/runs/34610956286)
+  passed all 25 steps, including App Store Connect authentication, exact source,
+  protected-environment policy, architecture and privacy gates, replacement-
+  only signing, signed-IPA inspection, and cleanup. It uploaded or retained
+  nothing.
+- The legacy-signed Build 39 binary is not a dependable rollback after
+  certificate revocation. Rollback now means producing a new higher-numbered
+  build from an approved source revision using the protected replacement
+  credentials.
 
 ## External TestFlight gate
 
