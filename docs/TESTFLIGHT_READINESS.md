@@ -12,7 +12,10 @@
   39 as the newest upload and no Build 40 record. The release workflow must
   still repeat its API-backed build-number check immediately before release.
 - Reproducible XcodeGen project generation with a pinned XcodeGen release and
-  pinned Xcode 26.0.1 release toolchain
+  pinned Xcode 26.0.1 (`17A400`) release toolchain. The local runner-correction
+  candidate moves both privileged release jobs to `macos-15` and makes them fail
+  before authentication unless the ARM64 runner, iOS 26.0 SDK, and matching
+  available runtime are all present. It is not active until reviewed and merged.
 - Release archive configuration present
 - Full simulator CI, security/lifecycle tests, and Swift CodeQL
 - Photos permission strings
@@ -30,7 +33,8 @@ These cannot be stored or guessed in source control and must be supplied through
 4. Apple Distribution certificate and App Store provisioning profiles for the
    app and thumbnail extension. **The prior set delivered Build 39. A replacement
    certificate, exportable P12, and both exact profiles are validated locally
-   for Build 40 and await protected-environment installation and preflight.**
+   and installed in the protected environment for Build 40. End-to-end signing
+   verification remains pending.**
 5. App Store Connect record for KeyHollow (Apple ID `6807022780`). **Complete.**
 6. App Store Connect API access and upload key for the cloud release workflow.
    **Replacement key `W3UF745JN4` is installed in the protected environment and
@@ -71,9 +75,9 @@ These cannot be stored or guessed in source control and must be supplied through
 
 ## Build 40 candidate gate
 
-- The candidate must remain a release-infrastructure, configuration, and
-  documentation-only change from merged `main` commit
-  `de170c3e2f6a937362b39bc849302dd424476482`; it must not change application-
+- The Build 40 preparation is merged through exact `main` commit
+  `569a5ef343c8a368676b054ef48443823d10fdd5`. The runner correction must remain
+  release-infrastructure and documentation only; it must not change application-
   runtime behavior.
 - `CURRENT_PROJECT_VERSION` must be exactly `40` for both the KeyHollow app and
   the KeyHollow Vault Thumbnail extension.
@@ -82,12 +86,18 @@ These cannot be stored or guessed in source control and must be supplied through
   upload.
 - `main` protection, the `production-testflight` environment, its exact-main
   deployment policy, required-reviewer gate, and random release guard are live.
-- A fresh random `KEYCHAIN_PASSWORD` and the three replacement App Store
-  Connect API secrets are present in the environment. Four signing secrets
-  remain to be installed. Do not dispatch the upload workflow until all eight
-  production credentials plus the environment-only guard have been validated
-  and the two-pass no-upload preflight has proven there is no repository-secret
-  fallback.
+- All eight production credentials plus the environment-only guard are present
+  in the protected environment. Do not dispatch the upload workflow until the
+  two-pass no-upload preflight validates the signing material and proves there
+  is no repository-secret fallback.
+- Protected no-upload run
+  [#34556497300](https://github.com/Frankbell84/KeyHollow/actions/runs/34556497300)
+  passed every source, CI, environment, architecture, privacy, identity, and App
+  Store authentication gate, then failed before signing-material installation
+  because its `macos-26-arm64` image lacked the iOS 26.0 runtime required by
+  Xcode 26.0.1. It signed and uploaded nothing. The isolated correction aligns
+  both privileged workflows with the proven `macos-15` runner and adds an early
+  fail-closed runtime check.
 - The first distribution is `KeyHollow Internal` only. Family expansion needs
   a separate decision after the Backup Verification device checks pass.
 

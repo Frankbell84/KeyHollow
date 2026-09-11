@@ -7,9 +7,18 @@ evidence remains in `docs/PROJECT_CHECKPOINT.md`.
 
 ## Provenance
 
-- Current local release-candidate branch:
-  `release/build40-backup-verification`, in a separate worktree rooted exactly
-  from `origin/main` at `de170c3e2f6a937362b39bc849302dd424476482`.
+- Current local release-runner correction branch:
+  `hardening/build40-runner-platform`, rooted exactly from `origin/main` at
+  `569a5ef343c8a368676b054ef48443823d10fdd5`.
+- PR [#53](https://github.com/Frankbell84/KeyHollow/pull/53) merged the exact
+  approved Build 40 preparation head
+  `ed7e2019f07caec7fac43489aed7184f8040303b` through regular merge commit
+  `569a5ef343c8a368676b054ef48443823d10fdd5`.
+- The merge tree `7782889f621f74be2b30a1eabf00a371ed4a6fe8` is
+  byte-for-byte identical to the approved Build 40 preparation tree.
+- Exact Build 40 merged-main CI run:
+  [#34554039223](https://github.com/Frankbell84/KeyHollow/actions/runs/34554039223)
+  passed `build-and-test` and Swift CodeQL with zero annotations.
 - Published phase-entry checkpoint: `6abc6ed`.
 - Published implementation checkpoint:
   `d6d87f39f0c5fee35f7cc05333955ef86046cb7e`.
@@ -59,12 +68,11 @@ evidence remains in `docs/PROJECT_CHECKPOINT.md`.
 
 ## Current task
 
-Prepare a release-only Build 40 candidate from exact merged `main` without
-changing application behavior. Keep the diff limited to both synchronized build
-numbers, release workflow and verifier hardening, current operational status,
-TestFlight readiness, and the physical-device Backup Verification checklist. Do
-not push, merge, sign, upload, or assign testers until each later gate receives
-its own action-time approval.
+Correct the privileged release runner from exact merged Build 40 `main` without
+changing application behavior, archive format, signing identities, or upload
+logic. Keep the correction limited to both protected release workflows, their
+fail-closed verifier, and current operational documentation. Then repeat the
+protected no-upload signing rehearsal before any credential deletion or upload.
 
 ## Completed work
 
@@ -382,7 +390,8 @@ There is no open P1/P2 review finding, known production-code defect, active
 Git-helper blocker, or failed required repository check on the merged Backup
 Verification Center implementation.
 
-Release remains blocked, but the major external control gap has been closed.
+Release remains blocked at the no-upload signing rehearsal, but the major
+external control gap has been closed.
 On 2026-09-10, `main` protection and the `production-testflight` environment
 were configured and verified live. The environment is exact-`main` only, has a
 required reviewer with administrator bypass disabled, and contains the random
@@ -393,16 +402,28 @@ Build-40/latest-39 lookup. Prior key `JD6P6X8C9A` remains active as a rollback
 credential until the complete cutover is proven.
 
 The replacement Apple Distribution certificate, exportable P12, and exact app
-and thumbnail-extension App Store profiles have been generated and validated
-locally. The reviewed release source pins certificate SHA-1
+and thumbnail-extension App Store profiles have been generated, validated
+locally, and installed in the protected environment. All nine expected
+environment-secret names are present: the environment-only guard plus all eight
+production credentials. The reviewed release source pins certificate SHA-1
 `7E2342E196D2A56E95A05BCBDD473FE3799B7EDD`, app-profile UUID
 `b9a24dc9-04a3-40e1-b0e3-fe7538e6e341`, and thumbnail-profile UUID
 `c9564b6f-22cd-490b-9f59-f91e98a4a065`; these are public binding identifiers,
-not secrets. The materials remain non-production until their four environment
-secrets are installed and the protected no-upload signing preflight passes.
-Build 40 remains only a candidate even though App Store Connect showed the
-number unused on 2026-09-10. Physical-device Backup Verification testing remains
-mandatory after any separately approved Internal upload.
+not secrets.
+
+The first protected no-upload run
+[#34556497300](https://github.com/Frankbell84/KeyHollow/actions/runs/34556497300)
+proved the exact-main, CI, environment, hygiene, architecture, verifier, privacy,
+identity, project-generation, and App Store Connect authentication gates. It
+then stopped before signing-material installation, export, IPA validation, or
+upload because GitHub's `macos-26-arm64` image `20260907.0351.1` did not contain
+the iOS 26.0 runtime required by pinned Xcode 26.0.1. No binary was signed or
+published. The isolated correction moves only the two privileged workflows to
+the same `macos-15-arm64` image family already proven by exact-main CI and adds
+fail-closed architecture, Xcode-build, SDK, and runtime checks before external
+authentication. Build 40 remains only a candidate even though App Store Connect
+showed the number unused on 2026-09-10. Physical-device Backup Verification
+testing remains mandatory after any separately approved Internal upload.
 
 ## Required external GitHub controls
 
@@ -413,13 +434,10 @@ Before the next production TestFlight upload, the following status applies:
    branch.
 3. **Complete:** a nonempty environment-only `PRODUCTION_RELEASE_GUARD`
    secret.
-4. **Partially complete:** `KEYCHAIN_PASSWORD` and all three App Store Connect
-   API secrets are present. These four production signing secrets remain open
-   in that environment:
-   - `BUILD_CERTIFICATE_BASE64`
-   - `BUILD_PROVISION_PROFILE_BASE64`
-   - `P12_PASSWORD`
-   - `THUMBNAIL_PROVISION_PROFILE_BASE64`
+4. **Complete:** all eight production credentials and the environment-only
+   guard are present in `production-testflight`. GitHub exposes names and update
+   times, not stored values; the protected preflight must still prove the four
+   signing values end to end.
 5. **Complete:** protected `main` requiring pull requests, an up-to-date branch, conversation
    resolution, and the exact `build-and-test`, `CodeQL (Swift)`, and GitHub
    Advanced Security `CodeQL` checks, with administrator bypass, force pushes,
@@ -445,35 +463,30 @@ only boundary.
 
 ## Next action
 
-1. Review this local release-infrastructure/configuration/documentation-only
-   Build 40 candidate and require all local gates to pass without any
-   application-runtime source change.
-2. Install the four locally validated signing secrets in
-   `production-testflight` and verify all nine environment-secret names: the
-   environment-only guard plus all eight production credentials.
+1. Review and publish the isolated runner correction through a normal pull
+   request; require complete PR CI, merge only the approved exact head, and
+   require complete main-push CI. No application-runtime source may change.
+2. Run `Verify KeyHollow Release Signing` on the corrected exact merged-main
+   commit. It must authenticate to App Store Connect, create the unsigned
+   archive, install and validate the replacement signing material, export and
+   inspect the signed IPA, and finish without an upload or publication action.
 3. **Complete for candidate preparation:** App Store Connect showed Build 39 as
    the newest upload and no Build 40 record on 2026-09-10. The release workflow
    must repeat this check immediately before upload.
-4. Publish this candidate through a normal pull request, require complete PR
-   CI, merge only the approved exact head, and require complete main-push CI.
-5. Run `Verify KeyHollow Release Signing` on the exact merged-main commit. It
-   must authenticate to App Store Connect, validate and use the new signing
-   material to create an unsigned archive, then export and inspect the signed
-   IPA, and finish without an upload or publication action.
-6. Only after that first preflight passes, remove the eight repository-scoped
+4. Only after that first preflight passes, remove the eight repository-scoped
    production-credential copies and rerun the same preflight. The second run
    must prove the protected environment is the only credential source.
-7. Only if Build 40 is unused, obtain explicit
+5. Only if Build 40 is unused, obtain explicit
    authorization naming the full merged-main SHA, Build 40, and
    `KeyHollow Internal` only.
-8. Verify the signed workflow, retained IPA digest, App Store Connect processing,
+6. Verify the signed workflow, retained IPA digest, App Store Connect processing,
    and Internal-only assignment; then execute the Backup Verification section of
    `docs/DEVICE_TEST_PLAN.md` on a physical iPhone.
-9. Retain the prior Apple Distribution certificate until the replacement has
+7. Retain the prior Apple Distribution certificate until the replacement has
    produced a processed Build 40 that installs and launches successfully. Keep
    API key `JD6P6X8C9A` available through the entire rollback window and revoke
    it only as the final credential-cutover action.
-10. Do not expand to Family or external testers without a separate decision after
+8. Do not expand to Family or external testers without a separate decision after
    the Internal checks pass.
 
 ## Frank's decisions required

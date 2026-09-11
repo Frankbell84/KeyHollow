@@ -34,9 +34,10 @@ Before the next production upload:
    commit. This preflight must authenticate, archive, export, and validate the
    signed product without uploading or publishing it.
 8. Only after that first preflight passes, remove the repository-scoped copies
-   of the eight production credentials and the retired beta credential, then
-   rerun the same preflight. The second run must prove no release path can fall
-   back to repository-scoped production secrets.
+   of the eight production credentials, then rerun the same preflight. The
+   second run must prove no release path can fall back to repository-scoped
+   production secrets. The retired beta credential is outside this cutover and
+   requires its own explicit cleanup decision.
 9. Keep replaced Apple credentials available through the rollback window. Do
    not retire the prior distribution certificate until a replacement-signed
    Build 40 is processed, installed, and launched successfully. Revoke the old
@@ -62,6 +63,11 @@ their own change. `CODEOWNERS` still records ownership of sensitive paths.
   and assets declared by their catalog metadata; stray resources and symlinks fail.
 - CI has read-only token permissions except for the CodeQL result upload.
 - Production upload is manual, serialized, and restricted to `main`.
+- The Build 40 runner-correction candidate moves both privileged release jobs
+  to the same `macos-15-arm64` image family and pinned Xcode 26.0.1 build as
+  validation CI. If merged, they will fail before App Store authentication
+  unless the runner architecture, iOS 26.0 SDK, and matching available runtime
+  are all exact.
 - The selected commit must be a lowercase 40-character SHA and must equal the
   checked-out workflow commit.
 - The same SHA must have a successful complete CI run produced by a push to
@@ -127,10 +133,23 @@ The replacement Apple Distribution certificate, exportable P12, and exact app
 and thumbnail-extension App Store profiles have been validated locally. Their
 four environment secrets—`BUILD_CERTIFICATE_BASE64`,
 `BUILD_PROVISION_PROFILE_BASE64`, `P12_PASSWORD`, and
-`THUMBNAIL_PROVISION_PROFILE_BASE64`—are not yet present. Repository-scoped
-fallback copies remain in place so no credential has been destroyed. They must
-not be removed until all environment copies pass the first no-upload preflight;
-the same preflight must then pass again after removal.
+`THUMBNAIL_PROVISION_PROFILE_BASE64`—are present, so all nine expected
+environment-secret names are installed. Repository-scoped fallback copies
+remain in place so no credential has been destroyed. They must not be removed
+until all environment copies pass the first no-upload preflight; the same
+preflight must then pass again after removal.
+
+The first protected no-upload attempt
+[#34556497300](https://github.com/Frankbell84/KeyHollow/actions/runs/34556497300)
+passed exact-source CI, live-environment, security, privacy, identity, project-
+generation, and App Store authentication gates. It stopped at the unsigned
+archive before signing material was installed because its `macos-26-arm64`
+image lacked the iOS 26.0 runtime required by pinned Xcode 26.0.1. No signing,
+export, upload, or publication occurred. The local correction candidate changes
+only the privileged runner to `macos-15` and adds explicit fail-closed toolchain
+and runtime assertions; it does not change application, signing, or upload
+logic. It still requires pull-request CI, exact-head approval, merge, and
+merged-main CI before another preflight.
 
 The reviewed release-workflow source pins the approved rotation identities:
 App Store Connect key `W3UF745JN4`, issuer

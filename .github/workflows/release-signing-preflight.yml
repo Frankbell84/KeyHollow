@@ -19,7 +19,7 @@ concurrency:
 jobs:
   sign-without-upload:
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
-    runs-on: macos-26
+    runs-on: macos-15
     timeout-minutes: 30
     environment: production-testflight
     env:
@@ -64,7 +64,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          test "$(uname -m)" = 'arm64'
           test "$(xcodebuild -version | sed -n '1p')" = 'Xcode 26.0.1'
+          test "$(xcodebuild -version | sed -n '2p')" = 'Build version 17A400'
+          test "$(xcrun --sdk iphoneos --show-sdk-version)" = '26.0'
+          python3 -I -c 'import json, subprocess, sys; runtimes = json.loads(subprocess.check_output(["xcrun", "simctl", "list", "runtimes", "available", "-j"])); available = any(runtime.get("identifier") == "com.apple.CoreSimulator.SimRuntime.iOS-26-0" and runtime.get("isAvailable") for runtime in runtimes.get("runtimes", [])); print("Verified available iOS 26.0 runtime." if available else "Required iOS 26.0 runtime is unavailable."); sys.exit(0 if available else 1)'
 
       - name: Verify exact-source CI succeeded
         env:
