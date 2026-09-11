@@ -5,6 +5,7 @@ import XCTest
 @testable import KeyHollow
 @testable import KeyHollowGalleryUI
 @testable import KeyHollowGeneralFileSupportAddOn
+@testable import KeyHollowMediaNavigationAddOn
 @testable import KeyHollowPhotoCore
 
 final class VaultGalleryPresentationTests: XCTestCase {
@@ -336,6 +337,220 @@ final class VaultGalleryPresentationTests: XCTestCase {
             VaultGalleryContentItem.generalFile(video).openRoute,
             .videoPlayback
         )
+    }
+
+    func testMediaNavigationIdentityKeepsPhotoAndFileWithSharedUUIDDistinct() throws {
+        let sharedID = UUID()
+        let importedAt = Date(timeIntervalSinceReferenceDate: 300)
+        let photo = VaultGalleryContentItem.photo(VaultPhotoRecord(
+            id: sharedID,
+            importedAt: importedAt,
+            blobName: "photo.khp",
+            thumbnailName: "photo.kht",
+            displayName: "Shared.jpg",
+            originalByteCount: 1_024
+        ))
+        let file = VaultGalleryContentItem.generalFile(VaultGeneralFileRecord(
+            id: sharedID,
+            importedAt: importedAt.addingTimeInterval(-1),
+            displayName: "Shared.jpg",
+            contentTypeIdentifier: "public.jpeg",
+            originalByteCount: 1_024,
+            blobName: "file.khg"
+        ))
+        let snapshot = VaultGalleryContentSnapshot(items: [photo, file])
+
+        XCTAssertNotEqual(photo.mediaNavigationID, file.mediaNavigationID)
+        XCTAssertEqual(snapshot.mediaNavigationItems.count, 2)
+        XCTAssertEqual(snapshot.mediaNavigationSourceByID.count, 2)
+        XCTAssertEqual(
+            snapshot.mediaNavigationSourceByID[photo.mediaNavigationID],
+            photo
+        )
+        XCTAssertEqual(
+            snapshot.mediaNavigationSourceByID[file.mediaNavigationID],
+            file
+        )
+    }
+
+    func testMediaNavigationPreservesVisibleGalleryOrdering() {
+        let oldestPhoto = VaultGalleryContentItem.photo(VaultPhotoRecord(
+            id: UUID(),
+            importedAt: Date(timeIntervalSinceReferenceDate: 100),
+            blobName: "old.khp",
+            thumbnailName: "old.kht",
+            displayName: "Old.jpg",
+            originalByteCount: 100
+        ))
+        let newestVideo = VaultGalleryContentItem.generalFile(VaultGeneralFileRecord(
+            id: UUID(),
+            importedAt: Date(timeIntervalSinceReferenceDate: 300),
+            displayName: "Newest.mp4",
+            contentTypeIdentifier: "public.mpeg-4",
+            originalByteCount: 300,
+            blobName: "new.khg"
+        ))
+        let middleImage = VaultGalleryContentItem.generalFile(VaultGeneralFileRecord(
+            id: UUID(),
+            importedAt: Date(timeIntervalSinceReferenceDate: 200),
+            displayName: "Middle.png",
+            contentTypeIdentifier: "public.png",
+            originalByteCount: 200,
+            blobName: "middle.khg"
+        ))
+        let snapshot = VaultGalleryContentSnapshot(
+            items: [oldestPhoto, newestVideo, middleImage]
+        )
+
+        XCTAssertEqual(
+            snapshot.mediaNavigationItems.map(\.id),
+            [
+                newestVideo.mediaNavigationID,
+                middleImage.mediaNavigationID,
+                oldestPhoto.mediaNavigationID
+            ]
+        )
+    }
+
+    func testMediaNavigationIncludesPhotosFileImagesAndSupportedVideos() {
+        let photo = VaultGalleryContentItem.photo(VaultPhotoRecord(
+            id: UUID(),
+            importedAt: Date(timeIntervalSinceReferenceDate: 300),
+            blobName: "photo.khp",
+            thumbnailName: "photo.kht",
+            displayName: "Photo.heic",
+            originalByteCount: 300
+        ))
+        let fileImage = VaultGalleryContentItem.generalFile(VaultGeneralFileRecord(
+            id: UUID(),
+            importedAt: Date(timeIntervalSinceReferenceDate: 200),
+            displayName: "Image.jpeg",
+            contentTypeIdentifier: "public.jpeg",
+            originalByteCount: 200,
+            blobName: "image.khg"
+        ))
+        let video = VaultGalleryContentItem.generalFile(VaultGeneralFileRecord(
+            id: UUID(),
+            importedAt: Date(timeIntervalSinceReferenceDate: 100),
+            displayName: "Clip.mov",
+            contentTypeIdentifier: "com.apple.quicktime-movie",
+            originalByteCount: 100,
+            blobName: "video.khg"
+        ))
+        let snapshot = VaultGalleryContentSnapshot(items: [video, photo, fileImage])
+
+        XCTAssertEqual(
+            snapshot.mediaNavigationItems.map(\.id),
+            [
+                photo.mediaNavigationID,
+                fileImage.mediaNavigationID,
+                video.mediaNavigationID
+            ]
+        )
+        XCTAssertEqual(
+            snapshot.mediaNavigationItems.map(\.kind),
+            [.image, .image, .video]
+        )
+    }
+
+    func testMediaNavigationExcludesNonMediaFiles() {
+        let photo = VaultGalleryContentItem.photo(VaultPhotoRecord(
+            id: UUID(),
+            importedAt: Date(timeIntervalSinceReferenceDate: 200),
+            blobName: "photo.khp",
+            thumbnailName: "photo.kht",
+            displayName: "Photo.jpg",
+            originalByteCount: 200
+        ))
+        let pdf = VaultGalleryContentItem.generalFile(VaultGeneralFileRecord(
+            id: UUID(),
+            importedAt: Date(timeIntervalSinceReferenceDate: 300),
+            displayName: "Document.pdf",
+            contentTypeIdentifier: "com.adobe.pdf",
+            originalByteCount: 300,
+            blobName: "document.khg"
+        ))
+        let snapshot = VaultGalleryContentSnapshot(items: [pdf, photo])
+
+        XCTAssertEqual(snapshot.mediaNavigationItems.map(\.id), [photo.mediaNavigationID])
+        XCTAssertNil(snapshot.mediaNavigationSourceByID[pdf.mediaNavigationID])
+    }
+
+    func testMediaNavigationQueueUsesOnlyTheSuppliedVisibleFolderSnapshot() throws {
+        let rootPhoto = VaultGalleryContentItem.photo(VaultPhotoRecord(
+            id: UUID(),
+            importedAt: Date(timeIntervalSinceReferenceDate: 400),
+            blobName: "root.khp",
+            thumbnailName: "root.kht",
+            displayName: "Root.jpg",
+            originalByteCount: 400
+        ))
+        let folderPhoto = VaultGalleryContentItem.photo(VaultPhotoRecord(
+            id: UUID(),
+            importedAt: Date(timeIntervalSinceReferenceDate: 300),
+            blobName: "folder.khp",
+            thumbnailName: "folder.kht",
+            displayName: "Folder.jpg",
+            originalByteCount: 300
+        ))
+        let folderVideo = VaultGalleryContentItem.generalFile(VaultGeneralFileRecord(
+            id: UUID(),
+            importedAt: Date(timeIntervalSinceReferenceDate: 200),
+            displayName: "Folder.mp4",
+            contentTypeIdentifier: "public.mpeg-4",
+            originalByteCount: 200,
+            blobName: "folder-video.khg"
+        ))
+        let visibleFolderSnapshot = VaultGalleryContentSnapshot(
+            items: [folderVideo, folderPhoto]
+        )
+
+        let queue = try visibleFolderSnapshot.mediaNavigationQueue(
+            startingAt: folderPhoto.mediaNavigationID
+        )
+
+        XCTAssertEqual(
+            queue.items.map(\.id),
+            [folderPhoto.mediaNavigationID, folderVideo.mediaNavigationID]
+        )
+        XCTAssertFalse(queue.items.map(\.id).contains(rootPhoto.mediaNavigationID))
+    }
+
+    func testMediaNavigationQueueStartsAtTappedVisibleItem() throws {
+        let newest = VaultGalleryContentItem.photo(VaultPhotoRecord(
+            id: UUID(),
+            importedAt: Date(timeIntervalSinceReferenceDate: 300),
+            blobName: "newest.khp",
+            thumbnailName: "newest.kht",
+            displayName: "Newest.jpg",
+            originalByteCount: 300
+        ))
+        let tapped = VaultGalleryContentItem.generalFile(VaultGeneralFileRecord(
+            id: UUID(),
+            importedAt: Date(timeIntervalSinceReferenceDate: 200),
+            displayName: "Tapped.mp4",
+            contentTypeIdentifier: "public.mpeg-4",
+            originalByteCount: 200,
+            blobName: "tapped.khg"
+        ))
+        let oldest = VaultGalleryContentItem.photo(VaultPhotoRecord(
+            id: UUID(),
+            importedAt: Date(timeIntervalSinceReferenceDate: 100),
+            blobName: "oldest.khp",
+            thumbnailName: "oldest.kht",
+            displayName: "Oldest.jpg",
+            originalByteCount: 100
+        ))
+        let snapshot = VaultGalleryContentSnapshot(items: [oldest, newest, tapped])
+
+        let queue = try snapshot.mediaNavigationQueue(
+            startingAt: tapped.mediaNavigationID
+        )
+
+        XCTAssertEqual(queue.selectedID, tapped.mediaNavigationID)
+        XCTAssertEqual(queue.currentItem.id, tapped.mediaNavigationID)
+        XCTAssertEqual(queue.currentIndex, 1)
+        XCTAssertEqual(queue.currentPosition, 2)
     }
 
     func testImageDeclarationKeepsPreviewPrecedenceOverVideoFilename() {

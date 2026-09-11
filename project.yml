@@ -164,6 +164,20 @@ targets:
         DEFINES_MODULE: YES
         SKIP_INSTALL: YES
 
+  KeyHollowMediaNavigationAddOn:
+    type: library.static
+    platform: iOS
+    sources:
+      - path: KeyHollow/AddOns/MediaNavigation
+    settings:
+      base:
+        PRODUCT_NAME: KeyHollowMediaNavigationAddOn
+        SWIFT_VERSION: 5.0
+        SWIFT_STRICT_CONCURRENCY: complete
+        SWIFT_TREAT_WARNINGS_AS_ERRORS: YES
+        DEFINES_MODULE: YES
+        SKIP_INSTALL: YES
+
   KeyHollowEncryptedVideoAddOn:
     type: library.static
     platform: iOS
@@ -238,6 +252,7 @@ targets:
           - AddOns/EncryptedVideo
           - AddOns/FolderPresentation
           - AddOns/SecurePreview
+          - AddOns/MediaNavigation
           - UI/VaultGalleryGridView.swift
           - UI/VaultGalleryTilePresentation.swift
           - UI/VaultFolderPresentationViews.swift
@@ -270,6 +285,7 @@ targets:
       - target: KeyHollowEncryptedVideoAddOn
       - target: KeyHollowFolderPresentationAddOn
       - target: KeyHollowGalleryUI
+      - target: KeyHollowMediaNavigationAddOn
       - target: KeyHollowSecurePreviewAddOn
       - target: KeyHollowCryptoCore
       - target: KeyHollowPhotoCore
@@ -338,6 +354,8 @@ targets:
         link: false
       - target: KeyHollowGalleryUI
         link: false
+      - target: KeyHollowMediaNavigationAddOn
+        link: false
       - target: KeyHollowSecurePreviewAddOn
         link: false
       - target: KeyHollowCryptoCore
@@ -379,6 +397,7 @@ schemes:
         KeyHollowEncryptedVideoAddOn: all
         KeyHollowFolderPresentationAddOn: all
         KeyHollowGalleryUI: all
+        KeyHollowMediaNavigationAddOn: all
         KeyHollowSecurePreviewAddOn: all
         KeyHollowCryptoCore: all
         KeyHollowPhotoCore: all

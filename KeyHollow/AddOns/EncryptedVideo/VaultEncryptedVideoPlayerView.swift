@@ -145,6 +145,7 @@ final class VaultEncryptedVideoPlayerFailureMonitor: @unchecked Sendable {
 @MainActor
 public struct VaultEncryptedVideoPlayerView: View {
     private let playback: VaultPreparedVideoPlayback
+    private let showsChrome: Bool
     private let onPlayerWillAttach: () -> Bool
     private let onPlayerReleased: () -> Void
     private let onDismiss: () -> Void
@@ -154,12 +155,14 @@ public struct VaultEncryptedVideoPlayerView: View {
 
     public init(
         playback: VaultPreparedVideoPlayback,
+        showsChrome: Bool = true,
         onPlayerWillAttach: @escaping () -> Bool = { true },
         onPlayerReleased: @escaping () -> Void = {},
         onDismiss: @escaping () -> Void,
         onFailure: ((VaultPreparedVideoPlaybackError) -> Void)? = nil
     ) {
         self.playback = playback
+        self.showsChrome = showsChrome
         self.onPlayerWillAttach = onPlayerWillAttach
         self.onPlayerReleased = onPlayerReleased
         self.onDismiss = onDismiss
@@ -180,25 +183,27 @@ public struct VaultEncryptedVideoPlayerView: View {
             }
         }
         .safeAreaInset(edge: .top) {
-            HStack {
-                Button("Done", action: dismiss)
+            if showsChrome {
+                HStack {
+                    Button("Done", action: dismiss)
 
-                Spacer()
+                    Spacer()
 
-                Text(playback.descriptor.displayName)
-                    .font(.headline)
-                    .lineLimit(1)
+                    Text(playback.descriptor.displayName)
+                        .font(.headline)
+                        .lineLimit(1)
 
-                Spacer()
+                    Spacer()
 
-                // Keeps the title centered relative to the leading control.
-                Color.clear
-                    .frame(width: 44, height: 1)
-                    .accessibilityHidden(true)
+                    // Keeps the title centered relative to the leading control.
+                    Color.clear
+                        .frame(width: 44, height: 1)
+                        .accessibilityHidden(true)
+                }
+                .padding(.horizontal)
+                .padding(.vertical, 10)
+                .background(.ultraThinMaterial)
             }
-            .padding(.horizontal)
-            .padding(.vertical, 10)
-            .background(.ultraThinMaterial)
         }
         .task(id: playback.id) {
             let didAcquirePlayerLease = await installAndMonitorPlayer()
