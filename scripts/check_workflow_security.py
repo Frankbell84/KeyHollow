@@ -188,13 +188,13 @@ RELEASE_WORKFLOW_SHA256: dict[str, str] = {
         "9554afac60a5dc035799c25f30231f7685484025501d2cea25258c19d2a2e304"
     ),
     "release-signing-preflight.yml": (
-        "1e81dbfc985c2ae6694600c9d39c8187ae6e957075cf846db3c7b1bfef57ab34"
+        "6a69fff1f1d897bb9fb36aacf250851ed81b556c499e0a231f7e43af8e46506c"
     ),
     "testflight-beta.yml": (
         "2aed9c97ea63adecbb29632b24e0286d20eb6812ea4aeb337880b16a2669e326"
     ),
     "testflight.yml": (
-        "2c71e5c3bb2a0015b7e63496fc2220a8161dafd1cc2fd96c5c5242e1753645fa"
+        "6c35e949b23651f38d7005a6fcba8194209dad839b6e1be05888d7ef4a92d687"
     ),
 }
 
@@ -208,11 +208,29 @@ RELEASE_JOB_ENTRIES = [
         "if",
         "github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'",
     ),
-    ("runs-on", "macos-26"),
+    ("runs-on", "macos-15"),
     ("timeout-minutes", "30"),
     ("environment", "production-testflight"),
     ("env", ""),
     ("steps", ""),
+]
+
+RELEASE_TOOLCHAIN_COMMAND_LINES = [
+    "set -euo pipefail",
+    "test \"$(uname -m)\" = 'arm64'",
+    "test \"$(xcodebuild -version | sed -n '1p')\" = 'Xcode 26.0.1'",
+    "test \"$(xcodebuild -version | sed -n '2p')\" = 'Build version 17A400'",
+    "test \"$(xcrun --sdk iphoneos --show-sdk-version)\" = '26.0'",
+    (
+        "python3 -I -c 'import json, subprocess, sys; runtimes = "
+        "json.loads(subprocess.check_output([\"xcrun\", \"simctl\", \"list\", "
+        "\"runtimes\", \"available\", \"-j\"])); available = any(runtime.get("
+        "\"identifier\") == \"com.apple.CoreSimulator.SimRuntime.iOS-26-0\" and "
+        "runtime.get(\"isAvailable\") for runtime in runtimes.get(\"runtimes\", "
+        "[])); print(\"Verified available iOS 26.0 runtime.\" if available else "
+        "\"Required iOS 26.0 runtime is unavailable.\"); sys.exit(0 if available "
+        "else 1)'"
+    ),
 ]
 
 FORBIDDEN_XCODEGEN_EXECUTION_KEYS = {
@@ -261,7 +279,7 @@ PREFLIGHT_STEP_NAMES = [
 PREFLIGHT_RUN_BODY_SHA256 = {
     "Verify workflow security": "6fb924cbeaaaeb9e4eaa88a1dd819a5d63a553df4aa9febe4216c2d5ce0e75b6",
     "Verify selected production commit": "f79d9bc2ae4d477cc5927d7c3bed7bbb93eb8292bc31cafef2e70d3053de8faf",
-    "Verify pinned Xcode toolchain": "26f034635684e5811a47e2246bd10c2d65ae2f3521368ac2b9f933a07ba23a49",
+    "Verify pinned Xcode toolchain": "d2738fe0838201c38d5bad975b7d63ddfa4d05fe9cc95ffbec701a1b9aa38d88",
     "Verify exact-source CI succeeded": "06d2a54e800c67827d496f4fef62257c73309dcd89a08d23bc8a86abe526daef",
     "Verify protected production environment": "c71086227ac10e021aa621ce7337839856e65e4816ff73e34c8860bdc90927af",
     "Verify release hygiene": "d4109ac97876499508b699a43ab8ef561dafc8b0e7e2d59ed524120e768fca16",
@@ -389,7 +407,7 @@ TESTFLIGHT_STEP_NAMES = [
 TESTFLIGHT_RUN_BODY_SHA256 = {
     "Verify workflow security": "6fb924cbeaaaeb9e4eaa88a1dd819a5d63a553df4aa9febe4216c2d5ce0e75b6",
     "Verify selected production commit": "f79d9bc2ae4d477cc5927d7c3bed7bbb93eb8292bc31cafef2e70d3053de8faf",
-    "Verify pinned Xcode toolchain": "26f034635684e5811a47e2246bd10c2d65ae2f3521368ac2b9f933a07ba23a49",
+    "Verify pinned Xcode toolchain": "d2738fe0838201c38d5bad975b7d63ddfa4d05fe9cc95ffbec701a1b9aa38d88",
     "Verify exact-source CI succeeded": "06d2a54e800c67827d496f4fef62257c73309dcd89a08d23bc8a86abe526daef",
     "Verify protected production environment": "c71086227ac10e021aa621ce7337839856e65e4816ff73e34c8860bdc90927af",
     "Verify release hygiene": "d4109ac97876499508b699a43ab8ef561dafc8b0e7e2d59ed524120e768fca16",
@@ -812,6 +830,12 @@ def collapse_shell_continuations(text: str) -> str:
 def named_step_block(text: str, step_name: str) -> str | None:
     matches = [block for name, block in workflow_step_blocks(text) if name == step_name]
     return matches[0] if len(matches) == 1 else None
+
+
+def release_toolchain_step_is_exact(text: str) -> bool:
+    block = named_step_block(text, "Verify pinned Xcode toolchain")
+    body = step_run_body(block) if block is not None else None
+    return body is not None and body.splitlines() == RELEASE_TOOLCHAIN_COMMAND_LINES
 
 
 def signing_secrets_unset_before_validator(step_block: str) -> bool:
@@ -1793,14 +1817,13 @@ def audit_testflight(text: str, release_source: str) -> list[str]:
     )
     require(
         violations,
-        text.count("runs-on: macos-26") == 1,
+        text.count("runs-on: macos-15") == 1,
         f"{name}: delivery must use the reviewed macOS runner image",
     )
     require(
         violations,
         "DEVELOPER_DIR: /Applications/Xcode_26.0.1.app/Contents/Developer" in text
-        and "test \"$(xcodebuild -version | sed -n '1p')\" = 'Xcode 26.0.1'"
-        in text,
+        and release_toolchain_step_is_exact(text),
         f"{name}: delivery must select and verify the reviewed Xcode toolchain",
     )
     for required in (
@@ -2105,7 +2128,7 @@ def audit_release_signing_preflight(
     )
     require(
         violations,
-        text.count("runs-on: macos-26") == 1
+        text.count("runs-on: macos-15") == 1
         and text.count("timeout-minutes: 30") == 1,
         f"{name}: preflight must use the reviewed bounded macOS runner",
     )
@@ -2115,10 +2138,7 @@ def audit_release_signing_preflight(
             "DEVELOPER_DIR: /Applications/Xcode_26.0.1.app/Contents/Developer"
         )
         == 1
-        and text.count(
-            "test \"$(xcodebuild -version | sed -n '1p')\" = 'Xcode 26.0.1'"
-        )
-        == 1,
+        and release_toolchain_step_is_exact(text),
         f"{name}: preflight must select and verify the reviewed Xcode toolchain",
     )
 
@@ -2667,6 +2687,21 @@ def self_test() -> int:
         )
     ) == "forbidden"
 
+    toolchain_fixture = (
+        "      - name: Verify pinned Xcode toolchain\n"
+        "        shell: bash\n"
+        "        run: |\n"
+        + "\n".join(f"          {line}" for line in RELEASE_TOOLCHAIN_COMMAND_LINES)
+    )
+    assert release_toolchain_step_is_exact(toolchain_fixture)
+    for command in RELEASE_TOOLCHAIN_COMMAND_LINES[1:]:
+        assert not release_toolchain_step_is_exact(
+            toolchain_fixture.replace(f"          {command}", f"          # {command}", 1)
+        )
+    assert not release_toolchain_step_is_exact(
+        toolchain_fixture.replace("iOS-26-0", "iOS-26-1", 1)
+    )
+
     release_structure_fixture = (
         "name: fixture\n"
         "on:\n"
@@ -2678,7 +2713,7 @@ def self_test() -> int:
         "  archive-and-upload:\n"
         "    if: github.event_name == 'workflow_dispatch' && "
         "github.ref == 'refs/heads/main'\n"
-        "    runs-on: macos-26\n"
+        "    runs-on: macos-15\n"
         "    timeout-minutes: 30\n"
         "    environment: production-testflight\n"
         "    env:\n"
@@ -2693,8 +2728,8 @@ def self_test() -> int:
             "    environment: unprotected # environment: production-testflight",
         ),
         (
-            "    runs-on: macos-26",
-            "    runs-on: self-hosted # runs-on: macos-26",
+            "    runs-on: macos-15",
+            "    runs-on: self-hosted # runs-on: macos-15",
         ),
         (
             "    env:",
