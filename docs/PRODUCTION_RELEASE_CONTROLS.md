@@ -105,7 +105,7 @@ their own change. `CODEOWNERS` still records ownership of sensitive paths.
 real independent reviewer is available, not while doing so would deadlock the
 sole owner.
 
-## Live control status (2026-09-10)
+## Live control status (2026-09-11)
 
 The following controls are now configured and were verified against GitHub:
 
@@ -159,8 +159,23 @@ the workflow incorrectly required one certificate total. No signed IPA or
 upload was produced. The isolated correction selects exactly one non-CA leaf
 from the P12 and independently requires exactly one valid code-signing identity
 matching the approved fingerprint. It does not weaken the Apple-team, profile,
-export, post-export, or cleanup checks and remains subject to protected PR and
-merged-main CI before another rehearsal.
+export, post-export, or cleanup checks.
+
+PR #55 merged that leaf-selection correction as exact `main` commit
+`015823d3ee69d8e52a668800ce9ee35d001221a8`; complete main-push CI run
+[#34564973012](https://github.com/Frankbell84/KeyHollow/actions/runs/34564973012)
+passed both required jobs with zero annotations. Protected no-upload run
+[#34566854574](https://github.com/Frankbell84/KeyHollow/actions/runs/34566854574)
+then passed every gate through signed IPA export and validation of both code
+signatures. It stopped safely during the final leaf-certificate extraction
+because the optional `codesign --extract-certificates` output prefix was passed
+as a separate token instead of being attached with `=`. The imported approved
+leaf and exact profiles had validated, and both products passed `codesign`
+structural and designated-requirement checks; the final byte-for-byte proof that
+each product used that exact leaf had not completed. Cleanup passed, the
+preflight contained no upload capability, and nothing was uploaded or retained.
+The follow-up correction is limited to the two extraction-option bindings plus
+fail-closed regression coverage for their exact command forms.
 
 The reviewed release-workflow source pins the approved rotation identities:
 App Store Connect key `W3UF745JN4`, issuer

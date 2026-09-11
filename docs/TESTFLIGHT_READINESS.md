@@ -75,11 +75,11 @@ These cannot be stored or guessed in source control and must be supplied through
 
 ## Build 40 candidate gate
 
-- The runner-corrected Build 40 preparation is merged through exact `main`
-  commit `95cd9f9deb2f99fe5f5962cc5ac96c2a47d12f33`, whose complete main-push CI
-  run passed. The certificate-chain correction remains release infrastructure,
-  verifier coverage, and documentation only; it does not change application-
-  runtime behavior.
+- The certificate-chain-corrected Build 40 preparation is merged through exact
+  `main` commit `015823d3ee69d8e52a668800ce9ee35d001221a8`, whose complete main-push
+  CI run passed. The remaining `codesign` extraction correction is release
+  infrastructure, verifier coverage, and documentation only; it does not
+  change application-runtime behavior.
 - `CURRENT_PROJECT_VERSION` must be exactly `40` for both the KeyHollow app and
   the KeyHollow Vault Thumbnail extension.
 - Build 40 was absent from App Store Connect on 2026-09-10 and remains
@@ -108,6 +108,17 @@ These cannot be stored or guessed in source control and must be supplied through
   isolated correction selects one non-CA leaf while still requiring one valid
   code-signing identity, the pinned fingerprint, exact profiles, and all
   post-export checks. The failed run signed and uploaded nothing.
+- Protected no-upload run
+  [#34566854574](https://github.com/Frankbell84/KeyHollow/actions/runs/34566854574)
+  passed all gates through signed export and validation of both code
+  signatures. It then failed safely at the first of the two post-export leaf-
+  certificate extraction commands because the optional
+  `codesign --extract-certificates` output prefix was separated by a space
+  instead of bound with `=`. The final exact-leaf comparisons therefore did not
+  complete. Cleanup passed; the no-upload workflow could not publish, and
+  nothing was uploaded or retained. The isolated correction changes only those
+  two option bindings and adds exact-command regression coverage before another
+  rehearsal.
 - The first distribution is `KeyHollow Internal` only. Family expansion needs
   a separate decision after the Backup Verification device checks pass.
 

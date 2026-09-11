@@ -337,10 +337,10 @@ jobs:
           test ! -e "$THUMBNAIL_CERTIFICATE_DIRECTORY"
           mkdir -p "$APP_CERTIFICATE_DIRECTORY" "$THUMBNAIL_CERTIFICATE_DIRECTORY"
           codesign --display \
-            --extract-certificates "$APP_CERTIFICATE_DIRECTORY/cert" \
+            --extract-certificates="$APP_CERTIFICATE_DIRECTORY/cert" \
             "$SIGNED_APP_PATH"
           codesign --display \
-            --extract-certificates "$THUMBNAIL_CERTIFICATE_DIRECTORY/cert" \
+            --extract-certificates="$THUMBNAIL_CERTIFICATE_DIRECTORY/cert" \
             "$SIGNED_EXTENSION_PATH"
           if ! cmp -s "$RUNNER_TEMP/keyhollow-distribution.cer" "$APP_CERTIFICATE_DIRECTORY/cert0"; then
             echo 'The signed app does not use the approved distribution certificate.'
