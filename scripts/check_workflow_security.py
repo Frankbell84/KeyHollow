@@ -54,6 +54,19 @@ EXPECTED_CERTIFICATE_COMPARISONS = [
     ),
 ]
 
+EXPECTED_CODESIGN_CERTIFICATE_EXTRACTIONS = [
+    (
+        'codesign --display '
+        '--extract-certificates="$APP_CERTIFICATE_DIRECTORY/cert" '
+        '"$SIGNED_APP_PATH"'
+    ),
+    (
+        'codesign --display '
+        '--extract-certificates="$THUMBNAIL_CERTIFICATE_DIRECTORY/cert" '
+        '"$SIGNED_EXTENSION_PATH"'
+    ),
+]
+
 COMMON_CLEANUP_REQUIREMENTS = (
     "if: always()",
     'KEYCHAIN_PATH="$RUNNER_TEMP/keyhollow-signing.keychain-db"',
@@ -210,7 +223,7 @@ RELEASE_WORKFLOW_SHA256: dict[str, str] = {
         "9554afac60a5dc035799c25f30231f7685484025501d2cea25258c19d2a2e304"
     ),
     "release-signing-preflight.yml": (
-        "5e9f92dd2fc22855b88496e1f024f815a9dbdda140bd6b37955094aea73940d4"
+        "d082072d96e0694b37e0ce220044efe6a43e8df4b696c6f9c9ff67a72e75c165"
     ),
     "testflight-beta.yml": (
         "2aed9c97ea63adecbb29632b24e0286d20eb6812ea4aeb337880b16a2669e326"
@@ -318,7 +331,7 @@ PREFLIGHT_RUN_BODY_SHA256 = {
     "Verify archived build and privacy manifest": "bfc8a654774502496e9edf9407f21f5516e6d6e372e1211555afb4fc31517175",
     "Create fingerprint-bound export options": "4aeb8c14cd1b15da9a6eb8d55528446b62180842687ecb8d0a8018ec85324869",
     "Export signed IPA without uploading": "405927b26839f3a3891eb3974f58bf7decb1b9341a4877a5daa05f78fd8c6975",
-    "Verify signed IPA and exact signing material": "1436c868e1f28c77b0e8dc9f20552338916e00820c72a4b0e9539ac9908ce2fd",
+    "Verify signed IPA and exact signing material": "bcf5f5e512034f69221d97cff4ef1a18f2c5b5cdd3078a5bce2325191062dc3a",
     "Remove temporary signing material": "3a863f63db09420d1eac529a5521425d1f28b00f167d89462a3d48b88a392674",
 }
 
@@ -1387,6 +1400,15 @@ def audit_signing_pipeline(
         and text.count("cmp -s") == 2
         and text.count("-exportArchive") == 1,
         f"{name}: app and extension leaf certificates must both be verified exactly",
+    )
+
+    require(
+        violations,
+        matching_command_lines(
+            collapse_shell_continuations(text), "codesign --display"
+        )
+        == EXPECTED_CODESIGN_CERTIFICATE_EXTRACTIONS,
+        f"{name}: certificate extraction must bind each output prefix to the reviewed codesign option and target",
     )
 
     require(
@@ -2596,14 +2618,73 @@ def self_test() -> int:
     assert matching_command_lines(exact_certificates, "cmp -s") == (
         EXPECTED_CERTIFICATE_COMPARISONS
     )
-    self_comparing_certificates = exact_certificates.replace(
-        '"$RUNNER_TEMP/keyhollow-distribution.cer"',
-        '"$APP_CERTIFICATE_DIRECTORY/cert0"',
-        1,
+    for comparison_mutation in (
+        exact_certificates.replace(
+            '"$RUNNER_TEMP/keyhollow-distribution.cer"',
+            '"$APP_CERTIFICATE_DIRECTORY/cert0"',
+            1,
+        ),
+        exact_certificates.replace("/cert0", "/cert1", 1),
+        exact_certificates.replace(
+            EXPECTED_CERTIFICATE_COMPARISONS[0],
+            (
+                'if ! cmp -s "$APP_CERTIFICATE_DIRECTORY/cert0" '
+                '"$RUNNER_TEMP/keyhollow-distribution.cer"; then'
+            ),
+            1,
+        ),
+        EXPECTED_CERTIFICATE_COMPARISONS[0],
+        exact_certificates + "\n" + EXPECTED_CERTIFICATE_COMPARISONS[0],
+    ):
+        assert matching_command_lines(
+            comparison_mutation, "cmp -s"
+        ) != EXPECTED_CERTIFICATE_COMPARISONS
+
+    exact_certificate_extractions = "\n".join(
+        EXPECTED_CODESIGN_CERTIFICATE_EXTRACTIONS
     )
     assert matching_command_lines(
-        self_comparing_certificates, "cmp -s"
-    ) != EXPECTED_CERTIFICATE_COMPARISONS
+        collapse_shell_continuations(exact_certificate_extractions),
+        "codesign --display",
+    ) == EXPECTED_CODESIGN_CERTIFICATE_EXTRACTIONS
+    multiline_certificate_extractions = (
+        "codesign --display \\\n"
+        '  --extract-certificates="$APP_CERTIFICATE_DIRECTORY/cert" \\\n'
+        '  "$SIGNED_APP_PATH"\n'
+        "codesign --display \\\n"
+        '  --extract-certificates="$THUMBNAIL_CERTIFICATE_DIRECTORY/cert" \\\n'
+        '  "$SIGNED_EXTENSION_PATH"'
+    )
+    assert matching_command_lines(
+        collapse_shell_continuations(multiline_certificate_extractions),
+        "codesign --display",
+    ) == EXPECTED_CODESIGN_CERTIFICATE_EXTRACTIONS
+    for extraction_mutation in (
+        exact_certificate_extractions.replace(
+            '--extract-certificates=', '--extract-certificates ', 1
+        ),
+        exact_certificate_extractions.replace(
+            '--extract-certificates="$APP_CERTIFICATE_DIRECTORY/cert" ',
+            '--extract-certificates ',
+            1,
+        ),
+        exact_certificate_extractions.replace(
+            '$APP_CERTIFICATE_DIRECTORY/cert',
+            '$THUMBNAIL_CERTIFICATE_DIRECTORY/cert',
+            1,
+        ),
+        exact_certificate_extractions.replace(
+            '"$SIGNED_APP_PATH"', '"$SIGNED_EXTENSION_PATH"', 1
+        ),
+        EXPECTED_CODESIGN_CERTIFICATE_EXTRACTIONS[0],
+        exact_certificate_extractions
+        + "\n"
+        + EXPECTED_CODESIGN_CERTIFICATE_EXTRACTIONS[0],
+    ):
+        assert matching_command_lines(
+            collapse_shell_continuations(extraction_mutation),
+            "codesign --display",
+        ) != EXPECTED_CODESIGN_CERTIFICATE_EXTRACTIONS
 
     assert matching_command_lines(
         SIGNING_IMPORT_COMMAND, "security import "

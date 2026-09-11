@@ -1,15 +1,22 @@
 # KeyHollow Work Status
 
-Updated: 2026-09-10
+Updated: 2026-09-11
 
 This is the authoritative operational resume point. Historical Build 38
 evidence remains in `docs/PROJECT_CHECKPOINT.md`.
 
 ## Provenance
 
-- Current local release-runner correction branch:
-  `hardening/build40-runner-platform`, rooted exactly from `origin/main` at
-  `569a5ef343c8a368676b054ef48443823d10fdd5`.
+- Current local signing-verifier correction branch:
+  `hardening/build40-codesign-cert-extraction`, rooted exactly from `origin/main` at
+  `015823d3ee69d8e52a668800ce9ee35d001221a8`.
+- PR [#55](https://github.com/Frankbell84/KeyHollow/pull/55) merged the exact
+  certificate-chain correction head
+  `a8bb43aa44a434dc16f90b668e45eee548f187a9` through regular merge commit
+  `015823d3ee69d8e52a668800ce9ee35d001221a8`.
+- Exact merged-main CI run
+  [#34564973012](https://github.com/Frankbell84/KeyHollow/actions/runs/34564973012)
+  passed `build-and-test` and Swift CodeQL with zero annotations.
 - PR [#53](https://github.com/Frankbell84/KeyHollow/pull/53) merged the exact
   approved Build 40 preparation head
   `ed7e2019f07caec7fac43489aed7184f8040303b` through regular merge commit
@@ -68,11 +75,12 @@ evidence remains in `docs/PROJECT_CHECKPOINT.md`.
 
 ## Current task
 
-Correct the privileged release runner from exact merged Build 40 `main` without
-changing application behavior, archive format, signing identities, or upload
-logic. Keep the correction limited to both protected release workflows, their
-fail-closed verifier, and current operational documentation. Then repeat the
-protected no-upload signing rehearsal before any credential deletion or upload.
+Correct the no-upload preflight's `codesign --extract-certificates` optional-
+argument binding from exact merged Build 40 `main`, and make the fail-closed
+workflow checker enforce both canonical app and extension extraction commands.
+Do not change application behavior, archive format, signing identities, or
+upload logic. Then repeat the protected no-upload signing rehearsal before any
+credential deletion or upload.
 
 ## Completed work
 
@@ -435,11 +443,27 @@ then authenticated and completed the unsigned archive, but stopped safely while
 installing signing material. The P12 imported successfully and contained one
 signing leaf plus its normal certificate chain; the workflow incorrectly
 required the isolated keychain to contain only one certificate total and saw
-three. It produced no signed IPA and performed no upload. The isolated local
-correction extracts exactly one non-CA leaf, still requires exactly one valid
-code-signing identity matching the pinned fingerprint, and leaves every profile,
-export, post-export, and cleanup gate intact. It requires its own protected PR,
-PR CI, merged-main CI, and fresh no-upload rehearsal.
+three. It produced no signed IPA and performed no upload. PR #55 merged the
+isolated non-CA leaf correction as exact `main` commit
+`015823d3ee69d8e52a668800ce9ee35d001221a8`; complete main-push CI run
+[#34564973012](https://github.com/Frankbell84/KeyHollow/actions/runs/34564973012)
+passed both required jobs with zero annotations.
+
+Protected no-upload run
+[#34566854574](https://github.com/Frankbell84/KeyHollow/actions/runs/34566854574)
+then passed every source, CI, environment, hygiene, architecture, privacy,
+identity, toolchain, App Store authentication, unsigned-archive, signing-
+material, profile, signed-export, and code-signature gate. It failed safely in
+the final post-export leaf-certificate extraction because the optional
+`codesign --extract-certificates` prefix was separated by a space instead of
+bound with `=`. Both products passed code-signature structural and designated-
+requirement validation, but the final byte-for-byte proof that each used the
+approved leaf did not complete. Cleanup passed, the workflow had no upload
+capability, and nothing was uploaded or retained. The current isolated
+correction changes only those two option bindings and extends the checker to
+reject spaced, bare, wrong-prefix, wrong-target, missing, or duplicate
+extraction commands. It requires its own protected PR, complete PR and merged-
+main CI, and a fresh no-upload rehearsal.
 
 ## Required external GitHub controls
 
@@ -479,10 +503,10 @@ only boundary.
 
 ## Next action
 
-1. Review and publish the isolated certificate-chain verifier correction through
-   a normal pull request; require complete PR CI, merge only the approved exact
-   head, and require complete main-push CI. No application-runtime source may
-   change.
+1. Review and publish the isolated `codesign` extraction-binding correction
+   through a normal pull request; require complete PR CI, merge only the exact
+   reviewed head, and require complete main-push CI. No application-runtime
+   source may change.
 2. Run `Verify KeyHollow Release Signing` on the corrected exact merged-main
    commit. It must authenticate to App Store Connect, create the unsigned
    archive, install and validate the replacement signing material, export and
