@@ -1,14 +1,10 @@
-name: Upload KeyHollow to TestFlight
+name: Verify KeyHollow Release Signing
 
 on:
   workflow_dispatch:
     inputs:
-      build_number:
-        description: Build number confirmed against App Store Connect
-        required: true
-        type: string
       expected_commit_sha:
-        description: Full 40-character commit SHA expected to upload
+        description: Full 40-character main commit SHA expected to verify
         required: true
         type: string
 
@@ -21,7 +17,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  archive-and-upload:
+  sign-without-upload:
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
     runs-on: macos-26
     timeout-minutes: 30
@@ -87,19 +83,17 @@ jobs:
       - name: Verify architecture boundaries
         run: python3 -I scripts/check_architecture_boundaries.py
 
+      - name: Test signing-material verifier
+        run: python3 -I scripts/verify_signing_material.py --self-test
+
       - name: Test TestFlight build-number guard
         run: node scripts/verify_testflight_build_number.mjs --self-test
-
-      - name: Test signing-material guard
-        run: python3 -I scripts/verify_signing_material.py --self-test
 
       - name: Verify privacy manifest
         run: python3 -I scripts/check_privacy_manifest.py
 
       - name: Verify production identity
         shell: bash
-        env:
-          REQUESTED_BUILD_NUMBER: ${{ inputs.build_number }}
         run: |
           set -euo pipefail
           grep -Eq '^[[:space:]]*PRODUCT_BUNDLE_IDENTIFIER:[[:space:]]*com\.keyhollow\.app[[:space:]]*$' project.yml
@@ -108,9 +102,8 @@ jobs:
           grep -Eq '^[[:space:]]*PRODUCT_BUNDLE_IDENTIFIER:[[:space:]]*com\.keyhollow\.app\.vault-thumbnail[[:space:]]*$' project.yml
 
           PROJECT_BUILDS=$(awk -F: '/^[[:space:]]*CURRENT_PROJECT_VERSION:/ { gsub(/[[:space:]]/, "", $2); print $2 }' project.yml | sort -u)
-          if [[ "$PROJECT_BUILDS" != "$REQUESTED_BUILD_NUMBER" ]]; then
-            echo "Requested Build $REQUESTED_BUILD_NUMBER does not match every product build:"
-            printf '%s\n' "$PROJECT_BUILDS"
+          if [[ ! "$PROJECT_BUILDS" =~ ^[1-9][0-9]*$ ]]; then
+            echo 'Every product must share one positive-integer build number.'
             exit 1
           fi
 
@@ -120,13 +113,12 @@ jobs:
       - name: Generate Xcode project
         run: xcodegen generate
 
-      - name: Verify build number against App Store Connect
+      - name: Verify App Store Connect authentication
         env:
           APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
           APP_STORE_CONNECT_API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
           APP_STORE_CONNECT_API_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_API_KEY_BASE64 }}
           APP_STORE_CONNECT_APP_ID: 6807022780
-          REQUESTED_BUILD_NUMBER: ${{ inputs.build_number }}
         run: |
           set -euo pipefail
           if [[ "$APP_STORE_CONNECT_API_KEY_ID" != "$EXPECTED_API_KEY_ID" || \
@@ -134,9 +126,9 @@ jobs:
             echo 'App Store Connect credential identity does not match the approved rotation.'
             exit 1
           fi
-          node scripts/verify_testflight_build_number.mjs "$REQUESTED_BUILD_NUMBER"
+          node scripts/verify_testflight_build_number.mjs --auth-only
 
-      - name: Archive KeyHollow
+      - name: Archive KeyHollow without signing
         run: |
           set -o pipefail
           xcodebuild \
@@ -144,53 +136,26 @@ jobs:
             -scheme KeyHollow \
             -configuration Release \
             -destination 'generic/platform=iOS' \
-            -archivePath build/KeyHollow.xcarchive \
+            -archivePath build/KeyHollowPreflight.xcarchive \
             DEVELOPMENT_TEAM="$TEAM_ID" \
             CODE_SIGNING_ALLOWED=NO \
             archive
 
-      - name: Verify archived build, privacy, and module hygiene
+      - name: Verify archived build and privacy manifest
         run: |
           set -euo pipefail
 
-          APP_PATH='build/KeyHollow.xcarchive/Products/Applications/KeyHollow.app'
-          python3 -I scripts/check_privacy_manifest.py --app-bundle "$APP_PATH"
-          ARCHIVED_INFO="$APP_PATH/Info.plist"
+          APP_PATH='build/KeyHollowPreflight.xcarchive/Products/Applications/KeyHollow.app'
           EXTENSION_PATH="$APP_PATH/PlugIns/KeyHollowVaultThumbnail.appex"
-          EXTENSION_INFO="$EXTENSION_PATH/Info.plist"
-          ARCHIVED_BUILD=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$ARCHIVED_INFO")
-          EXPECTED_BUILD=$(xcodebuild -project KeyHollow.xcodeproj -scheme KeyHollow -configuration Release -showBuildSettings | awk '/ CURRENT_PROJECT_VERSION = / { print $3; exit }')
-
-          if [[ "$ARCHIVED_BUILD" != "$EXPECTED_BUILD" ]]; then
-            echo "Archived build number $ARCHIVED_BUILD does not match project build number $EXPECTED_BUILD."
-            exit 1
-          fi
-
+          python3 -I scripts/check_privacy_manifest.py --app-bundle "$APP_PATH"
           test -d "$EXTENSION_PATH"
           test -f "$EXTENSION_PATH/Assets.car"
-          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$EXTENSION_INFO")" = \
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP_PATH/Info.plist")" = \
+            'com.keyhollow.app'
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$EXTENSION_PATH/Info.plist")" = \
             'com.keyhollow.app.vault-thumbnail'
-          test "$(/usr/libexec/PlistBuddy -c 'Print :NSExtension:NSExtensionPointIdentifier' "$EXTENSION_INFO")" = \
-            'com.apple.quicklook.thumbnail'
 
-          if find "$APP_PATH" -name 'KHVaultDocumentIcon-*.png' -print -quit | grep -q .; then
-            echo 'Legacy document icon PNGs entered the archive.'
-            exit 1
-          fi
-          if /usr/libexec/PlistBuddy -c \
-            'Print :CFBundleDocumentTypes:0:CFBundleTypeIconFiles' "$ARCHIVED_INFO" >/dev/null 2>&1; then
-            echo 'Legacy CFBundleTypeIconFiles metadata entered the archive.'
-            exit 1
-          fi
-          if /usr/libexec/PlistBuddy -c \
-            'Print :UTExportedTypeDeclarations:0:UTTypeIcons' "$ARCHIVED_INFO" >/dev/null 2>&1; then
-            echo 'Abandoned UTTypeIcons metadata entered the archive.'
-            exit 1
-          fi
-
-          echo "Verified clean Build $ARCHIVED_BUILD with isolated thumbnail extension."
-
-      - name: Install cloud-signing material
+      - name: Install and verify cloud-signing material
         env:
           BUILD_CERTIFICATE_BASE64: ${{ secrets.BUILD_CERTIFICATE_BASE64 }}
           BUILD_PROVISION_PROFILE_BASE64: ${{ secrets.BUILD_PROVISION_PROFILE_BASE64 }}
@@ -212,6 +177,8 @@ jobs:
           PROFILE_DIRECTORY="$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles"
 
           printf '%s' "$BUILD_CERTIFICATE_BASE64" | base64 --decode > "$CERTIFICATE_PATH"
+          printf '%s' "$BUILD_PROVISION_PROFILE_BASE64" | base64 --decode > "$APP_PROFILE_PATH"
+          printf '%s' "$THUMBNAIL_PROVISION_PROFILE_BASE64" | base64 --decode > "$THUMBNAIL_PROFILE_PATH"
 
           security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
           security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
@@ -226,7 +193,10 @@ jobs:
             echo "Expected exactly one certificate in the isolated signing keychain, found $CERTIFICATE_COUNT."
             exit 1
           fi
-          openssl x509 -in "$SIGNING_CERTIFICATE_PEM" -outform DER -out "$SIGNING_CERTIFICATE_DER"
+          openssl x509 \
+            -in "$SIGNING_CERTIFICATE_PEM" \
+            -outform DER \
+            -out "$SIGNING_CERTIFICATE_DER"
           CERTIFICATE_SUBJECT=$(openssl x509 -in "$SIGNING_CERTIFICATE_PEM" -noout -subject -nameopt RFC2253)
           if [[ "$CERTIFICATE_SUBJECT" != *"CN=Apple Distribution:"* || "$CERTIFICATE_SUBJECT" != *"OU=$TEAM_ID"* ]]; then
             echo 'Signing certificate subject does not match the KeyHollow Apple team.'
@@ -234,24 +204,22 @@ jobs:
           fi
           SIGNING_CERTIFICATE_SHA1=$(shasum -a 1 "$SIGNING_CERTIFICATE_DER" | awk '{ print toupper($1) }')
           if [[ ! "$SIGNING_CERTIFICATE_SHA1" =~ ^[0-9A-F]{40}$ ]]; then
-            echo 'Signing-certificate fingerprint is not a canonical SHA-1 value.'
+            echo 'Signing certificate fingerprint is not a canonical SHA-1 value.'
             exit 1
           fi
           if [[ "$SIGNING_CERTIFICATE_SHA1" != "$EXPECTED_SIGNING_CERTIFICATE_SHA1" ]]; then
             echo 'Signing certificate does not match the approved rotation.'
             exit 1
           fi
-          IDENTITY_MATCH_COUNT=$(security find-identity -v -p codesigning "$KEYCHAIN_PATH" | awk -v expected="$SIGNING_CERTIFICATE_SHA1" 'toupper($2) == expected { count += 1 } END { print count + 0 }')
-          if [[ "$IDENTITY_MATCH_COUNT" != 1 ]]; then
-            echo 'The imported certificate does not have exactly one matching code-signing identity.'
+
+          IDENTITY_COUNT=$(security find-identity -v -p codesigning "$KEYCHAIN_PATH" | awk -v expected="$SIGNING_CERTIFICATE_SHA1" 'toupper($2) == expected { count += 1 } END { print count + 0 }')
+          if [[ "$IDENTITY_COUNT" -ne 1 ]]; then
+            echo 'Expected exactly one valid matching Apple Distribution identity.'
             exit 1
           fi
           rm -f "$CERTIFICATE_PATH"
           unset BUILD_CERTIFICATE_BASE64 P12_PASSWORD
 
-          mkdir -p "$PROFILE_DIRECTORY"
-          printf '%s' "$BUILD_PROVISION_PROFILE_BASE64" | base64 --decode > "$APP_PROFILE_PATH"
-          printf '%s' "$THUMBNAIL_PROVISION_PROFILE_BASE64" | base64 --decode > "$THUMBNAIL_PROFILE_PATH"
           security cms -D -i "$APP_PROFILE_PATH" > "$APP_PROFILE_PLIST"
           security cms -D -i "$THUMBNAIL_PROFILE_PATH" > "$THUMBNAIL_PROFILE_PLIST"
           unset \
@@ -266,8 +234,14 @@ jobs:
             --thumbnail-profile-plist "$THUMBNAIL_PROFILE_PLIST" \
             --expected-app-uuid "$EXPECTED_APP_PROFILE_UUID" \
             --expected-thumbnail-uuid "$EXPECTED_THUMBNAIL_PROFILE_UUID"
+
           APP_PROFILE_UUID=$(/usr/libexec/PlistBuddy -c 'Print :UUID' "$APP_PROFILE_PLIST")
           THUMBNAIL_PROFILE_UUID=$(/usr/libexec/PlistBuddy -c 'Print :UUID' "$THUMBNAIL_PROFILE_PLIST")
+          UUID_PATTERN='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$'
+          if [[ ! "$APP_PROFILE_UUID" =~ $UUID_PATTERN || ! "$THUMBNAIL_PROFILE_UUID" =~ $UUID_PATTERN ]]; then
+            echo 'Provisioning profile UUID is not canonical.'
+            exit 1
+          fi
           NORMALIZED_APP_PROFILE_UUID=$(printf '%s' "$APP_PROFILE_UUID" | tr '[:upper:]' '[:lower:]')
           NORMALIZED_THUMBNAIL_PROFILE_UUID=$(printf '%s' "$THUMBNAIL_PROFILE_UUID" | tr '[:upper:]' '[:lower:]')
           if [[ "$NORMALIZED_APP_PROFILE_UUID" != "$EXPECTED_APP_PROFILE_UUID" || \
@@ -275,177 +249,98 @@ jobs:
             echo 'Provisioning profiles do not match the approved rotation.'
             exit 1
           fi
+
+          mkdir -p "$PROFILE_DIRECTORY"
           echo "APP_PROFILE_UUID=$APP_PROFILE_UUID" >> "$GITHUB_ENV"
           echo "THUMBNAIL_PROFILE_UUID=$THUMBNAIL_PROFILE_UUID" >> "$GITHUB_ENV"
           echo "SIGNING_CERTIFICATE_SHA1=$SIGNING_CERTIFICATE_SHA1" >> "$GITHUB_ENV"
           cp "$APP_PROFILE_PATH" "$PROFILE_DIRECTORY/$EXPECTED_APP_PROFILE_UUID.mobileprovision"
           cp "$THUMBNAIL_PROFILE_PATH" "$PROFILE_DIRECTORY/$EXPECTED_THUMBNAIL_PROFILE_UUID.mobileprovision"
 
-      - name: Create export options
+      - name: Create fingerprint-bound export options
         run: |
           set -euo pipefail
+          /usr/libexec/PlistBuddy -c 'Add :method string app-store-connect' build/PreflightExportOptions.plist
+          /usr/libexec/PlistBuddy -c 'Add :destination string export' build/PreflightExportOptions.plist
+          /usr/libexec/PlistBuddy -c 'Add :signingStyle string manual' build/PreflightExportOptions.plist
+          /usr/libexec/PlistBuddy -c "Add :signingCertificate string $SIGNING_CERTIFICATE_SHA1" build/PreflightExportOptions.plist
+          /usr/libexec/PlistBuddy -c 'Add :provisioningProfiles dict' build/PreflightExportOptions.plist
+          /usr/libexec/PlistBuddy -c "Add :provisioningProfiles:com.keyhollow.app string $APP_PROFILE_UUID" build/PreflightExportOptions.plist
+          /usr/libexec/PlistBuddy -c "Add :provisioningProfiles:com.keyhollow.app.vault-thumbnail string $THUMBNAIL_PROFILE_UUID" build/PreflightExportOptions.plist
+          /usr/libexec/PlistBuddy -c "Add :teamID string $TEAM_ID" build/PreflightExportOptions.plist
+          /usr/libexec/PlistBuddy -c 'Add :manageAppVersionAndBuildNumber bool false' build/PreflightExportOptions.plist
 
-          /usr/libexec/PlistBuddy -c 'Add :method string app-store-connect' build/ExportOptions.plist
-          /usr/libexec/PlistBuddy -c 'Add :destination string export' build/ExportOptions.plist
-          /usr/libexec/PlistBuddy -c 'Add :signingStyle string manual' build/ExportOptions.plist
-          /usr/libexec/PlistBuddy -c "Add :signingCertificate string $SIGNING_CERTIFICATE_SHA1" build/ExportOptions.plist
-          /usr/libexec/PlistBuddy -c 'Add :provisioningProfiles dict' build/ExportOptions.plist
-          /usr/libexec/PlistBuddy -c "Add :provisioningProfiles:com.keyhollow.app string $APP_PROFILE_UUID" build/ExportOptions.plist
-          /usr/libexec/PlistBuddy -c "Add :provisioningProfiles:com.keyhollow.app.vault-thumbnail string $THUMBNAIL_PROFILE_UUID" build/ExportOptions.plist
-          /usr/libexec/PlistBuddy -c "Add :teamID string $TEAM_ID" build/ExportOptions.plist
-          /usr/libexec/PlistBuddy -c 'Add :manageAppVersionAndBuildNumber bool false' build/ExportOptions.plist
-
-      - name: Export signed IPA
+      - name: Export signed IPA without uploading
         run: |
           set -o pipefail
           xcodebuild \
             -exportArchive \
-            -archivePath build/KeyHollow.xcarchive \
-            -exportPath build/export \
-            -exportOptionsPlist build/ExportOptions.plist
+            -archivePath build/KeyHollowPreflight.xcarchive \
+            -exportPath build/preflight-export \
+            -exportOptionsPlist build/PreflightExportOptions.plist
 
-      - name: Verify signed IPA
-        shell: bash
+      - name: Verify signed IPA and exact signing material
         run: |
           set -euo pipefail
 
-          IPA_PATHS=$(find build/export -maxdepth 1 -type f -name '*.ipa' -print)
+          IPA_PATHS=$(find build/preflight-export -maxdepth 1 -type f -name '*.ipa' -print)
           IPA_COUNT=$(printf '%s\n' "$IPA_PATHS" | awk 'NF { count += 1 } END { print count + 0 }')
           if [[ "$IPA_COUNT" != 1 ]]; then
-            echo "Expected exactly one signed IPA, found $IPA_COUNT."
+            echo "Preflight must produce exactly one IPA, found $IPA_COUNT."
             exit 1
           fi
           IPA_PATH="$IPA_PATHS"
 
-          SIGNED_IPA_ROOT="$RUNNER_TEMP/keyhollow-signed-ipa"
-          SIGNED_APP_PATH="$SIGNED_IPA_ROOT/Payload/KeyHollow.app"
+          EXPANDED_IPA_PATH="$RUNNER_TEMP/keyhollow-preflight-ipa"
+          rm -rf "$EXPANDED_IPA_PATH"
+          mkdir -p "$EXPANDED_IPA_PATH"
+          ditto -x -k "$IPA_PATH" "$EXPANDED_IPA_PATH"
+
+          SIGNED_APP_PATH="$EXPANDED_IPA_PATH/Payload/KeyHollow.app"
           SIGNED_EXTENSION_PATH="$SIGNED_APP_PATH/PlugIns/KeyHollowVaultThumbnail.appex"
-          SIGNED_APP_PROFILE_PLIST="$RUNNER_TEMP/keyhollow-signed-app-profile.plist"
-          SIGNED_THUMBNAIL_PROFILE_PLIST="$RUNNER_TEMP/keyhollow-signed-thumbnail-profile.plist"
-          APP_CERTIFICATE_DIRECTORY="$RUNNER_TEMP/keyhollow-app-codesign-certificates"
-          THUMBNAIL_CERTIFICATE_DIRECTORY="$RUNNER_TEMP/keyhollow-thumbnail-codesign-certificates"
-
-          if [[ -e "$SIGNED_IPA_ROOT" ]]; then
-            echo 'Signed-IPA verification directory already exists.'
-            exit 1
-          fi
-          mkdir -p "$SIGNED_IPA_ROOT"
-          test ! -e "$APP_CERTIFICATE_DIRECTORY"
-          test ! -e "$THUMBNAIL_CERTIFICATE_DIRECTORY"
-          mkdir -p "$APP_CERTIFICATE_DIRECTORY" "$THUMBNAIL_CERTIFICATE_DIRECTORY"
-          ditto -x -k "$IPA_PATH" "$SIGNED_IPA_ROOT"
-
           test -d "$SIGNED_APP_PATH"
           test -d "$SIGNED_EXTENSION_PATH"
-          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$SIGNED_APP_PATH/Info.plist")" = 'com.keyhollow.app'
-          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$SIGNED_EXTENSION_PATH/Info.plist")" = 'com.keyhollow.app.vault-thumbnail'
           codesign --verify --deep --strict --verbose=2 "$SIGNED_APP_PATH"
           codesign --verify --strict --verbose=2 "$SIGNED_EXTENSION_PATH"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$SIGNED_APP_PATH/Info.plist")" = \
+            'com.keyhollow.app'
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$SIGNED_EXTENSION_PATH/Info.plist")" = \
+            'com.keyhollow.app.vault-thumbnail'
 
-          security cms -D -i "$SIGNED_APP_PATH/embedded.mobileprovision" > "$SIGNED_APP_PROFILE_PLIST"
-          security cms -D -i "$SIGNED_EXTENSION_PATH/embedded.mobileprovision" > "$SIGNED_THUMBNAIL_PROFILE_PLIST"
+          security cms -D \
+            -i "$SIGNED_APP_PATH/embedded.mobileprovision" \
+            > "$RUNNER_TEMP/keyhollow-signed-app-profile.plist"
+          security cms -D \
+            -i "$SIGNED_EXTENSION_PATH/embedded.mobileprovision" \
+            > "$RUNNER_TEMP/keyhollow-signed-thumbnail-profile.plist"
           python3 -I scripts/verify_signing_material.py \
             --certificate-der "$RUNNER_TEMP/keyhollow-distribution.cer" \
-            --app-profile-plist "$SIGNED_APP_PROFILE_PLIST" \
-            --thumbnail-profile-plist "$SIGNED_THUMBNAIL_PROFILE_PLIST" \
+            --app-profile-plist "$RUNNER_TEMP/keyhollow-signed-app-profile.plist" \
+            --thumbnail-profile-plist "$RUNNER_TEMP/keyhollow-signed-thumbnail-profile.plist" \
             --expected-app-uuid "$APP_PROFILE_UUID" \
             --expected-thumbnail-uuid "$THUMBNAIL_PROFILE_UUID"
 
-          codesign --display --extract-certificates="$APP_CERTIFICATE_DIRECTORY/cert" "$SIGNED_APP_PATH"
-          codesign --display --extract-certificates="$THUMBNAIL_CERTIFICATE_DIRECTORY/cert" "$SIGNED_EXTENSION_PATH"
+          APP_CERTIFICATE_DIRECTORY="$RUNNER_TEMP/keyhollow-signed-app-certificates"
+          THUMBNAIL_CERTIFICATE_DIRECTORY="$RUNNER_TEMP/keyhollow-signed-thumbnail-certificates"
+          test ! -e "$APP_CERTIFICATE_DIRECTORY"
+          test ! -e "$THUMBNAIL_CERTIFICATE_DIRECTORY"
+          mkdir -p "$APP_CERTIFICATE_DIRECTORY" "$THUMBNAIL_CERTIFICATE_DIRECTORY"
+          codesign --display \
+            --extract-certificates "$APP_CERTIFICATE_DIRECTORY/cert" \
+            "$SIGNED_APP_PATH"
+          codesign --display \
+            --extract-certificates "$THUMBNAIL_CERTIFICATE_DIRECTORY/cert" \
+            "$SIGNED_EXTENSION_PATH"
           if ! cmp -s "$RUNNER_TEMP/keyhollow-distribution.cer" "$APP_CERTIFICATE_DIRECTORY/cert0"; then
-            echo 'The signed app does not use the imported distribution certificate.'
+            echo 'The signed app does not use the approved distribution certificate.'
             exit 1
           fi
           if ! cmp -s "$RUNNER_TEMP/keyhollow-distribution.cer" "$THUMBNAIL_CERTIFICATE_DIRECTORY/cert0"; then
-            echo 'The signed thumbnail extension does not use the imported distribution certificate.'
+            echo 'The signed thumbnail extension does not use the approved distribution certificate.'
             exit 1
           fi
 
-      - name: Remove signing authority before external actions
-        run: |
-          set -euo pipefail
-
-          KEYCHAIN_PATH="$RUNNER_TEMP/keyhollow-signing.keychain-db"
-          test -e "$KEYCHAIN_PATH"
-          security lock-keychain "$KEYCHAIN_PATH"
-          security delete-keychain "$KEYCHAIN_PATH"
-          test ! -e "$KEYCHAIN_PATH"
-          if security list-keychains -d user | grep -Fq "$KEYCHAIN_PATH"; then
-            echo 'The temporary signing keychain remains registered after deletion.'
-            exit 1
-          fi
-          PROFILE_DIRECTORY="$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles"
-          rm -f \
-            "$RUNNER_TEMP/keyhollow-distribution.p12" \
-            "$RUNNER_TEMP/keyhollow-distribution.pem" \
-            "$RUNNER_TEMP/keyhollow-distribution.cer" \
-            "$RUNNER_TEMP/keyhollow-app.mobileprovision" \
-            "$RUNNER_TEMP/keyhollow-thumbnail.mobileprovision" \
-            "$RUNNER_TEMP/keyhollow-app-profile.plist" \
-            "$RUNNER_TEMP/keyhollow-thumbnail-profile.plist" \
-            "$RUNNER_TEMP/keyhollow-signed-app-profile.plist" \
-            "$RUNNER_TEMP/keyhollow-signed-thumbnail-profile.plist" \
-            "$PROFILE_DIRECTORY/$EXPECTED_APP_PROFILE_UUID.mobileprovision" \
-            "$PROFILE_DIRECTORY/$EXPECTED_THUMBNAIL_PROFILE_UUID.mobileprovision" \
-            build/ExportOptions.plist
-          rm -rf \
-            "$RUNNER_TEMP/keyhollow-signed-ipa" \
-            "$RUNNER_TEMP/keyhollow-app-codesign-certificates" \
-            "$RUNNER_TEMP/keyhollow-thumbnail-codesign-certificates" \
-            build/KeyHollow.xcarchive
-
-      - name: Retain verified signed IPA artifact
-        if: success()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: KeyHollow-TestFlight-IPA
-          path: build/export/*.ipa
-          if-no-files-found: error
-          retention-days: 7
-
-      - name: Upload verified IPA to App Store Connect
-        env:
-          APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
-          APP_STORE_CONNECT_API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
-          APP_STORE_CONNECT_API_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_API_KEY_BASE64 }}
-          APP_STORE_CONNECT_APP_ID: 6807022780
-          REQUESTED_BUILD_NUMBER: ${{ inputs.build_number }}
-        run: |
-          set -euo pipefail
-          umask 077
-
-          API_KEY_DIRECTORY="$HOME/.appstoreconnect/private_keys"
-          if [[ "$APP_STORE_CONNECT_API_KEY_ID" != "$EXPECTED_API_KEY_ID" || \
-                "$APP_STORE_CONNECT_API_ISSUER_ID" != "$EXPECTED_API_ISSUER_ID" ]]; then
-            echo 'Upload key identity does not match the approved rotation.'
-            exit 1
-          fi
-          node scripts/verify_testflight_build_number.mjs "$REQUESTED_BUILD_NUMBER"
-          API_KEY_PATH="$API_KEY_DIRECTORY/AuthKey_${APP_STORE_CONNECT_API_KEY_ID}.p8"
-          cleanup_upload_key() {
-            rm -f "$API_KEY_PATH"
-          }
-          trap cleanup_upload_key EXIT
-          mkdir -p "$API_KEY_DIRECTORY"
-          printf '%s' "$APP_STORE_CONNECT_API_KEY_BASE64" | base64 --decode > "$API_KEY_PATH"
-          chmod 600 "$API_KEY_PATH"
-          unset APP_STORE_CONNECT_API_KEY_BASE64
-
-          IPA_PATHS=$(find build/export -maxdepth 1 -type f -name '*.ipa' -print)
-          IPA_COUNT=$(printf '%s\n' "$IPA_PATHS" | awk 'NF { count += 1 } END { print count + 0 }')
-          if [[ "$IPA_COUNT" != 1 ]]; then
-            echo "Upload requires exactly one verified IPA, found $IPA_COUNT."
-            exit 1
-          fi
-          IPA_PATH="$IPA_PATHS"
-
-          xcrun altool \
-            --upload-app \
-            --type ios \
-            --file "$IPA_PATH" \
-            --apiKey "$APP_STORE_CONNECT_API_KEY_ID" \
-            --apiIssuer "$APP_STORE_CONNECT_API_ISSUER_ID"
+          echo 'Release-signing preflight passed; no build was uploaded or published.'
 
       - name: Remove temporary signing material
         if: always()
@@ -473,11 +368,10 @@ jobs:
             "$RUNNER_TEMP/keyhollow-signed-thumbnail-profile.plist" \
             "$PROFILE_DIRECTORY/$EXPECTED_APP_PROFILE_UUID.mobileprovision" \
             "$PROFILE_DIRECTORY/$EXPECTED_THUMBNAIL_PROFILE_UUID.mobileprovision" \
-            "$HOME/.appstoreconnect/private_keys/AuthKey_${EXPECTED_API_KEY_ID}.p8" \
-            build/ExportOptions.plist
+            build/PreflightExportOptions.plist
           rm -rf \
-            "$RUNNER_TEMP/keyhollow-signed-ipa" \
-            "$RUNNER_TEMP/keyhollow-app-codesign-certificates" \
-            "$RUNNER_TEMP/keyhollow-thumbnail-codesign-certificates" \
-            build/KeyHollow.xcarchive \
-            build/export
+            "$RUNNER_TEMP/keyhollow-preflight-ipa" \
+            "$RUNNER_TEMP/keyhollow-signed-app-certificates" \
+            "$RUNNER_TEMP/keyhollow-signed-thumbnail-certificates" \
+            build/KeyHollowPreflight.xcarchive \
+            build/preflight-export

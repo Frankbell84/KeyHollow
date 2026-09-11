@@ -29,25 +29,28 @@ jobs:
           persist-credentials: false
 
       - name: Verify workflow security
-        run: python3 scripts/check_workflow_security.py
+        run: python3 -I scripts/check_workflow_security.py
 
       - name: Verify release hygiene
-        run: python3 scripts/check_release_hygiene.py
+        run: python3 -I scripts/check_release_hygiene.py
 
       - name: Verify architecture boundaries
-        run: python3 scripts/check_architecture_boundaries.py
+        run: python3 -I scripts/check_architecture_boundaries.py
 
       - name: Test TestFlight build-number guard
         run: node scripts/verify_testflight_build_number.mjs --self-test
 
       - name: Test release-source evidence guard
-        run: python3 scripts/verify_release_source.py --self-test
+        run: python3 -I scripts/verify_release_source.py --self-test
 
       - name: Test release-environment guard
-        run: python3 scripts/verify_release_environment.py --self-test
+        run: python3 -I scripts/verify_release_environment.py --self-test
+
+      - name: Test signing-material guard
+        run: python3 -I scripts/verify_signing_material.py --self-test
 
       - name: Verify privacy manifest
-        run: python3 scripts/check_privacy_manifest.py
+        run: python3 -I scripts/check_privacy_manifest.py
 
       - name: Install XcodeGen
         run: bash scripts/install_xcodegen.sh
@@ -59,7 +62,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          SIMULATOR_ID=$(xcrun simctl list devices available -j | python3 -c '
+          SIMULATOR_ID=$(xcrun simctl list devices available -j | python3 -I -c '
           import json, sys
           payload = json.load(sys.stdin)
           devices = [
@@ -73,7 +76,7 @@ jobs:
           ')
 
           if [[ -z "$SIMULATOR_ID" ]]; then
-            RUNTIME_ID=$(xcrun simctl list runtimes available -j | python3 -c '
+            RUNTIME_ID=$(xcrun simctl list runtimes available -j | python3 -I -c '
             import json, sys
             runtimes = [
                 runtime
@@ -83,7 +86,7 @@ jobs:
             ]
             print(runtimes[-1]["identifier"] if runtimes else "")
             ')
-            DEVICE_TYPE_ID=$(xcrun simctl list devicetypes -j | python3 -c '
+            DEVICE_TYPE_ID=$(xcrun simctl list devicetypes -j | python3 -I -c '
             import json, sys
             device_types = [
                 device_type
@@ -130,7 +133,7 @@ jobs:
           set -euo pipefail
           APP_PATH="build/DerivedData/Build/Products/Debug-iphonesimulator/KeyHollow.app"
           EXTENSION_PATH="$APP_PATH/PlugIns/KeyHollowVaultThumbnail.appex"
-          python3 scripts/check_privacy_manifest.py --app-bundle "$APP_PATH"
+          python3 -I scripts/check_privacy_manifest.py --app-bundle "$APP_PATH"
           test -d "$EXTENSION_PATH"
           test -f "$EXTENSION_PATH/Assets.car"
 

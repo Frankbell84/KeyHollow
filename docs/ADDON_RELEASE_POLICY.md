@@ -42,13 +42,19 @@ Every feature follows this order:
 6. Explicit approval of the exact reviewed revision, followed by merge through
    the protected `main` branch. Direct pushes to `main` are not a release path.
 7. A successful full CI and CodeQL run for the exact merged `main` commit.
-8. Explicit authorization of that exact commit and build number, followed by a
+8. A successful manual `Verify KeyHollow Release Signing` run for that exact
+   commit through the protected `production-testflight` environment. It must
+   authenticate, archive, sign, export, and validate without uploading or
+   publishing. During a credential migration, run it once before repository-
+   scoped fallbacks are removed and again afterward to prove environment-only
+   operation.
+9. Explicit authorization of that exact commit and build number, followed by a
    production-identity TestFlight upload from `main` through the protected
    `production-testflight` environment.
-9. Physical-iPhone testing of the TestFlight binary: the feature, core
+10. Physical-iPhone testing of the TestFlight binary: the feature, core
    regressions, interruptions, background locking, low-storage behavior, and
    rollback/data-integrity behavior.
-10. No source changes after physical acceptance. A failure returns to a new
+11. No source changes after physical acceptance. A failure returns to a new
     reviewed pull request; external TestFlight or App Store promotion requires
     a separate explicit authorization.
 
