@@ -232,6 +232,24 @@ public enum VaultFileIngressError: Error, Equatable {
     case unavailable
 }
 
+/// Sanitized byte progress for copying an incoming archive into KeyHollow's
+/// protected temporary storage. No source path or vault metadata crosses the
+/// add-on boundary.
+public struct VaultFileIngressProgress: Equatable, Sendable {
+    public let completedByteCount: UInt64
+    public let totalByteCount: UInt64
+
+    public init(completedByteCount: UInt64, totalByteCount: UInt64) {
+        self.totalByteCount = totalByteCount
+        self.completedByteCount = min(completedByteCount, totalByteCount)
+    }
+
+    public var fractionCompleted: Double {
+        guard totalByteCount > 0 else { return 0 }
+        return Double(completedByteCount) / Double(totalByteCount)
+    }
+}
+
 /// Owns the short-lived Files-provider permission and immediately copies an
 /// incoming vault into app-controlled, protected temporary storage.
 public struct KHVaultFileIngress {
@@ -243,14 +261,20 @@ public struct KHVaultFileIngress {
         self.fileManager = fileManager
     }
 
-    public func stageIfRecognized(_ sourceURL: URL) throws -> StagedVaultFile? {
+    public func stageIfRecognized(
+        _ sourceURL: URL,
+        progress: (@Sendable (VaultFileIngressProgress) -> Void)? = nil
+    ) throws -> StagedVaultFile? {
         guard let recognized = KHVaultFileRecognizer().recognize(sourceURL) else {
             return nil
         }
-        return try stage(recognized)
+        return try stage(recognized, progress: progress)
     }
 
-    public func stage(_ recognizedFile: RecognizedVaultFile) throws -> StagedVaultFile {
+    public func stage(
+        _ recognizedFile: RecognizedVaultFile,
+        progress: (@Sendable (VaultFileIngressProgress) -> Void)? = nil
+    ) throws -> StagedVaultFile {
         let sourceURL = recognizedFile.url
         let displayName = sourceURL.lastPathComponent
         let accessed = sourceURL.startAccessingSecurityScopedResource()
@@ -272,7 +296,8 @@ public struct KHVaultFileIngress {
                 stagedResult = .success(
                     try stageCoordinatedFile(
                         at: coordinatedURL,
-                        displayName: displayName
+                        displayName: displayName,
+                        progress: progress
                     )
                 )
             } catch {
@@ -288,6 +313,8 @@ public struct KHVaultFileIngress {
         }
         do {
             return try stagedResult.get()
+        } catch is CancellationError {
+            throw CancellationError()
         } catch let error as VaultFileIngressError {
             throw error
         } catch {
@@ -297,7 +324,8 @@ public struct KHVaultFileIngress {
 
     private func stageCoordinatedFile(
         at sourceURL: URL,
-        displayName: String
+        displayName: String,
+        progress: (@Sendable (VaultFileIngressProgress) -> Void)?
     ) throws -> StagedVaultFile {
         guard sourceURL.pathExtension.caseInsensitiveCompare(
             KHVaultFileRecognizer.filenameExtension
@@ -361,7 +389,12 @@ public struct KHVaultFileIngress {
             try protectedRoot.setResourceValues(values)
 
             let destination = importRoot.appendingPathComponent("Selected.khvault")
-            try fileManager.copyItem(at: sourceURL, to: destination)
+            try copyProtectedFile(
+                from: sourceURL,
+                to: destination,
+                byteCount: sourceByteCount,
+                progress: progress
+            )
             try fileManager.setAttributes(
                 [.protectionKey: FileProtectionType.complete],
                 ofItemAtPath: destination.path
@@ -395,5 +428,57 @@ public struct KHVaultFileIngress {
             try? fileManager.removeItem(at: importRoot)
             throw error
         }
+    }
+
+    private func copyProtectedFile(
+        from sourceURL: URL,
+        to destinationURL: URL,
+        byteCount: UInt64,
+        progress: (@Sendable (VaultFileIngressProgress) -> Void)?
+    ) throws {
+        guard fileManager.createFile(
+            atPath: destinationURL.path,
+            contents: nil,
+            attributes: [.protectionKey: FileProtectionType.complete]
+        ) else {
+            throw VaultFileIngressError.unavailable
+        }
+
+        let sourceHandle = try FileHandle(forReadingFrom: sourceURL)
+        let destinationHandle = try FileHandle(forWritingTo: destinationURL)
+        defer {
+            try? sourceHandle.close()
+            try? destinationHandle.close()
+        }
+
+        let chunkByteCount = 1_048_576
+        var copiedByteCount: UInt64 = 0
+        progress?(VaultFileIngressProgress(
+            completedByteCount: 0,
+            totalByteCount: byteCount
+        ))
+
+        while copiedByteCount < byteCount {
+            try Task.checkCancellation()
+            let remainingByteCount = byteCount - copiedByteCount
+            let requestedByteCount = Int(min(UInt64(chunkByteCount), remainingByteCount))
+            guard let chunk = try sourceHandle.read(upToCount: requestedByteCount),
+                  !chunk.isEmpty else {
+                throw VaultFileIngressError.unavailable
+            }
+            try destinationHandle.write(contentsOf: chunk)
+            copiedByteCount += UInt64(chunk.count)
+            progress?(VaultFileIngressProgress(
+                completedByteCount: copiedByteCount,
+                totalByteCount: byteCount
+            ))
+        }
+
+        try Task.checkCancellation()
+        let trailingByte = try sourceHandle.read(upToCount: 1) ?? Data()
+        guard trailingByte.isEmpty else {
+            throw VaultFileIngressError.unavailable
+        }
+        try destinationHandle.synchronize()
     }
 }

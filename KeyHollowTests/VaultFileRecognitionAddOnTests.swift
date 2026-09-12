@@ -39,6 +39,34 @@ final class VaultFileRecognitionAddOnTests: XCTestCase {
         XCTAssertEqual(stagedValues.fileSize, original.count)
     }
 
+    func testIngressReportsMonotonicByteProgressThroughCompletion() throws {
+        let sourceURL = FileManager.default.temporaryDirectory.appendingPathComponent(
+            "Progress-\(UUID().uuidString).khvault"
+        )
+        let original = Data(repeating: 0xA5, count: 2_500_000)
+        try original.write(to: sourceURL)
+        defer { try? FileManager.default.removeItem(at: sourceURL) }
+
+        let recorder = IngressProgressRecorder()
+        let staged = try XCTUnwrap(
+            KHVaultFileIngress().stageIfRecognized(sourceURL) { progress in
+                recorder.append(progress)
+            }
+        )
+        defer { staged.discard() }
+
+        let updates = recorder.values
+        XCTAssertGreaterThan(updates.count, 2)
+        XCTAssertEqual(updates.first?.completedByteCount, 0)
+        XCTAssertEqual(updates.last?.completedByteCount, UInt64(original.count))
+        XCTAssertTrue(updates.allSatisfy { $0.totalByteCount == UInt64(original.count) })
+        XCTAssertEqual(
+            updates.map(\.completedByteCount),
+            updates.map(\.completedByteCount).sorted()
+        )
+        XCTAssertEqual(try Data(contentsOf: staged.url), original)
+    }
+
     func testCheckedDiscardFailsClosedAndCanRetry() throws {
         let sourceURL = FileManager.default.temporaryDirectory.appendingPathComponent(
             "Checked-Discard-\(UUID().uuidString).khvault"
@@ -403,6 +431,23 @@ final class VaultFileRecognitionAddOnTests: XCTestCase {
             ),
             "The packaged thumbnail extension must expose the approved icon asset"
         )
+    }
+}
+
+private final class IngressProgressRecorder: @unchecked Sendable {
+    private let lock = NSLock()
+    private var storedValues: [VaultFileIngressProgress] = []
+
+    var values: [VaultFileIngressProgress] {
+        lock.lock()
+        defer { lock.unlock() }
+        return storedValues
+    }
+
+    func append(_ value: VaultFileIngressProgress) {
+        lock.lock()
+        storedValues.append(value)
+        lock.unlock()
     }
 }
 
