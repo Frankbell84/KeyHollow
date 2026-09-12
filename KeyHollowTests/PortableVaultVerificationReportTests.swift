@@ -38,6 +38,45 @@ final class PortableVaultVerificationReportTests: XCTestCase {
         XCTAssertTrue(FileManager.default.fileExists(atPath: roots.archive.path))
     }
 
+    func testVerificationReportsAuthenticatedProgressThroughFinalCleanup() async throws {
+        let roots = try VerificationTestRoots.create()
+        defer { roots.remove() }
+        let credential = PortableArchiveCredential.recoveryCode(
+            "0123-4567-89AB-CDEF-GHJK-MNPQ-RSTV-WXYZ"
+        )
+        try await createMixedArchive(
+            at: roots,
+            createdAt: Date(timeIntervalSince1970: 1_700_123_405),
+            credential: credential
+        )
+        let recorder = ValidationProgressRecorder()
+
+        _ = try await EncryptedVaultTransferCoordinator().verifyArchive(
+            archiveURL: roots.archive,
+            credential: credential,
+            workingRootOverride: roots.working,
+            supplementalContent: GeneralFilePortableTransferBridge(),
+            keyDeriver: VerificationTestKeyDeriver(),
+            progress: { recorder.append($0) }
+        )
+
+        let updates = recorder.values
+        let archiveUpdates = updates.filter { $0.phase == .authenticatingArchive }
+        let fileUpdates = updates.filter { $0.phase == .authenticatingFiles }
+        let photoUpdates = updates.filter { $0.phase == .authenticatingPhotos }
+        let finalUpdates = updates.filter { $0.phase == .finalizing }
+        XCTAssertGreaterThan(archiveUpdates.count, 1)
+        XCTAssertEqual(
+            archiveUpdates.last?.fractionCompleted ?? -1,
+            1,
+            accuracy: 0.000_001
+        )
+        XCTAssertEqual(fileUpdates.last?.fractionCompleted, 1)
+        XCTAssertEqual(photoUpdates.last?.fractionCompleted, 1)
+        XCTAssertEqual(finalUpdates.last?.fractionCompleted, 1)
+        XCTAssertTrue(try workingDirectoryContents(roots.working).isEmpty)
+    }
+
     func testGeneralFileOnlyArchiveReportsAuthenticatedSupplementalInventory() async throws {
         let roots = try VerificationTestRoots.create()
         defer { roots.remove() }
@@ -762,6 +801,23 @@ final class PortableVaultVerificationReportTests: XCTestCase {
 }
 
 private func requireSendable<T: Sendable>(_ value: T) {}
+
+private final class ValidationProgressRecorder: @unchecked Sendable {
+    private let lock = NSLock()
+    private var storedValues: [PortableVaultValidationProgress] = []
+
+    var values: [PortableVaultValidationProgress] {
+        lock.lock()
+        defer { lock.unlock() }
+        return storedValues
+    }
+
+    func append(_ value: PortableVaultValidationProgress) {
+        lock.lock()
+        storedValues.append(value)
+        lock.unlock()
+    }
+}
 
 private func workingDirectoryContents(_ root: URL) throws -> [URL] {
     try FileManager.default.contentsOfDirectory(

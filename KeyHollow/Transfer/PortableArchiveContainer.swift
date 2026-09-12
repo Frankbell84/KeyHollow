@@ -276,14 +276,22 @@ final class PortableArchiveContainerWriter {
 
 final class PortableArchiveContainerReader {
     let header: EncryptedVaultArchiveHeader
+    let totalByteCount: UInt64
 
     private var fileHandle: FileHandle?
     private var isConsumed = false
+    private let initialConsumedByteCount: UInt64
 
     init(sourceURL: URL) throws {
         let handle = try FileHandle(forReadingFrom: sourceURL)
 
         do {
+            let attributes = try FileManager.default.attributesOfItem(atPath: sourceURL.path)
+            guard let size = attributes[.size] as? NSNumber,
+                  size.uint64Value > 0 else {
+                throw PortableArchiveContainerError.truncated
+            }
+            totalByteCount = size.uint64Value
             let magic = try Self.readExactly(
                 PortableArchiveContainerFormat.magic.count,
                 from: handle
@@ -317,6 +325,9 @@ final class PortableArchiveContainerReader {
                 throw PortableArchiveContainerError.unsupportedVersion
             }
             header = decodedHeader
+            initialConsumedByteCount = UInt64(
+                PortableArchiveContainerFormat.magic.count + 4 + 4 + headerLength
+            )
             fileHandle = handle
         } catch {
             try? handle.close()
@@ -332,7 +343,8 @@ final class PortableArchiveContainerReader {
     func streamAuthenticatedContent(
         credential: PortableArchiveCredential,
         keyDeriver: any PortableArchiveKeyDeriving = PortableArchiveArgon2idKeyDeriver(),
-        receive: (Data) throws -> Void
+        receive: (Data) throws -> Void,
+        progress: ((_ completedByteCount: UInt64, _ totalByteCount: UInt64) -> Void)? = nil
     ) throws -> PortableArchiveSecrets {
         guard !isConsumed, let handle = fileHandle else {
             throw PortableArchiveContainerError.alreadyConsumed
@@ -344,6 +356,8 @@ final class PortableArchiveContainerReader {
             let contentKey = SymmetricKey(data: secrets.contentKey)
             var expectedSequence: UInt64 = 0
             var foundFinalChunk = false
+            var consumedByteCount = initialConsumedByteCount
+            progress?(min(consumedByteCount, totalByteCount), totalByteCount)
 
             while !foundFinalChunk {
                 try Task.checkCancellation()
@@ -394,6 +408,10 @@ final class PortableArchiveContainerReader {
                 }
                 try receive(plaintext)
                 try Task.checkCancellation()
+                consumedByteCount += UInt64(
+                    PortableArchiveContainerFormat.framePrefixByteCount + sealedLength
+                )
+                progress?(min(consumedByteCount, totalByteCount), totalByteCount)
                 foundFinalChunk = chunk.isFinal
 
                 let (incremented, overflow) = expectedSequence.addingReportingOverflow(1)

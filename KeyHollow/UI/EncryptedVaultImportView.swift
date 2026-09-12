@@ -24,6 +24,9 @@ struct EncryptedVaultImportView: View {
     @State private var showingFilePicker = false
     @State private var systemInteractionOpen = false
     @State private var isWorking = false
+    @State private var operationProgress: VaultTransferProgressDisplay?
+    @State private var protectedTaskID: UUID?
+    @State private var activeOperationID: UUID?
     @State private var message: String?
     @State private var handledInitialArchive = false
     @FocusState private var focusedField: ImportField?
@@ -193,9 +196,13 @@ struct EncryptedVaultImportView: View {
                 }
                 .overlay {
                     if isWorking {
-                        ProgressView(validatedContent == nil ? "Authenticating every file…" : "Re-authenticating and installing…")
-                            .padding()
-                            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+                        if let operationProgress {
+                            VaultTransferProgressView(display: operationProgress)
+                        } else {
+                            ProgressView(validatedContent == nil ? "Authenticating every file…" : "Re-authenticating and installing…")
+                                .padding()
+                                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+                        }
                     }
                 }
                 .interactiveDismissDisabled(isWorking)
@@ -215,6 +222,9 @@ struct EncryptedVaultImportView: View {
             guard SecurityEpochCredentialPolicy.mustClearDuringSystemInteraction(
                 systemInteractionOpen
             ) else { return }
+            activeOperationID = nil
+            protectedTaskID = nil
+            operationProgress = nil
             clearSensitiveState()
             discardUninstalledMaterial()
             isWorking = false
@@ -314,19 +324,85 @@ struct EncryptedVaultImportView: View {
         }
 
         discardUninstalledMaterial()
-        do {
-            guard let stagedArchive = try KHVaultFileIngress().stageIfRecognized(url) else {
-                throw VaultFileIngressError.unsupportedFile
+        let operationID = UUID()
+        activeOperationID = operationID
+        isWorking = true
+        operationProgress = VaultTransferProgressDisplay(
+            title: "Loading encrypted vault…",
+            fractionCompleted: nil,
+            detail: nil
+        )
+        message = nil
+
+        protectedTaskID = session.startProtectedTask {
+            var newlyStagedArchive: StagedVaultFile?
+            do {
+                guard let stagedArchive = try await Self.stageArchiveOffMain(
+                    url,
+                    progress: { progress in
+                        Task { @MainActor in
+                            guard activeOperationID == operationID else { return }
+                            operationProgress = .copying(progress)
+                        }
+                    }
+                ) else {
+                    throw VaultFileIngressError.unsupportedFile
+                }
+                newlyStagedArchive = stagedArchive
+                try Task.checkCancellation()
+                guard activeOperationID == operationID else {
+                    try stagedArchive.discardChecked()
+                    return
+                }
+                selectedArchive = stagedArchive
+                newlyStagedArchive = nil
+                recoveryCode = ""
+                message = nil
+                finishProtectedOperation(operationID)
+            } catch is CancellationError {
+                newlyStagedArchive?.discard()
+                guard activeOperationID == operationID else { return }
+                finishProtectedOperation(operationID)
+            } catch VaultFileIngressError.unsupportedFile {
+                newlyStagedArchive?.discard()
+                guard activeOperationID == operationID else { return }
+                message = "Choose a KeyHollow .khvault file."
+                finishProtectedOperation(operationID)
+            } catch VaultFileIngressError.insufficientStorage {
+                newlyStagedArchive?.discard()
+                guard activeOperationID == operationID else { return }
+                message = "This iPhone does not have enough free space to authenticate and install that export safely."
+                finishProtectedOperation(operationID)
+            } catch {
+                newlyStagedArchive?.discard()
+                guard activeOperationID == operationID else { return }
+                message = "The selected export could not be copied into protected temporary storage."
+                finishProtectedOperation(operationID)
             }
-            selectedArchive = stagedArchive
-            recoveryCode = ""
-            message = nil
-        } catch VaultFileIngressError.unsupportedFile {
-            message = "Choose a KeyHollow .khvault file."
-        } catch VaultFileIngressError.insufficientStorage {
-            message = "This iPhone does not have enough free space to authenticate and install that export safely."
-        } catch {
-            message = "The selected export could not be copied into protected temporary storage."
+        }
+    }
+
+    private static func stageArchiveOffMain(
+        _ url: URL,
+        progress: @escaping @Sendable (VaultFileIngressProgress) -> Void
+    ) async throws -> StagedVaultFile? {
+        let task = Task.detached(priority: .userInitiated) {
+            let staged = try KHVaultFileIngress().stageIfRecognized(
+                url,
+                progress: progress
+            )
+            do {
+                try Task.checkCancellation()
+                return staged
+            } catch {
+                try staged?.discardChecked()
+                throw error
+            }
+        }
+        return try await withTaskCancellationHandler {
+            try await task.value
+        } onCancel: {
+            task.cancel()
         }
     }
 
@@ -334,31 +410,44 @@ struct EncryptedVaultImportView: View {
         guard canValidate, let selectedArchive, !isWorking else { return }
         dismissKeyboard()
         let credential = PortableArchiveCredential.recoveryCode(recoveryCode)
+        let operationID = UUID()
+        activeOperationID = operationID
         isWorking = true
+        operationProgress = VaultTransferProgressDisplay(
+            title: "Preparing secure verification…",
+            fractionCompleted: nil,
+            detail: nil
+        )
         message = nil
         let requestSecurityEpoch = session.securityEpoch
 
-        session.startProtectedTask {
+        protectedTaskID = session.startProtectedTask {
             do {
                 let report = try await EncryptedVaultTransferCoordinator().verifyArchive(
                     archiveURL: selectedArchive.url,
                     credential: credential,
-                    supplementalContent: GeneralFilePortableTransferBridge()
+                    supplementalContent: GeneralFilePortableTransferBridge(),
+                    progress: { progress in
+                        Task { @MainActor in
+                            guard activeOperationID == operationID else { return }
+                            operationProgress = .validating(progress)
+                        }
+                    }
                 )
                 let summary = ValidatedVaultContentSummary(
                     photoCount: report.authenticatedPhotoCount,
                     generalFileCount: report.authenticatedFileCount,
                     legacyOversizedPhotoCount: report.legacyOversizedPhotoCount
                 )
-                guard !Task.isCancelled else { return }
+                guard !Task.isCancelled, activeOperationID == operationID else { return }
                 validatedContent = summary
-                isWorking = false
+                finishProtectedOperation(operationID)
             } catch is CancellationError {
                 guard session.securityEpoch == requestSecurityEpoch else { return }
-                isWorking = false
+                finishProtectedOperation(operationID)
             } catch {
                 guard session.securityEpoch == requestSecurityEpoch else { return }
-                isWorking = false
+                finishProtectedOperation(operationID)
                 recoveryCode = ""
                 message = "The export could not be authenticated. Check the recovery code and confirm the .khvault file is unchanged."
             }
@@ -375,12 +464,19 @@ struct EncryptedVaultImportView: View {
         let credential = PortableArchiveCredential.recoveryCode(recoveryCode)
         newPasscode = ""
         passcodeConfirmation = ""
+        let operationID = UUID()
+        activeOperationID = operationID
         isWorking = true
+        operationProgress = VaultTransferProgressDisplay(
+            title: "Preparing secure installation…",
+            fractionCompleted: nil,
+            detail: nil
+        )
         message = nil
         let unlockAuthorization = session.authorizeUnlockCompletion()
         let requestSecurityEpoch = session.securityEpoch
 
-        session.startProtectedTask {
+        protectedTaskID = session.startProtectedTask {
             var restore: ValidatedPortableVaultRestore?
             do {
                 // Re-authenticate immediately before installation so the
@@ -389,7 +485,13 @@ struct EncryptedVaultImportView: View {
                 let authenticated = try await EncryptedVaultTransferCoordinator().stageAndValidateRestore(
                     archiveURL: selectedArchive.url,
                     credential: credential,
-                    supplementalContent: GeneralFilePortableTransferBridge()
+                    supplementalContent: GeneralFilePortableTransferBridge(),
+                    progress: { progress in
+                        Task { @MainActor in
+                            guard activeOperationID == operationID else { return }
+                            operationProgress = .validating(progress)
+                        }
+                    }
                 )
                 restore = authenticated
                 try Task.checkCancellation()
@@ -402,7 +504,7 @@ struct EncryptedVaultImportView: View {
                 self.selectedArchive = nil
                 validatedContent = nil
                 recoveryCode = ""
-                isWorking = false
+                finishProtectedOperation(operationID)
                 let accepted = session.completeUnlock(
                     vaultID: unlocked.vaultID,
                     key: unlocked.vaultKey,
@@ -413,23 +515,37 @@ struct EncryptedVaultImportView: View {
             } catch is CancellationError {
                 restore?.discard()
                 guard session.securityEpoch == requestSecurityEpoch else { return }
-                isWorking = false
+                finishProtectedOperation(operationID)
             } catch VaultUnlockError.passcodeAlreadyUsed {
                 restore?.discard()
                 guard session.securityEpoch == requestSecurityEpoch else { return }
-                isWorking = false
+                finishProtectedOperation(operationID)
                 message = "That LowKey is already in use. Choose a different unpredictable LowKey."
             } catch {
                 restore?.discard()
                 guard session.securityEpoch == requestSecurityEpoch else { return }
-                isWorking = false
+                finishProtectedOperation(operationID)
                 message = "The vault could not be installed safely. The incomplete install was rolled back; select the export and try again."
             }
         }
     }
 
+    private func finishProtectedOperation(_ operationID: UUID) {
+        guard activeOperationID == operationID else { return }
+        activeOperationID = nil
+        protectedTaskID = nil
+        operationProgress = nil
+        isWorking = false
+    }
+
     private func cancelAndDismiss() {
         dismissKeyboard()
+        activeOperationID = nil
+        if let protectedTaskID {
+            session.cancelSensitiveTask(protectedTaskID)
+        }
+        protectedTaskID = nil
+        operationProgress = nil
         clearSensitiveState()
         discardUninstalledMaterial()
         dismiss()

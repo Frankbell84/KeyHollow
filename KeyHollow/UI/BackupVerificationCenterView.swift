@@ -23,6 +23,7 @@ struct BackupVerificationCenterView: View {
     @State private var isWorking = false
     @State private var isDismissing = false
     @State private var workingDescription = ""
+    @State private var operationProgress: VaultTransferProgressDisplay?
     @State private var message: String?
     @State private var protectedTaskID: UUID?
     @State private var activeOperationID: UUID?
@@ -154,9 +155,13 @@ struct BackupVerificationCenterView: View {
         }
         .overlay {
             if isWorking {
-                ProgressView(workingDescription)
-                    .padding()
-                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+                if let operationProgress {
+                    VaultTransferProgressView(display: operationProgress)
+                } else {
+                    ProgressView(workingDescription)
+                        .padding()
+                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+                }
             }
         }
         .interactiveDismissDisabled(isWorking || isDismissing)
@@ -220,13 +225,26 @@ struct BackupVerificationCenterView: View {
         activeOperationID = operationID
         isWorking = true
         workingDescription = "Copying backup into protected storage..."
+        operationProgress = VaultTransferProgressDisplay(
+            title: "Loading encrypted vault…",
+            fractionCompleted: nil,
+            detail: nil
+        )
         message = nil
         messageFocused = false
 
         protectedTaskID = session.startProtectedTask {
             var newlyStagedArchive: StagedVaultFile?
             do {
-                guard let stagedArchive = try await Self.stageArchiveOffMain(url) else {
+                guard let stagedArchive = try await Self.stageArchiveOffMain(
+                    url,
+                    progress: { progress in
+                        Task { @MainActor in
+                            guard activeOperationID == operationID else { return }
+                            operationProgress = .copying(progress)
+                        }
+                    }
+                ) else {
                     throw VaultFileIngressError.unsupportedFile
                 }
                 newlyStagedArchive = stagedArchive
@@ -296,10 +314,14 @@ struct BackupVerificationCenterView: View {
     }
 
     private static func stageArchiveOffMain(
-        _ url: URL
+        _ url: URL,
+        progress: @escaping @Sendable (VaultFileIngressProgress) -> Void
     ) async throws -> StagedVaultFile? {
         let task = Task.detached(priority: .userInitiated) {
-            let staged = try KHVaultFileIngress().stageIfRecognized(url)
+            let staged = try KHVaultFileIngress().stageIfRecognized(
+                url,
+                progress: progress
+            )
             do {
                 try Task.checkCancellation()
                 return staged
@@ -326,6 +348,11 @@ struct BackupVerificationCenterView: View {
         recoveryCode = ""
         isWorking = true
         workingDescription = "Authenticating every file..."
+        operationProgress = VaultTransferProgressDisplay(
+            title: "Preparing secure verification…",
+            fractionCompleted: nil,
+            detail: nil
+        )
         message = nil
         messageFocused = false
 
@@ -334,7 +361,14 @@ struct BackupVerificationCenterView: View {
                 let verified = try await EncryptedVaultTransferCoordinator().verifyArchive(
                     archiveURL: selectedArchive.url,
                     credential: credential,
-                    supplementalContent: GeneralFilePortableTransferBridge()
+                    supplementalContent: GeneralFilePortableTransferBridge(),
+                    progress: { progress in
+                        Task { @MainActor in
+                            if activeOperationID == operationID {
+                                operationProgress = .validating(progress)
+                            }
+                        }
+                    }
                 )
                 try Task.checkCancellation()
 
@@ -416,6 +450,7 @@ struct BackupVerificationCenterView: View {
         protectedTaskID = nil
         isWorking = false
         workingDescription = ""
+        operationProgress = nil
         recoveryCode = ""
     }
 
@@ -428,6 +463,7 @@ struct BackupVerificationCenterView: View {
         }
         protectedTaskID = nil
         isWorking = false
+        operationProgress = nil
         workingDescription = ""
         return protectedTaskWasActive
     }

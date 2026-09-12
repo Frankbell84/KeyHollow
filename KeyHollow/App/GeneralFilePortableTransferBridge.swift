@@ -66,6 +66,32 @@ struct GeneralFilePortableTransferBridge: PortableVaultSupplementalContentProvid
         )
     }
 
+    func validateStagedContent(
+        at rootURL: URL,
+        sourceVaultID: UUID,
+        vaultKey: SymmetricKey,
+        progress: @Sendable (PortableVaultSupplementalValidationProgress) -> Void
+    ) async throws -> PortableVaultSupplementalValidation {
+        let store = try VaultGeneralFileStore(
+            vaultID: sourceVaultID,
+            access: PortableGeneralFileAccess(
+                vaultID: sourceVaultID,
+                vaultKey: vaultKey
+            ),
+            storageRoot: rootURL
+        )
+        let manifest = try await store.validateAllEncryptedFiles { completed, total in
+            progress(PortableVaultSupplementalValidationProgress(
+                completedItemCount: completed,
+                totalItemCount: total
+            ))
+        }
+        return PortableVaultSupplementalValidation(
+            itemCount: manifest.files.count,
+            storageNames: Set(manifest.files.map(\.blobName))
+        )
+    }
+
     private static func storageRoot(vaultID: UUID, override: URL?) throws -> URL {
         if let override { return override.standardizedFileURL }
         let appSupport = try FileManager.default.url(

@@ -44,6 +44,46 @@ public struct PortableVaultSupplementalValidation: Sendable {
     }
 }
 
+public struct PortableVaultSupplementalValidationProgress: Equatable, Sendable {
+    public let completedItemCount: Int
+    public let totalItemCount: Int
+
+    public init(completedItemCount: Int, totalItemCount: Int) {
+        self.totalItemCount = max(0, totalItemCount)
+        self.completedItemCount = min(max(0, completedItemCount), self.totalItemCount)
+    }
+}
+
+public enum PortableVaultValidationPhase: Equatable, Sendable {
+    case authenticatingArchive
+    case authenticatingFiles
+    case authenticatingPhotos
+    case finalizing
+}
+
+/// Phase-local progress for archive authentication. It deliberately contains
+/// counts only—never vault identity, filenames, paths, keys, or plaintext.
+public struct PortableVaultValidationProgress: Equatable, Sendable {
+    public let phase: PortableVaultValidationPhase
+    public let completedUnitCount: UInt64
+    public let totalUnitCount: UInt64
+
+    public init(
+        phase: PortableVaultValidationPhase,
+        completedUnitCount: UInt64,
+        totalUnitCount: UInt64
+    ) {
+        self.phase = phase
+        self.totalUnitCount = totalUnitCount
+        self.completedUnitCount = min(completedUnitCount, totalUnitCount)
+    }
+
+    public var fractionCompleted: Double {
+        guard totalUnitCount > 0 else { return 0 }
+        return Double(completedUnitCount) / Double(totalUnitCount)
+    }
+}
+
 /// A narrow composition seam for independently compiled encrypted-content
 /// add-ons. The transfer core understands only authenticated ciphertext files.
 public protocol PortableVaultSupplementalContentProviding: Sendable {
@@ -57,6 +97,33 @@ public protocol PortableVaultSupplementalContentProviding: Sendable {
         sourceVaultID: UUID,
         vaultKey: SymmetricKey
     ) async throws -> PortableVaultSupplementalValidation
+
+    func validateStagedContent(
+        at rootURL: URL,
+        sourceVaultID: UUID,
+        vaultKey: SymmetricKey,
+        progress: @Sendable (PortableVaultSupplementalValidationProgress) -> Void
+    ) async throws -> PortableVaultSupplementalValidation
+}
+
+public extension PortableVaultSupplementalContentProviding {
+    func validateStagedContent(
+        at rootURL: URL,
+        sourceVaultID: UUID,
+        vaultKey: SymmetricKey,
+        progress: @Sendable (PortableVaultSupplementalValidationProgress) -> Void
+    ) async throws -> PortableVaultSupplementalValidation {
+        let validation = try await validateStagedContent(
+            at: rootURL,
+            sourceVaultID: sourceVaultID,
+            vaultKey: vaultKey
+        )
+        progress(PortableVaultSupplementalValidationProgress(
+            completedItemCount: validation.itemCount,
+            totalItemCount: validation.itemCount
+        ))
+        return validation
+    }
 }
 
 public struct EncryptedVaultExportReceipt: Equatable, Sendable {
@@ -536,7 +603,8 @@ public struct EncryptedVaultTransferCoordinator {
         credential: PortableArchiveCredential,
         workingRootOverride: URL? = nil,
         supplementalContent: (any PortableVaultSupplementalContentProviding)? = nil,
-        keyDeriver: any PortableArchiveKeyDeriving = PortableArchiveArgon2idKeyDeriver()
+        keyDeriver: any PortableArchiveKeyDeriving = PortableArchiveArgon2idKeyDeriver(),
+        progress: (@Sendable (PortableVaultValidationProgress) -> Void)? = nil
     ) async throws -> ValidatedPortableVaultRestore {
         let workingRoot = try Self.workingRoot(override: workingRootOverride)
         let workingDirectoryLease = try PortableArchiveWorkingDirectoryRegistry.shared.acquire(
@@ -549,12 +617,25 @@ public struct EncryptedVaultTransferCoordinator {
         let stagedPayload: PortableArchiveStagedPayload
         do {
             let reader = try PortableArchiveContainerReader(sourceURL: archiveURL)
+            progress?(PortableVaultValidationProgress(
+                phase: .authenticatingArchive,
+                completedUnitCount: 0,
+                totalUnitCount: reader.totalByteCount
+            ))
             secrets = try reader.streamAuthenticatedContent(
                 credential: credential,
-                keyDeriver: keyDeriver
-            ) { chunk in
-                try extractor.receive(chunk)
-            }
+                keyDeriver: keyDeriver,
+                receive: { chunk in
+                    try extractor.receive(chunk)
+                },
+                progress: { completedByteCount, totalByteCount in
+                    progress?(PortableVaultValidationProgress(
+                        phase: .authenticatingArchive,
+                        completedUnitCount: completedByteCount,
+                        totalUnitCount: totalByteCount
+                    ))
+                }
+            )
             stagedPayload = try extractor.finish()
         } catch {
             do {
@@ -580,13 +661,27 @@ public struct EncryptedVaultTransferCoordinator {
                 guard let supplementalContent else {
                     throw EncryptedVaultTransferError.restoredCatalogMismatch
                 }
+                progress?(PortableVaultValidationProgress(
+                    phase: .authenticatingFiles,
+                    completedUnitCount: 0,
+                    totalUnitCount: UInt64(max(1, stagedPayload.catalog.entries.filter {
+                        $0.role == .supplementalBlob
+                    }.count))
+                ))
                 supplementalValidation = try await supplementalContent.validateStagedContent(
                     at: stagedPayload.directoryURL.appendingPathComponent(
                         "supplemental",
                         isDirectory: true
                     ),
                     sourceVaultID: secrets.sourceVaultID,
-                    vaultKey: vaultKey
+                    vaultKey: vaultKey,
+                    progress: { supplementalProgress in
+                        progress?(PortableVaultValidationProgress(
+                            phase: .authenticatingFiles,
+                            completedUnitCount: UInt64(supplementalProgress.completedItemCount),
+                            totalUnitCount: UInt64(max(1, supplementalProgress.totalItemCount))
+                        ))
+                    }
                 )
             } else {
                 supplementalValidation = PortableVaultSupplementalValidation(
@@ -613,6 +708,13 @@ public struct EncryptedVaultTransferCoordinator {
                 }
             )
             var legacyOversizedPhotoIDs = Set<UUID>()
+            let photoValidationUnitCount = UInt64(max(1, manifest.photos.count))
+            var completedPhotoValidationUnitCount: UInt64 = 0
+            progress?(PortableVaultValidationProgress(
+                phase: .authenticatingPhotos,
+                completedUnitCount: 0,
+                totalUnitCount: photoValidationUnitCount
+            ))
             for photo in manifest.photos {
                 try Task.checkCancellation()
                 guard let originalEntry = entriesByStorageName[photo.blobName],
@@ -635,7 +737,19 @@ public struct EncryptedVaultTransferCoordinator {
                 } else {
                     legacyOversizedPhotoIDs.insert(photo.id)
                 }
+                completedPhotoValidationUnitCount += 1
+                progress?(PortableVaultValidationProgress(
+                    phase: .authenticatingPhotos,
+                    completedUnitCount: completedPhotoValidationUnitCount,
+                    totalUnitCount: photoValidationUnitCount
+                ))
             }
+
+            progress?(PortableVaultValidationProgress(
+                phase: .finalizing,
+                completedUnitCount: 0,
+                totalUnitCount: 1
+            ))
 
             return ValidatedPortableVaultRestore(
                 secrets: secrets,
@@ -664,7 +778,8 @@ public struct EncryptedVaultTransferCoordinator {
         credential: PortableArchiveCredential,
         workingRootOverride: URL? = nil,
         supplementalContent: (any PortableVaultSupplementalContentProviding)? = nil,
-        keyDeriver: any PortableArchiveKeyDeriving = PortableArchiveArgon2idKeyDeriver()
+        keyDeriver: any PortableArchiveKeyDeriving = PortableArchiveArgon2idKeyDeriver(),
+        progress: (@Sendable (PortableVaultValidationProgress) -> Void)? = nil
     ) async throws -> PortableVaultVerificationReport {
         try await verifyArchive(
             archiveURL: archiveURL,
@@ -672,6 +787,7 @@ public struct EncryptedVaultTransferCoordinator {
             workingRootOverride: workingRootOverride,
             supplementalContent: supplementalContent,
             keyDeriver: keyDeriver,
+            progress: progress,
             discardStaging: { restore in
                 try restore.discardChecked()
             }
@@ -684,6 +800,7 @@ public struct EncryptedVaultTransferCoordinator {
         workingRootOverride: URL? = nil,
         supplementalContent: (any PortableVaultSupplementalContentProviding)? = nil,
         keyDeriver: any PortableArchiveKeyDeriving = PortableArchiveArgon2idKeyDeriver(),
+        progress: (@Sendable (PortableVaultValidationProgress) -> Void)? = nil,
         discardStaging: @Sendable (ValidatedPortableVaultRestore) throws -> Void
     ) async throws -> PortableVaultVerificationReport {
         try Task.checkCancellation()
@@ -692,7 +809,8 @@ public struct EncryptedVaultTransferCoordinator {
             credential: credential,
             workingRootOverride: workingRootOverride,
             supplementalContent: supplementalContent,
-            keyDeriver: keyDeriver
+            keyDeriver: keyDeriver,
+            progress: progress
         )
         var cleanupCompleted = false
         defer {
@@ -728,6 +846,11 @@ public struct EncryptedVaultTransferCoordinator {
         }
         cleanupCompleted = true
         try Task.checkCancellation()
+        progress?(PortableVaultValidationProgress(
+            phase: .finalizing,
+            completedUnitCount: 1,
+            totalUnitCount: 1
+        ))
         return report
     }
 
