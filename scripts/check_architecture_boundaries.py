@@ -2167,6 +2167,10 @@ def main() -> int:
                     surface_body or "",
                     "public func updateUIView(_ imageView: UIImageView, context: Context)",
                 )
+                size_surface_body = swift_block_body(
+                    surface_body or "",
+                    "public func sizeThatFits(",
+                )
                 dismantle_surface_body = swift_block_body(
                     surface_body or "",
                     "public static func dismantleUIView(",
@@ -2228,7 +2232,7 @@ def main() -> int:
                     and contains_in_order(
                         make_surface_body,
                         (
-                            "let imageView = UIImageView()",
+                            "let imageView = VaultSecureAspectFitImageView()",
                             "imageView.contentMode = .scaleAspectFit",
                             "if context.coordinator.attachIfAllowed()",
                             "imageView.image = renderedImage.image",
@@ -2242,6 +2246,35 @@ def main() -> int:
                     violations.append(
                         f"{path}: UIKit image attachment must be approved before "
                         "the rendered image enters the presentation surface"
+                    )
+
+                aspect_fit_surface_body = swift_block_body(
+                    secure_preview_file_executable,
+                    "final class VaultSecureAspectFitImageView: UIImageView",
+                )
+                if not (
+                    size_surface_body is not None
+                    and contains_in_order(
+                        size_surface_body,
+                        (
+                            "guard let width = proposal.width",
+                            "let height = proposal.height else { return nil }",
+                            "return CGSize(width: max(0, width), height: max(0, height))",
+                        ),
+                    )
+                    and aspect_fit_surface_body is not None
+                    and contains_in_order(
+                        aspect_fit_surface_body,
+                        (
+                            "override var intrinsicContentSize: CGSize",
+                            "width: UIView.noIntrinsicMetric",
+                            "height: UIView.noIntrinsicMetric",
+                        ),
+                    )
+                ):
+                    violations.append(
+                        f"{path}: secure image surfaces must reject decoded-image "
+                        "intrinsic sizing and accept the stable SwiftUI viewport"
                     )
 
                 if not (
@@ -3248,6 +3281,7 @@ def main() -> int:
                 "isNavigationEnabled: !isSavingPreview",
                 "&& !isDeletingMedia",
                 "&& !isClosingMediaNavigation",
+                "&& isMediaNavigationContentReady(queue)",
                 "onSelectionChange: selectMediaNavigationItem",
             ),
         )
@@ -3291,6 +3325,7 @@ def main() -> int:
                 "imagePreview.imageWillAttach(item.id)",
                 "onImageReleased:",
                 "imagePreview.imageDidRelease(item.id)",
+                ".frame(maxWidth: .infinity, maxHeight: .infinity)",
             ),
         )
         and media_active_content_body.count("VaultSecureImageSurface(") == 1

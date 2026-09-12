@@ -694,7 +694,8 @@ struct VaultGalleryView: View {
                 queue: queue,
                 isNavigationEnabled: !isSavingPreview
                     && !isDeletingMedia
-                    && !isClosingMediaNavigation,
+                    && !isClosingMediaNavigation
+                    && isMediaNavigationContentReady(queue),
                 onSelectionChange: selectMediaNavigationItem
             ) { item in
                 mediaNavigationActiveContent(item)
@@ -765,22 +766,22 @@ struct VaultGalleryView: View {
         } else {
             switch item.kind {
             case .image:
-                ZStack {
-                    mediaNavigationPlaceholder(for: item.id)
-
-                    if let active = imagePreview.active,
-                       active.id == item.id {
-                        VaultSecureImageSurface(
-                            renderedImage: active.preview.displayImage,
-                            accessibilityLabel: item.accessibilityTitle,
-                            onImageWillAttach: {
-                                imagePreview.imageWillAttach(item.id)
-                            },
-                            onImageReleased: {
-                                imagePreview.imageDidRelease(item.id)
-                            }
-                        )
-                    } else {
+                if let active = imagePreview.active,
+                   active.id == item.id {
+                    VaultSecureImageSurface(
+                        renderedImage: active.preview.displayImage,
+                        accessibilityLabel: item.accessibilityTitle,
+                        onImageWillAttach: {
+                            imagePreview.imageWillAttach(item.id)
+                        },
+                        onImageReleased: {
+                            imagePreview.imageDidRelease(item.id)
+                        }
+                    )
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    ZStack {
+                        mediaNavigationPlaceholder(for: item.id)
                         mediaNavigationLoadState(for: item)
                     }
                 }
@@ -1848,6 +1849,7 @@ struct VaultGalleryView: View {
               !isDeletingMedia,
               !isClosingMediaNavigation,
               let queue = mediaNavigationQueue,
+              isMediaNavigationContentReady(queue),
               queue.selectedID != id,
               let selectedQueue = try? queue.selecting(id) else { return }
 
@@ -1998,6 +2000,23 @@ struct VaultGalleryView: View {
             && mediaNavigationGeneration == generation
             && mediaNavigationQueue?.selectedID == id
             && !isClosingMediaNavigation
+    }
+
+    private func isMediaNavigationContentReady(
+        _ queue: VaultMediaNavigationQueue
+    ) -> Bool {
+        if failedMediaID == queue.selectedID {
+            return true
+        }
+
+        switch queue.currentItem.kind {
+        case .image:
+            return imagePreview.active?.id == queue.selectedID
+        case .video:
+            guard let active = videoPlayback.active else { return false }
+            return VaultGalleryContentItem.generalFile(active.source)
+                .mediaNavigationID == queue.selectedID
+        }
     }
 
     private func delete(_ record: VaultPhotoRecord) {

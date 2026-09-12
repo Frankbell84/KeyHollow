@@ -87,6 +87,20 @@ final class VaultSecurePreviewAddOnTests: XCTestCase {
     }
 
     @MainActor
+    func testSecureImageSurfaceDoesNotAdoptAttachedImageDimensions() {
+        let surface = VaultSecureAspectFitImageView()
+        surface.image = UIGraphicsImageRenderer(
+            size: CGSize(width: 640, height: 480)
+        ).image { context in
+            UIColor.systemBlue.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 640, height: 480))
+        }
+
+        XCTAssertEqual(surface.intrinsicContentSize.width, UIView.noIntrinsicMetric)
+        XCTAssertEqual(surface.intrinsicContentSize.height, UIView.noIntrinsicMetric)
+    }
+
+    @MainActor
     func testProcessorBoundsAndPreparesGalleryThumbnailOffViewPath() async throws {
         let format = UIGraphicsImageRendererFormat()
         format.scale = 1
