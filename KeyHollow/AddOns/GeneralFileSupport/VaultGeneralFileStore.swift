@@ -384,14 +384,14 @@ public actor VaultGeneralFileStore {
     /// Verifies that every persisted record has one safe, authenticated blob.
     /// Decrypted bytes exist only transiently in memory and are never written.
     public func validateAllEncryptedFiles(
-        progress: (@Sendable (_ completedItemCount: Int, _ totalItemCount: Int) -> Void)? = nil
+        progress: @Sendable (_ completedItemCount: Int, _ totalItemCount: Int) -> Void = { _, _ in }
     ) throws -> VaultGeneralFileManifest {
         try manifestTransaction.withLock {
             let manifest = try loadManifest()
             var recordIDs = Set<UUID>()
             var blobNames = Set<String>()
             var completedItemCount = 0
-            progress?(completedItemCount, manifest.files.count)
+            progress(completedItemCount, manifest.files.count)
 
             for record in manifest.files {
                 try Task.checkCancellation()
@@ -410,7 +410,7 @@ public actor VaultGeneralFileStore {
                     throw StoreError.verificationFailed
                 }
                 completedItemCount += 1
-                progress?(completedItemCount, manifest.files.count)
+                progress(completedItemCount, manifest.files.count)
             }
             return manifest
         }
