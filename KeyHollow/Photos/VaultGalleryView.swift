@@ -458,6 +458,8 @@ struct VaultGalleryView: View {
     @State private var mediaNavigationSources: [VaultMediaNavigationID: VaultGalleryContentItem] = [:]
     @State private var mediaNavigationGeneration: UInt64 = 0
     @State private var mediaNavigationTask: Task<Void, Never>?
+    @State private var mediaChromeHideTask: Task<Void, Never>?
+    @State private var isMediaChromeVisible = true
     @State private var failedMediaID: VaultMediaNavigationID?
     @State private var isClosingMediaNavigation = false
     @State private var isDeletingMedia = false
@@ -495,7 +497,13 @@ struct VaultGalleryView: View {
     @State private var previewImageProcessor = VaultSecureImageProcessor()
     @State private var generalFileThumbnailPipeline = VaultGeneralFileThumbnailPipeline()
 
-    private let maximumCachedThumbnails = 48
+    // This matches the previous worst-case decoded-cache envelope (48 photo +
+    // 48 Files-origin entries), but applies it as one source-neutral budget.
+    private let maximumCachedThumbnails = 96
+    @State private var thumbnailRetention =
+        VaultGalleryThumbnailRetentionPolicy<VaultGallerySelection.Item>(
+            maximumCount: 96
+        )
 
     var body: some View {
         let snapshot = makeVisibleGallerySnapshot()
@@ -672,6 +680,9 @@ struct VaultGalleryView: View {
             contentStoresLoaded = false
             thumbnails = [:]
             generalFileThumbnails = [:]
+            thumbnailRetention = VaultGalleryThumbnailRetentionPolicy(
+                maximumCount: maximumCachedThumbnails
+            )
             leaveSelectionMode()
             await session.performSensitiveTask { capability in
                 guard session.activeVaultID == capability.vaultID else { return }
@@ -696,13 +707,18 @@ struct VaultGalleryView: View {
                     && !isDeletingMedia
                     && !isClosingMediaNavigation
                     && isMediaNavigationContentReady(queue),
-                onSelectionChange: selectMediaNavigationItem
+                onSelectionChange: selectMediaNavigationItem,
+                onChromeToggleRequested: toggleMediaChrome
             ) { item in
                 mediaNavigationActiveContent(item)
             }
-            .safeAreaInset(edge: .top, spacing: 0) {
-                mediaNavigationToolbar(for: queue)
+            .overlay(alignment: .top) {
+                if isMediaChromeVisible {
+                    mediaNavigationToolbar(for: queue)
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                }
             }
+            .animation(.easeInOut(duration: 0.2), value: isMediaChromeVisible)
             .alert("KeyHollow", isPresented: Binding(
                 get: { previewMessage != nil },
                 set: { if !$0 { previewMessage = nil } }
@@ -719,36 +735,49 @@ struct VaultGalleryView: View {
     private func mediaNavigationToolbar(
         for queue: VaultMediaNavigationQueue
     ) -> some View {
-        HStack(spacing: 18) {
-            Button("Done", action: beginMediaNavigationDismissal)
-                .disabled(
-                    isSavingPreview
-                        || isDeletingMedia
-                        || isClosingMediaNavigation
-                )
+        ZStack {
+            VStack(spacing: 1) {
+                Text(queue.currentItem.accessibilityTitle)
+                    .font(.headline)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                Text(queue.accessibilityPosition)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 96)
 
-            Spacer()
+            HStack(spacing: 18) {
+                Button("Done", action: beginMediaNavigationDismissal)
+                    .disabled(
+                        isSavingPreview
+                            || isDeletingMedia
+                            || isClosingMediaNavigation
+                    )
 
-            if isSavingPreview || isDeletingMedia || isClosingMediaNavigation {
-                ProgressView()
-                    .tint(.white)
-            } else if queue.currentItem.kind == .image {
-                Button {
-                    saveCurrentMediaImage()
-                } label: {
-                    Image(systemName: "square.and.arrow.down")
+                Spacer()
+
+                if isSavingPreview || isDeletingMedia || isClosingMediaNavigation {
+                    ProgressView()
+                        .tint(.white)
+                } else if queue.currentItem.kind == .image {
+                    Button {
+                        saveCurrentMediaImage()
+                    } label: {
+                        Image(systemName: "square.and.arrow.down")
+                    }
+                    .accessibilityLabel("Save to Photos")
+                    .disabled(imagePreview.active?.id != queue.selectedID)
                 }
-                .accessibilityLabel("Save to Photos")
-                .disabled(imagePreview.active?.id != queue.selectedID)
-            }
 
-            Button(role: .destructive) {
-                deleteCurrentMedia()
-            } label: {
-                Image(systemName: "trash")
+                Button(role: .destructive) {
+                    deleteCurrentMedia()
+                } label: {
+                    Image(systemName: "trash")
+                }
+                .accessibilityLabel("Delete from Vault")
+                .disabled(isSavingPreview || isDeletingMedia || isClosingMediaNavigation)
             }
-            .accessibilityLabel("Delete from Vault")
-            .disabled(isSavingPreview || isDeletingMedia || isClosingMediaNavigation)
         }
         .padding(.horizontal)
         .padding(.vertical, 10)
@@ -1225,6 +1254,12 @@ struct VaultGalleryView: View {
             .task(id: item.id, priority: .utility) {
                 await loadThumbnailIfNeeded(for: item)
             }
+            .onAppear {
+                markThumbnailVisible(item.id)
+            }
+            .onDisappear {
+                markThumbnailHidden(item.id)
+            }
         }
     }
 
@@ -1390,6 +1425,7 @@ struct VaultGalleryView: View {
             generalFileRecords = loadedRecords
             let validIDs = Set(generalFileRecords.map(\.id))
             generalFileThumbnails = generalFileThumbnails.filter { validIDs.contains($0.key) }
+            retainKnownThumbnailIDs()
             reconcileSelection()
             if isSelecting && visibleSelectableItems.isEmpty {
                 leaveSelectionMode()
@@ -1600,6 +1636,7 @@ struct VaultGalleryView: View {
         records = manifest.photos
         let validIDs = Set(manifest.photos.map(\.id))
         thumbnails = thumbnails.filter { validIDs.contains($0.key) }
+        retainKnownThumbnailIDs()
         reconcileSelection()
 
         if visibleSelectableItems.isEmpty {
@@ -1741,11 +1778,7 @@ struct VaultGalleryView: View {
                   !Task.isCancelled,
                   session.activeVaultID == activeVaultID else { return }
 
-            if thumbnails.count >= maximumCachedThumbnails,
-               let eviction = thumbnails.keys.first(where: { $0 != record.id }) {
-                thumbnails.removeValue(forKey: eviction)
-            }
-            thumbnails[record.id] = rendered.image
+            cacheThumbnail(rendered.image, for: .photo(record.id))
         }
     }
 
@@ -1786,7 +1819,7 @@ struct VaultGalleryView: View {
                 )
                 guard !Task.isCancelled,
                       session.activeVaultID == activeVaultID else { return }
-                cacheGeneralFileThumbnail(renderedImage.image, id: record.id)
+                cacheThumbnail(renderedImage.image, for: .generalFile(record.id))
             } catch is CancellationError {
                 return
             } catch {
@@ -1797,12 +1830,52 @@ struct VaultGalleryView: View {
     }
 
     @MainActor
-    private func cacheGeneralFileThumbnail(_ image: UIImage, id: UUID) {
-        if generalFileThumbnails.count >= maximumCachedThumbnails,
-           let eviction = generalFileThumbnails.keys.first(where: { $0 != id }) {
-            generalFileThumbnails.removeValue(forKey: eviction)
+    private func cacheThumbnail(
+        _ image: UIImage,
+        for id: VaultGallerySelection.Item
+    ) {
+        switch id {
+        case .photo(let rawID):
+            thumbnails[rawID] = image
+        case .generalFile(let rawID):
+            generalFileThumbnails[rawID] = image
         }
-        generalFileThumbnails[id] = image
+        thumbnailRetention.recordAccess(id)
+        trimThumbnailCache()
+    }
+
+    private func markThumbnailVisible(_ id: VaultGallerySelection.Item) {
+        thumbnailRetention.markVisible(id)
+        if cachedThumbnailIDs.contains(id) {
+            thumbnailRetention.recordAccess(id)
+        }
+    }
+
+    private func markThumbnailHidden(_ id: VaultGallerySelection.Item) {
+        thumbnailRetention.markHidden(id)
+        trimThumbnailCache()
+    }
+
+    private var cachedThumbnailIDs: Set<VaultGallerySelection.Item> {
+        Set(thumbnails.keys.map(VaultGallerySelection.Item.photo))
+            .union(generalFileThumbnails.keys.map(VaultGallerySelection.Item.generalFile))
+    }
+
+    private func trimThumbnailCache() {
+        for id in thumbnailRetention.evictionCandidates(cachedKeys: cachedThumbnailIDs) {
+            switch id {
+            case .photo(let rawID):
+                thumbnails.removeValue(forKey: rawID)
+            case .generalFile(let rawID):
+                generalFileThumbnails.removeValue(forKey: rawID)
+            }
+        }
+    }
+
+    private func retainKnownThumbnailIDs() {
+        let known = Set(records.map { VaultGallerySelection.Item.photo($0.id) })
+            .union(generalFileRecords.map { VaultGallerySelection.Item.generalFile($0.id) })
+        thumbnailRetention.retainOnly(known)
     }
 
     private func importResultMessage(action: String, importedCount: Int, failedCount: Int) -> String {
@@ -1838,6 +1911,7 @@ struct VaultGalleryView: View {
             failedMediaID = nil
             isClosingMediaNavigation = false
             isDeletingMedia = false
+            showMediaChromeTemporarily()
             prepareSelectedMedia(id: item.id)
         } catch {
             message = "The media viewer could not be opened."
@@ -1856,7 +1930,45 @@ struct VaultGalleryView: View {
         mediaNavigationQueue = selectedQueue
         previewMessage = nil
         failedMediaID = nil
+        showMediaChromeTemporarily()
         prepareSelectedMedia(id: id)
+    }
+
+    private func toggleMediaChrome() {
+        guard !isSavingPreview, !isDeletingMedia, !isClosingMediaNavigation else {
+            return
+        }
+        if isMediaChromeVisible {
+            mediaChromeHideTask?.cancel()
+            mediaChromeHideTask = nil
+            isMediaChromeVisible = false
+        } else {
+            showMediaChromeTemporarily()
+        }
+    }
+
+    private func showMediaChromeTemporarily() {
+        mediaChromeHideTask?.cancel()
+        isMediaChromeVisible = true
+        mediaChromeHideTask = Task { @MainActor in
+            do {
+                try await Task.sleep(for: .seconds(3))
+            } catch {
+                return
+            }
+            guard !isSavingPreview,
+                  !isDeletingMedia,
+                  !isClosingMediaNavigation,
+                  mediaNavigationQueue != nil else { return }
+            isMediaChromeVisible = false
+            mediaChromeHideTask = nil
+        }
+    }
+
+    private func resetMediaChrome() {
+        mediaChromeHideTask?.cancel()
+        mediaChromeHideTask = nil
+        isMediaChromeVisible = true
     }
 
     private func retryMediaNavigationItem(_ id: VaultMediaNavigationID) {
@@ -2115,6 +2227,7 @@ struct VaultGalleryView: View {
               !isClosingMediaNavigation else { return }
 
         isClosingMediaNavigation = true
+        resetMediaChrome()
         mediaNavigationGeneration &+= 1
         let dismissalGeneration = mediaNavigationGeneration
         let retiringTask = mediaNavigationTask
@@ -2219,6 +2332,7 @@ struct VaultGalleryView: View {
     }
 
     private func resetMediaNavigationAndWait() async {
+        resetMediaChrome()
         mediaNavigationGeneration &+= 1
         let retiringTask = mediaNavigationTask
         let retiringSaveTaskID = imageSaveTaskID
@@ -2242,6 +2356,7 @@ struct VaultGalleryView: View {
     }
 
     private func cancelMediaNavigationForLifecycle() {
+        resetMediaChrome()
         mediaNavigationGeneration &+= 1
         mediaNavigationTask?.cancel()
         mediaNavigationTask = nil
@@ -2261,6 +2376,7 @@ struct VaultGalleryView: View {
     }
 
     private func clearMediaNavigationState() {
+        resetMediaChrome()
         mediaNavigationTask = nil
         if let imageSaveTaskID {
             session.cancelSensitiveTask(imageSaveTaskID)

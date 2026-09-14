@@ -14,17 +14,20 @@ public struct VaultMediaNavigationPager<ActiveContent: View>: View {
     private let queue: VaultMediaNavigationQueue
     private let isNavigationEnabled: Bool
     private let onSelectionChange: (VaultMediaNavigationID) -> Void
+    private let onChromeToggleRequested: () -> Void
     private let activeContent: (VaultMediaNavigationItem) -> ActiveContent
 
     public init(
         queue: VaultMediaNavigationQueue,
         isNavigationEnabled: Bool = true,
         onSelectionChange: @escaping (VaultMediaNavigationID) -> Void,
+        onChromeToggleRequested: @escaping () -> Void = {},
         @ViewBuilder activeContent: @escaping (VaultMediaNavigationItem) -> ActiveContent
     ) {
         self.queue = queue
         self.isNavigationEnabled = isNavigationEnabled
         self.onSelectionChange = onSelectionChange
+        self.onChromeToggleRequested = onChromeToggleRequested
         self.activeContent = activeContent
     }
 
@@ -45,41 +48,15 @@ public struct VaultMediaNavigationPager<ActiveContent: View>: View {
                         handleDrag(value, viewportHeight: geometry.size.height)
                     }
             )
-        }
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            navigationBar
-        }
-    }
-
-    private var navigationBar: some View {
-        HStack(spacing: 16) {
-            navigationButton(
-                direction: .previous,
-                systemImage: "chevron.left",
-                accessibilityLabel: "Previous item",
-                isAvailable: queue.canNavigatePrevious
+            .simultaneousGesture(
+                TapGesture().onEnded(onChromeToggleRequested)
             )
-
-            Spacer(minLength: 8)
-
-            VStack(spacing: 2) {
-                Text(queue.currentItem.accessibilityTitle)
-                    .font(.headline)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-
-                Text(queue.accessibilityPosition)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+            .accessibilityAction(named: "Previous item") {
+                navigate(.previous)
             }
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel(queue.accessibilityLabel)
-            .accessibilityValue(queue.accessibilityPosition)
-            .accessibilityHint(
-                isNavigationEnabled
-                    ? "Swipe left or right, or adjust, to navigate media"
-                    : "Navigation is temporarily unavailable"
-            )
+            .accessibilityAction(named: "Next item") {
+                navigate(.next)
+            }
             .accessibilityAdjustableAction { direction in
                 switch direction {
                 case .increment:
@@ -90,42 +67,7 @@ public struct VaultMediaNavigationPager<ActiveContent: View>: View {
                     break
                 }
             }
-
-            Spacer(minLength: 8)
-
-            navigationButton(
-                direction: .next,
-                systemImage: "chevron.right",
-                accessibilityLabel: "Next item",
-                isAvailable: queue.canNavigateNext
-            )
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 12)
-        .background(.ultraThinMaterial)
-    }
-
-    private func navigationButton(
-        direction: VaultMediaNavigationDirection,
-        systemImage: String,
-        accessibilityLabel: String,
-        isAvailable: Bool
-    ) -> some View {
-        Button {
-            navigate(direction)
-        } label: {
-            Image(systemName: systemImage)
-                .frame(minWidth: 44, minHeight: 44)
-        }
-        .accessibilityLabel(accessibilityLabel)
-        .accessibilityHint(
-            !isNavigationEnabled
-                ? "Navigation is temporarily unavailable"
-                : isAvailable
-                    ? "Displays the adjacent media item"
-                    : "No item available"
-        )
-        .disabled(!isNavigationEnabled || !isAvailable)
     }
 
     private func handleDrag(

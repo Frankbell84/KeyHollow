@@ -153,6 +153,7 @@ targets:
     sources:
       - path: KeyHollow/UI/VaultGalleryGridView.swift
       - path: KeyHollow/UI/VaultGalleryTilePresentation.swift
+      - path: KeyHollow/UI/VaultGalleryThumbnailRetentionPolicy.swift
       - path: KeyHollow/UI/VaultFolderPresentationViews.swift
       - path: KeyHollow/UI/VaultGallerySelection.swift
     settings:
@@ -255,6 +256,7 @@ targets:
           - AddOns/MediaNavigation
           - UI/VaultGalleryGridView.swift
           - UI/VaultGalleryTilePresentation.swift
+          - UI/VaultGalleryThumbnailRetentionPolicy.swift
           - UI/VaultFolderPresentationViews.swift
           - UI/VaultGallerySelection.swift
           - Security/CryptoBox.swift
