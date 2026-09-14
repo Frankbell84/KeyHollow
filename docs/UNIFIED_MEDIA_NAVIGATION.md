@@ -57,10 +57,17 @@ Protected core modules never import the add-on.
 ## Deliberate exclusions
 
 This phase does not add document paging, PDF rendering, metadata editing,
-search, sort controls, nested folders, import-progress UI, cross-vault
+search, sort controls, nested folders, cross-vault
 references, account services, or any Architecture Addendum service module.
 Those remain separately reviewed work. Search remains the first low-risk
 catalog refinement after this approved navigation phase.
+
+The Build 43 refinement keeps the same queue and cleanup boundaries while
+making the presentation immersive: navigation remains swipe- and
+accessibility-driven, the permanent arrow footer is removed, and the
+app-owned action header overlays media and auto-hides. Native fullscreen video
+is not treated as terminal disappearance; only the view-bound playback task
+may release its player lease.
 
 ## Acceptance criteria
 

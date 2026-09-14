@@ -203,6 +203,32 @@ archives. Do not use the only copy of a real backup for tamper tests.
   image/video and confirm the privacy shield and relock. Reject any lag, crash,
   missing item, incorrect folder mutation, or plaintext-residue symptom.
 
+## Build 43 viewer and gallery refinement
+
+- Select several photos in the system picker and tap **Add**. Require immediate
+  haptic confirmation, a visible "Encrypting N of M" progress bar that advances
+  after each protected write, a responsive cancel-free processing state, and a
+  clear completion response. Repeat with one item and the 50-item selection
+  limit.
+- Play a supported encrypted video inline, enter and exit native fullscreen at
+  least five times, rotate while fullscreen, seek, pause, resume, and then
+  dismiss normally. Reject any stopped playback, black surface, duplicated
+  audio, cleanup alert, or need to reopen the video.
+- Open portrait, landscape, screenshot, Files-origin image, and video items.
+  Confirm the action header overlays rather than resizes media, disappears
+  after three seconds, returns on tap and after a swipe, and that no permanent
+  arrow footer remains. Confirm VoiceOver Previous/Next and adjustable actions
+  still navigate without wrapping.
+- With more than 96 mixed items, slowly scroll from top to bottom and back,
+  then repeat quickly. Once a visible thumbnail appears, it must remain visible
+  until its tile leaves the viewport. Reject placeholder flicker, already-
+  loaded thumbnails disappearing, stalled visible tiles, runaway memory, or
+  scrolling worse than the accepted Build 42 baseline.
+- Lock, background, switch vaults, and dismiss during picker processing,
+  thumbnail loading, image viewing, inline video, and fullscreen video. Confirm
+  the privacy shield, session revocation, player/image release, temporary-file
+  cleanup, and relock behavior remain unchanged.
+
 ## Backup/container inspection
 
 - Confirm KeyHollow encrypted storage directories/files carry complete file protection.

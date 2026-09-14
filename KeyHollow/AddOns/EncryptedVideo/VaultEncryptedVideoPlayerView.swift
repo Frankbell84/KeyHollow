@@ -214,9 +214,11 @@ public struct VaultEncryptedVideoPlayerView: View {
                 onPlayerReleased()
             }
         }
-        .onDisappear {
-            detachPlayer()
-        }
+        // Do not tear down from `onDisappear`: AVPlayerViewController briefly
+        // removes its inline surface while presenting native fullscreen video.
+        // The view-bound task is the actual ownership boundary. Its cancellation
+        // unwinds `runAttachedPlayer`, releases AVPlayerItem, and then acknowledges
+        // plaintext cleanup through `onPlayerReleased`.
     }
 
     private func dismiss() {

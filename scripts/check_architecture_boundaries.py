@@ -89,6 +89,7 @@ TRANSFER_MODULE_FILES = {
 GALLERY_UI_MODULE_FILES = {
     "KeyHollow/UI/VaultGalleryGridView.swift",
     "KeyHollow/UI/VaultGalleryTilePresentation.swift",
+    "KeyHollow/UI/VaultGalleryThumbnailRetentionPolicy.swift",
     "KeyHollow/UI/VaultFolderPresentationViews.swift",
     "KeyHollow/UI/VaultGallerySelection.swift",
 }
@@ -700,11 +701,13 @@ def main() -> int:
         "KeyHollowGalleryUI:",
         "- path: KeyHollow/UI/VaultGalleryGridView.swift",
         "- path: KeyHollow/UI/VaultGalleryTilePresentation.swift",
+        "- path: KeyHollow/UI/VaultGalleryThumbnailRetentionPolicy.swift",
         "- path: KeyHollow/UI/VaultFolderPresentationViews.swift",
         "- path: KeyHollow/UI/VaultGallerySelection.swift",
         "- target: KeyHollowGalleryUI",
         "- UI/VaultGalleryGridView.swift",
         "- UI/VaultGalleryTilePresentation.swift",
+        "- UI/VaultGalleryThumbnailRetentionPolicy.swift",
         "- UI/VaultFolderPresentationViews.swift",
         "- UI/VaultGallerySelection.swift",
     )
@@ -720,6 +723,7 @@ def main() -> int:
         expected_sources = {
             "KeyHollow/UI/VaultGalleryGridView.swift",
             "KeyHollow/UI/VaultGalleryTilePresentation.swift",
+            "KeyHollow/UI/VaultGalleryThumbnailRetentionPolicy.swift",
             "KeyHollow/UI/VaultFolderPresentationViews.swift",
             "KeyHollow/UI/VaultGallerySelection.swift",
         }
@@ -2000,10 +2004,9 @@ def main() -> int:
                     "activeContent(queue.currentItem)",
                     ".id(queue.currentItem.id)",
                     ".accessibilityAdjustableAction",
+                    ".accessibilityAction(named:",
                     "handleDrag(value, viewportHeight: geometry.size.height)",
-                    "isAvailable: queue.canNavigatePrevious",
-                    "isAvailable: queue.canNavigateNext",
-                    "isAvailable: Bool",
+                    "onChromeToggleRequested",
                     "videoControlExclusionMinimumHeight: CGFloat = 140",
                     "videoControlExclusionHeightRatio: CGFloat = 0.24",
                 ):
@@ -2025,28 +2028,26 @@ def main() -> int:
                     pager_body or "",
                     "private func navigate(_ direction: VaultMediaNavigationDirection)",
                 )
-                navigation_button_body = swift_block_body(
-                    pager_body or "",
-                    "private func navigationButton(",
-                )
                 if not (
                     pager_body is not None
-                    and pager_body.count("private func navigationButton(") == 1
-                    and pager_body.count("isAvailable: Bool") == 1
-                    and navigation_button_body is not None
+                    and pager_body.count(".accessibilityAction(named:") == 2
+                    and 'systemImage: "chevron.left"' not in pager_body
+                    and 'systemImage: "chevron.right"' not in pager_body
+                    and ".safeAreaInset(edge: .bottom" not in pager_body
+                    and navigate_body is not None
                     and contains_in_order(
-                        navigation_button_body,
+                        navigate_body,
                         (
-                            "Button",
-                            "navigate(direction)",
-                            ".disabled(!isNavigationEnabled || !isAvailable)",
+                            "guard isNavigationEnabled else { return }",
+                            "guard let destination = queue.item(in: direction) else { return }",
+                            "onSelectionChange(destination.id)",
                         ),
                     )
                 ):
                     violations.append(
-                        f"{path}: both navigation arrows must share a button "
-                        "implementation that disables selection while busy or "
-                        "when the adjacent queue position is unavailable"
+                        f"{path}: immersive navigation must omit the permanent "
+                        "arrow footer while keeping busy-aware, non-wrapping "
+                        "swipe and accessibility navigation"
                     )
                 if not (
                     pager_body is not None
@@ -2475,6 +2476,11 @@ def main() -> int:
                     violations.append(
                         f"{path}: URL-based player creation bypasses the "
                         "reference-restricted asset factory"
+                    )
+                if ".onDisappear" in swift_executable_text(source):
+                    violations.append(
+                        f"{path}: inline disappearance cannot release the player; "
+                        "native fullscreen presentation temporarily hides the inline surface"
                     )
                 if source.count("onPlayerReleased()") != 1:
                     violations.append(
