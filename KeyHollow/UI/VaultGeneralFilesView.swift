@@ -11,6 +11,7 @@ struct VaultGeneralFilesView: View {
     @State private var isSelecting = false
     @State private var isImporting = false
     @State private var isWorking = false
+    @State private var importProgress: GeneralFileImportProgressState?
     @State private var export: PreparedGeneralFileExport?
     @State private var exportTaskID: UUID?
     @State private var message: String?
@@ -49,7 +50,9 @@ struct VaultGeneralFilesView: View {
                 }
             }
             .overlay {
-                if isWorking {
+                if let importProgress {
+                    GeneralFileImportProgressView(progress: importProgress)
+                } else if isWorking {
                     ProgressView()
                         .padding()
                         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
@@ -228,10 +231,18 @@ struct VaultGeneralFilesView: View {
         guard let store, !isWorking else { return }
         isWorking = true
 
-        session.startSensitiveTask { _ in
-            defer { isWorking = false }
+        let taskID = session.startSensitiveTask { _ in
+            defer {
+                importProgress = nil
+                isWorking = false
+            }
             do {
-                let outcome = try await store.importFiles(at: urls)
+                let outcome = try await GeneralFileImportCoordinator.importFiles(
+                    at: urls,
+                    using: store
+                ) { progress in
+                    importProgress = progress
+                }
                 guard !Task.isCancelled else { return }
                 records = try await store.loadManifest().files
                 message = GeneralFileImportPresentation.message(for: outcome)
@@ -240,6 +251,10 @@ struct VaultGeneralFilesView: View {
             } catch {
                 message = "The selected files could not be imported into this vault."
             }
+        }
+        if taskID == nil {
+            importProgress = nil
+            isWorking = false
         }
     }
 

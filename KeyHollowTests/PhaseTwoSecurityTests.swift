@@ -2,10 +2,18 @@ import CryptoKit
 import Foundation
 import XCTest
 @testable import KeyHollow
+@testable import KeyHollowGeneralFileSupportAddOn
 @testable import KeyHollowPhotoCore
 @testable import KeyHollowPhotosAdapter
 
 final class PhaseTwoSecurityTests: XCTestCase {
+    func testPhotosVideoIngressMatchesGeneralFileSafetyCeiling() {
+        XCTAssertEqual(
+            ApplePhotoPickerItemLoader.maximumVideoByteCount,
+            VaultGeneralFileStore.maximumFileByteCount
+        )
+    }
+
     func testRevokedCapabilityCannotReadOrMutateVaultStore() async throws {
         let root = try temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: root) }

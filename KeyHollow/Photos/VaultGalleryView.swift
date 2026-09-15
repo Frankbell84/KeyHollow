@@ -436,6 +436,110 @@ actor VaultGeneralFileThumbnailPipeline {
     }
 }
 
+@MainActor
+private struct VaultMediaImagePage: View {
+    @ObservedObject var coordinator: VaultImagePreviewCoordinator
+
+    let item: VaultMediaNavigationItem
+    let placeholder: UIImage?
+    let isFailed: Bool
+    let loadGeneration: UInt64
+    let isInteractionDisabled: Bool
+    let onRetry: () -> Void
+    let onImageWillAttach: () -> Bool
+    let onImageReleased: () -> Void
+    let onZoomStateChange: (Bool) -> Void
+
+    @State private var showsLoadingIndicator = false
+
+    var body: some View {
+        ZStack {
+            if let active = coordinator.active,
+               active.id == item.id {
+                VaultSecureZoomableImageSurface(
+                    renderedImage: active.preview.displayImage,
+                    accessibilityLabel: item.accessibilityTitle,
+                    onImageWillAttach: onImageWillAttach,
+                    onImageReleased: onImageReleased,
+                    onZoomStateChange: onZoomStateChange
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                placeholderView
+
+                if isFailed {
+                    failureView
+                } else if showsLoadingIndicator {
+                    ProgressView("Opening…")
+                        .padding()
+                        .background(
+                            .regularMaterial,
+                            in: RoundedRectangle(cornerRadius: 12)
+                        )
+                }
+            }
+        }
+        .task(id: loadGeneration) {
+            showsLoadingIndicator = false
+            guard coordinator.active?.id != item.id, !isFailed else { return }
+            do {
+                try await Task.sleep(for: .milliseconds(250))
+            } catch {
+                return
+            }
+            guard !Task.isCancelled,
+                  coordinator.active?.id != item.id,
+                  !isFailed else { return }
+            showsLoadingIndicator = true
+        }
+        .onChange(of: coordinator.active?.id) { _, activeID in
+            if activeID == item.id {
+                showsLoadingIndicator = false
+            }
+        }
+        .onChange(of: isFailed) { _, failed in
+            if failed {
+                showsLoadingIndicator = false
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var placeholderView: some View {
+        if let placeholder {
+            Image(uiImage: placeholder)
+                .resizable()
+                .scaledToFit()
+                .opacity(0.72)
+                .accessibilityHidden(true)
+        } else {
+            Image(systemName: "photo.on.rectangle.angled")
+                .font(.system(size: 52))
+                .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
+        }
+    }
+
+    private var failureView: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "exclamationmark.triangle")
+                .font(.title)
+            Text("Unable to Open")
+                .font(.headline)
+            Button("Try Again", action: onRetry)
+                .buttonStyle(.borderedProminent)
+                .disabled(isInteractionDisabled)
+        }
+        .padding()
+        .foregroundStyle(.white)
+        .background(
+            .regularMaterial,
+            in: RoundedRectangle(cornerRadius: 12)
+        )
+        .accessibilityElement(children: .contain)
+    }
+}
+
 /// Application composition coordinator. Visible folder/gallery layout,
 /// tiles, and selection state are compiled in `KeyHollowGalleryUI`.
 /// This shell alone translates UI actions into authenticated store operations.
@@ -488,6 +592,8 @@ struct VaultGalleryView: View {
     @State private var isWorking = false
     @State private var message: String?
     @State private var importProgress: VaultImportProgress?
+    @State private var generalFileImportProgress: GeneralFileImportProgressState?
+    @State private var isMediaImageZoomed = false
     @StateObject private var imagePreview = VaultImagePreviewCoordinator()
     @StateObject private var videoPlayback = VaultVideoPlaybackCoordinator()
 
@@ -539,12 +645,17 @@ struct VaultGalleryView: View {
                 selectionActionBar
             }
         }
+        .overlay {
+            if let generalFileImportProgress {
+                GeneralFileImportProgressView(progress: generalFileImportProgress)
+            }
+        }
         .confirmationDialog("Import to Vault", isPresented: $showingImportOptions, titleVisibility: .visible) {
-            Button("Copy Photos to Vault") {
+            Button("Copy Photos & Videos to Vault") {
                 importMode = .copy
                 showingPicker = true
             }
-            Button("Move Photos to Vault") {
+            Button("Move Photos & Videos to Vault") {
                 importMode = .move
                 showingPicker = true
             }
@@ -554,7 +665,7 @@ struct VaultGalleryView: View {
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("Import encrypted copies from Photos or Files. Moving photos verifies the vault copies first, then asks iOS to delete the originals.")
+            Text("Import encrypted copies from Photos or Files. Moving Photos items verifies the vault copies first, then asks iOS to delete the originals.")
         }
         .sheet(isPresented: $showingPicker) {
             SecurePhotoPicker(selectionLimit: 50) { event in
@@ -706,6 +817,7 @@ struct VaultGalleryView: View {
                 isNavigationEnabled: !isSavingPreview
                     && !isDeletingMedia
                     && !isClosingMediaNavigation
+                    && !isMediaImageZoomed
                     && isMediaNavigationContentReady(queue),
                 onSelectionChange: selectMediaNavigationItem,
                 onChromeToggleRequested: toggleMediaChrome
@@ -795,25 +907,28 @@ struct VaultGalleryView: View {
         } else {
             switch item.kind {
             case .image:
-                if let active = imagePreview.active,
-                   active.id == item.id {
-                    VaultSecureImageSurface(
-                        renderedImage: active.preview.displayImage,
-                        accessibilityLabel: item.accessibilityTitle,
-                        onImageWillAttach: {
-                            imagePreview.imageWillAttach(item.id)
-                        },
-                        onImageReleased: {
-                            imagePreview.imageDidRelease(item.id)
-                        }
-                    )
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else {
-                    ZStack {
-                        mediaNavigationPlaceholder(for: item.id)
-                        mediaNavigationLoadState(for: item)
+                VaultMediaImagePage(
+                    coordinator: imagePreview,
+                    item: item,
+                    placeholder: mediaNavigationSources[item.id].flatMap {
+                        thumbnail(for: $0)
+                    },
+                    isFailed: failedMediaID == item.id,
+                    loadGeneration: mediaNavigationGeneration,
+                    isInteractionDisabled: isSavingPreview
+                        || isDeletingMedia
+                        || isClosingMediaNavigation,
+                    onRetry: { retryMediaNavigationItem(item.id) },
+                    onImageWillAttach: {
+                        imagePreview.imageWillAttach(item.id)
+                    },
+                    onImageReleased: {
+                        imagePreview.imageDidRelease(item.id)
+                    },
+                    onZoomStateChange: { isZoomed in
+                        isMediaImageZoomed = isZoomed
                     }
-                }
+                )
 
             case .video:
                 if let active = videoPlayback.active,
@@ -1615,10 +1730,18 @@ struct VaultGalleryView: View {
         guard let generalFileStore, !isWorking else { return }
         isWorking = true
 
-        session.startSensitiveTask { _ in
-            defer { isWorking = false }
+        let taskID = session.startSensitiveTask { _ in
+            defer {
+                generalFileImportProgress = nil
+                isWorking = false
+            }
             do {
-                let outcome = try await generalFileStore.importFiles(at: urls)
+                let outcome = try await GeneralFileImportCoordinator.importFiles(
+                    at: urls,
+                    using: generalFileStore
+                ) { progress in
+                    generalFileImportProgress = progress
+                }
                 guard !Task.isCancelled else { return }
                 generalFileRecords = try await generalFileStore.loadManifest().files
                 message = GeneralFileImportPresentation.message(for: outcome)
@@ -1627,6 +1750,10 @@ struct VaultGalleryView: View {
             } catch {
                 message = "The selected files could not be imported into this vault."
             }
+        }
+        if taskID == nil {
+            generalFileImportProgress = nil
+            isWorking = false
         }
     }
 
@@ -1678,6 +1805,28 @@ struct VaultGalleryView: View {
                 importProgress = progress
             }
 
+        case .video(let video):
+            await session.performSensitiveTask { capability in
+                guard var progress = importProgress,
+                      let generalFileStore,
+                      session.activeVaultID == capability.vaultID,
+                      !Task.isCancelled else { return }
+                do {
+                    _ = try await generalFileStore.importFile(at: video.fileURL)
+                    try Task.checkCancellation()
+                    progress.importedCount += 1
+                    if progress.mode == .move,
+                       let identifier = video.sourceAssetIdentifier {
+                        progress.identifiersToDelete.append(identifier)
+                    }
+                } catch is CancellationError {
+                    return
+                } catch {
+                    progress.failedCount += 1
+                }
+                importProgress = progress
+            }
+
         case .failed:
             importProgress?.failedCount += 1
 
@@ -1707,12 +1856,13 @@ struct VaultGalleryView: View {
 
         do {
             try await reload(using: store)
+            await reloadGeneralFiles()
         } catch {
             guard !Task.isCancelled, session.hasActiveAccess else {
                 isWorking = false
                 return
             }
-            message = "Photos were encrypted, but the gallery could not be refreshed."
+            message = "Items were encrypted, but the gallery could not be refreshed."
         }
 
         if progress.mode == .move, progress.importedCount > 0 {
@@ -1879,17 +2029,17 @@ struct VaultGalleryView: View {
     }
 
     private func importResultMessage(action: String, importedCount: Int, failedCount: Int) -> String {
-        let noun = importedCount == 1 ? "photo" : "photos"
+        let noun = importedCount == 1 ? "item" : "items"
         if failedCount > 0 {
-            let failedNoun = failedCount == 1 ? "photo" : "photos"
+            let failedNoun = failedCount == 1 ? "item" : "items"
             return "\(action) \(importedCount) \(noun) into KeyHollow. \(failedCount) \(failedNoun) could not be imported."
         }
         return "\(action) \(importedCount) \(noun) into KeyHollow."
     }
 
     private func unreadableSelectionMessage(count: Int) -> String {
-        let noun = count == 1 ? "photo" : "photos"
-        return "No photos were imported. \(count) selected \(noun) could not be read."
+        let noun = count == 1 ? "item" : "items"
+        return "No items were imported. \(count) selected \(noun) could not be read or exceeded the 100 MB video limit."
     }
 
     private func openMediaNavigation(
@@ -1911,6 +2061,7 @@ struct VaultGalleryView: View {
             failedMediaID = nil
             isClosingMediaNavigation = false
             isDeletingMedia = false
+            isMediaImageZoomed = false
             showMediaChromeTemporarily()
             prepareSelectedMedia(id: item.id)
         } catch {
@@ -1930,6 +2081,7 @@ struct VaultGalleryView: View {
         mediaNavigationQueue = selectedQueue
         previewMessage = nil
         failedMediaID = nil
+        isMediaImageZoomed = false
         showMediaChromeTemporarily()
         prepareSelectedMedia(id: id)
     }
@@ -1983,6 +2135,7 @@ struct VaultGalleryView: View {
 
     private func prepareSelectedMedia(id: VaultMediaNavigationID) {
         failedMediaID = nil
+        isMediaImageZoomed = false
         mediaNavigationGeneration &+= 1
         let generation = mediaNavigationGeneration
         let retiringTask = mediaNavigationTask
@@ -2370,6 +2523,7 @@ struct VaultGalleryView: View {
         isClosingMediaNavigation = false
         isDeletingMedia = false
         isSavingPreview = false
+        isMediaImageZoomed = false
         imagePreview.dismiss()
         videoPlayback.dismiss()
         previewMessage = nil
@@ -2388,6 +2542,7 @@ struct VaultGalleryView: View {
         isClosingMediaNavigation = false
         isDeletingMedia = false
         isSavingPreview = false
+        isMediaImageZoomed = false
         imagePreview.dismiss()
         videoPlayback.dismiss()
         previewMessage = nil
