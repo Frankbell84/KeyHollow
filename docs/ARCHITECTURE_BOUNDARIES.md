@@ -18,7 +18,7 @@ small local core with narrow adapters around it.
 | `App` | Composition and lifecycle entry | Feature implementation details |
 | `AddOns/FileRecognition` | `.khvault` filename recognition and bounded ingress staging | Vault decryption, vault keys, protected content stores, application navigation |
 | `AddOns/BackupVerification` | Immutable archive-verification report values and read-only result presentation | Recovery credentials, vault keys, ciphertext, staging URLs, protected stores, archive parsing, installation, application navigation |
-| `AddOns/CatalogSearch` | Bounded, normalized matching of already-sanitized display text | Vault identity, records, stores, keys, URLs, payloads, folders, mutation, recursive traversal, archive formats |
+| `AddOns/CatalogSearch` | Bounded matching and stable ordering of already-sanitized display metadata | Vault identity, record identifiers, stores, keys, URLs, payloads, folder manifests, mutation, recursive traversal, archive formats |
 | `AddOns/GeneralFileSupport` | Encrypted general-file records, manifests, blobs, and protected ingress/egress staging | Vault keys, photo storage, SwiftUI/UIKit, portable archive formats |
 | `AddOns/FolderPresentation` | Folder metadata, neutral content references, and encrypted presentation thumbnails | Vault keys, protected photo/file content, SwiftUI/UIKit, portable archive formats |
 | `UI/VaultGallery*` | Source-neutral grid layout, tile metadata, folder presentation, and selection behavior | Vault keys, ciphertext, protected stores, decryption, portable archive formats |
@@ -107,15 +107,17 @@ manifest; a batch is committed with one authenticated manifest write and never
 moves or rewrites photo or general-file ciphertext. Removing the add-on leaves
 the protected stores and existing `.khvault` format operational.
 
-`KeyHollowCatalogSearchAddOn` owns only a bounded, dependency-free display-text
-matching policy. The application composition layer supplies the current
-location's already-sanitized item titles and root folder names, filters its
-existing immutable gallery snapshot, and constructs selection and media queues
-from those visible results. The add-on never receives a vault identifier,
-protected record, store, session, key, URL, ciphertext, plaintext payload,
-folder manifest, mutation closure, or archive capability. It performs no
-recursive traversal or content indexing. Removing it restores the accepted
-unfiltered gallery without changing protected data or `.khvault` compatibility.
+`KeyHollowCatalogSearchAddOn` owns only bounded, dependency-free display-text
+matching and stable catalog-ordering policies. The application composition
+layer supplies the current location's already-sanitized item titles, root
+folder names, presentation timestamps, and stable ordinals; filters and orders
+its existing immutable gallery snapshot; and constructs selection and media
+queues from those visible results. The add-on never receives a vault or record
+identifier, protected record, store, session, key, URL, ciphertext, plaintext
+payload, folder manifest, mutation closure, or archive capability. It performs
+no recursive traversal or content indexing. Removing it restores the accepted
+unfiltered Vault Order without changing protected data or `.khvault`
+compatibility.
 
 `KeyHollowGalleryUI` owns the visible, source-neutral gallery grid. The app
 composition layer converts protected photo and general-file records into

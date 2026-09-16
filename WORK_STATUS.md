@@ -8,7 +8,15 @@ evidence remains in `docs/PROJECT_CHECKPOINT.md`.
 ## Provenance
 
 - Current accepted production source: exact `main` commit
-  `2bbb0836526c6397265d14dfcb156df574f819c5`.
+  `9eb107a259082be049f57a5d83ff27a67a37989a`.
+- Build 47 completed exact-main CI in run
+  [#35124289873](https://github.com/Frankbell84/KeyHollow/actions/runs/35124289873),
+  protected signing-only preflight in run
+  [#35127204962](https://github.com/Frankbell84/KeyHollow/actions/runs/35127204962),
+  and the separately authorized Internal-only upload in run
+  [#35127821582](https://github.com/Frankbell84/KeyHollow/actions/runs/35127821582).
+  App Store Connect completed processing and shows only `KeyHollow Internal`.
+  Frank physically tested Vault Catalog Search and confirmed that it works.
 - Build 46 completed protected signing and upload in workflow
   [#35101488529](https://github.com/Frankbell84/KeyHollow/actions/runs/35101488529),
   processed successfully in App Store Connect, and is assigned only to
@@ -95,8 +103,8 @@ evidence remains in `docs/PROJECT_CHECKPOINT.md`.
 - Retained Build 39 IPA artifact: `10132108885`
 - IPA SHA-256:
   `99a3ed152df2c5bb267e5950aab27db82e51e3d22e91981f1d3d15812ced72e1`
-- The latest accepted product is version 1.0, Build 40, built from exact
-  `main` commit `54bd2d6887f3ca0e476339fce05e90dd59ba963f`.
+- The latest accepted product is version 1.0, Build 47, built from exact
+  `main` commit `9eb107a259082be049f57a5d83ff27a67a37989a`.
 - Protected signed-upload workflow
   [#34602241254](https://github.com/Frankbell84/KeyHollow/actions/runs/34602241254)
   completed successfully. App Store Connect reports the binary as validated,
@@ -113,26 +121,26 @@ evidence remains in `docs/PROJECT_CHECKPOINT.md`.
 
 ## Current task
 
-Build 46 remains the physically accepted production baseline. Vault Catalog
-Search is now merged to protected `main` at exact commit
-`38fc86455832c298e6ea05d57e95b6ce23c48e56`, and the exact-main complete test
-suite plus Swift CodeQL passed. The current task is the isolated Build 47 release
-candidate on `release/build47-vault-catalog-search`.
+Build 47 is the physically accepted production baseline. Vault Catalog Search
+is merged to protected `main` at exact commit
+`9eb107a259082be049f57a5d83ff27a67a37989a`, the exact-main complete test suite
+and Swift CodeQL passed, the signing-only preflight passed, and the signed build
+processed successfully for `KeyHollow Internal` only. Frank confirmed the
+feature works on a physical iPhone.
 
-Build 47 changes only the application and thumbnail-extension build number from
-46 to 47 and records the completed merge evidence. It must pass release-branch
-review, protected merge, exact-main CI and CodeQL, and the no-upload signing
-preflight before any separately authorized TestFlight upload. Physical-device
-acceptance must then complete the Vault Catalog Search checks in
-`docs/DEVICE_TEST_PLAN.md`. No signing preflight authorizes upload, tester-group
-expansion, or App Store promotion.
+The current task is the isolated Vault Catalog Sorting phase on
+`feature/vault-catalog-sorting`, created directly from that exact accepted main
+commit. It extends the existing dependency-free catalog presentation module
+with bounded sanitized titles, timestamps, and stable ordinals only. It cannot
+access vault or record identifiers, protected records, storage, cryptography,
+archive handling, media payloads, URLs, folder manifests, or mutation
+capabilities.
 
-Vault Catalog Search remains a separately compiled, dependency-free matching
-module with application-owned current-location filtering. It receives bounded
-display text only and cannot access vault identity, protected records, storage,
-cryptography, archive handling, media payloads, URLs, or mutation capabilities.
-This release does not add sorting, recursive traversal, content indexing,
-nested folders, or archive changes.
+The default **Vault Order** must preserve the accepted Build 47 behavior:
+root folders by name and visible mixed items newest-first. Optional name and
+date orders may reorder only the current immutable presentation snapshot.
+Search, selection, media queues, import/export, folder membership, protected
+stores, and `.khvault` compatibility must remain unchanged.
 
 ## Unified Media Navigation candidate
 
@@ -578,15 +586,15 @@ only boundary.
 
 ## Next action
 
-1. Preserve exact accepted Build 40 source
-   `54bd2d6887f3ca0e476339fce05e90dd59ba963f` as the rollback and comparison
+1. Preserve exact accepted Build 47 source
+   `9eb107a259082be049f57a5d83ff27a67a37989a` as the rollback and comparison
    baseline.
-2. Publish the locally hardened Unified Media Navigation checkpoint through a
-   draft pull request and require the complete macOS build, test, security, and
-   CodeQL gates.
-3. Merge only that reviewed head through protected `main` after required PR
-   checks pass, then require complete exact-main CI.
-4. Produce a separately authorized Internal TestFlight build for the physical-
+2. Complete and locally harden the isolated Vault Catalog Sorting candidate.
+3. Publish only the reviewed sorting head through a draft pull request and
+   require the complete macOS build, test, security, and CodeQL gates.
+4. Merge only that exact reviewed head through protected `main`, then require
+   complete exact-main CI and a no-upload signing preflight.
+5. Produce a separately authorized Internal TestFlight build for the physical-
    device plan. Do not expand to Family or external testers without a separate
    decision.
 

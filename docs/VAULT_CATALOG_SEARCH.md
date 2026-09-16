@@ -34,10 +34,11 @@ storage directly.
 
 ## Deliberate exclusions
 
-This phase does not add sorting, recursive search, content indexing, OCR,
-document-text search, metadata editing, nested folders, cross-vault references,
-accounts, networking, analytics, or archive changes. Those remain separately
-reviewed add-ons.
+Sorting is implemented as a separately reviewed policy in the same compiled
+catalog module. This search phase does not add recursive search, content
+indexing, OCR, document-text search, metadata editing, nested folders,
+cross-vault references, accounts, networking, analytics, or archive changes.
+Those remain separately reviewed add-ons.
 
 ## Acceptance
 

@@ -112,6 +112,7 @@ BACKUP_VERIFICATION_MODULE_FILES = {
 }
 CATALOG_SEARCH_MODULE_FILES = {
     "KeyHollow/AddOns/CatalogSearch/VaultCatalogSearchQuery.swift",
+    "KeyHollow/AddOns/CatalogSearch/VaultCatalogSortOrder.swift",
 }
 MEDIA_NAVIGATION_MODULE_FILES = {
     "KeyHollow/AddOns/MediaNavigation/VaultMediaNavigationModels.swift",
@@ -890,6 +891,34 @@ def main() -> int:
                     "KeyHollow/AddOns/CatalogSearch/"
                     "VaultCatalogSearchQuery.swift: bounded metadata-only "
                     f"matching is missing {required!r}"
+                )
+    catalog_sort_file = (
+        CATALOG_SEARCH_ROOT / "VaultCatalogSortOrder.swift"
+    )
+    if catalog_sort_file.is_file():
+        catalog_sort_source = swift_executable_text(
+            catalog_sort_file.read_text(encoding="utf-8")
+        )
+        for required in (
+            "public enum VaultCatalogSortOrder:",
+            "case vaultOrder",
+            "case newestFirst",
+            "case oldestFirst",
+            "case nameAscending",
+            "case nameDescending",
+            "public struct VaultCatalogSortDescriptor: Equatable, Sendable",
+            "public static let maximumTitleCharacterCount = 1_024",
+            "title.prefix(Self.maximumTitleCharacterCount)",
+            ".caseInsensitive",
+            ".diacriticInsensitive",
+            ".widthInsensitive",
+            "return first.offset < second.offset",
+        ):
+            if required not in catalog_sort_source:
+                violations.append(
+                    "KeyHollow/AddOns/CatalogSearch/"
+                    "VaultCatalogSortOrder.swift: bounded metadata-only "
+                    f"ordering is missing {required!r}"
                 )
 
     media_navigation_target = target_body(
@@ -3373,7 +3402,12 @@ def main() -> int:
         "folders: filteredVisibleGalleryFolders",
         "items: snapshot.presentations",
         "@State private var searchText = \"\"",
+        "@State private var catalogSortOrder: VaultCatalogSortOrder = .vaultOrder",
         "VaultCatalogSearchQuery(searchText)",
+        "sortOrder.orderedOffsets(",
+        "sortOrder: catalogSortOrder",
+        'Picker("Sort", selection: $catalogSortOrder)',
+        '.accessibilityLabel("Sort vault items")',
         "makeVisibleGallerySnapshot().filtering(with: activeCatalogSearchQuery)",
         "query.matches($0.presentationItem.title)",
         "visibleGalleryFolders.filter { query.matches($0.name) }",

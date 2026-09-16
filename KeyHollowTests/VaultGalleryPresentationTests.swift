@@ -68,6 +68,38 @@ final class VaultGalleryPresentationTests: XCTestCase {
         ])
     }
 
+    func testCatalogSortOrderControlsVisibleItemsAndMediaQueue() throws {
+        let older = Date(timeIntervalSinceReferenceDate: 700)
+        let newer = Date(timeIntervalSinceReferenceDate: 800)
+        let alpha = VaultPhotoRecord(
+            id: UUID(),
+            importedAt: older,
+            blobName: "alpha.khp",
+            thumbnailName: "alpha.kht",
+            displayName: "Alpha.HEIC",
+            originalByteCount: 1_024
+        )
+        let zulu = VaultGeneralFileRecord(
+            id: UUID(),
+            importedAt: newer,
+            displayName: "Zulu.mp4",
+            contentTypeIdentifier: "public.mpeg-4",
+            originalByteCount: 2_048,
+            blobName: "zulu.khg"
+        )
+
+        let snapshot = VaultGalleryContentSnapshot(
+            items: [.generalFile(zulu), .photo(alpha)],
+            sortOrder: .nameAscending
+        )
+
+        XCTAssertEqual(snapshot.presentations.map(\.title), ["Alpha", "Zulu.mp4"])
+        let queue = try snapshot.mediaNavigationQueue(
+            startingAt: VaultGalleryContentItem.photo(alpha).mediaNavigationID
+        )
+        XCTAssertEqual(queue.items.map(\.title), ["Alpha", "Zulu.mp4"])
+    }
+
     func testGalleryModuleContractUsesImmutableSourceNeutralValues() {
         let itemID = UUID()
         let importedAt = Date(timeIntervalSinceReferenceDate: 500)
