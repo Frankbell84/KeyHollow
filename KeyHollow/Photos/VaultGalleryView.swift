@@ -670,9 +670,13 @@ struct VaultGalleryView: View {
         )
 
     var body: some View {
+        galleryLifecycleView
+    }
+
+    private var galleryCoreView: some View {
         let snapshot = filteredVisibleGallerySnapshot
 
-        VStack(spacing: 0) {
+        return VStack(spacing: 0) {
             galleryHeader(visibleItemIDs: snapshot.selectableItems)
             Divider()
 
@@ -713,6 +717,10 @@ struct VaultGalleryView: View {
                 selectionActionBar
             }
         }
+    }
+
+    private var galleryPresentationView: some View {
+        galleryCoreView
         .overlay {
             if let generalFileImportProgress {
                 GeneralFileImportProgressView(progress: generalFileImportProgress)
@@ -794,6 +802,10 @@ struct VaultGalleryView: View {
             mediaNavigationViewer
                 .interactiveDismissDisabled()
         }
+    }
+
+    private var galleryAlertView: some View {
+        galleryPresentationView
         .confirmationDialog(
             "Delete Selected Items?",
             isPresented: $showingDeleteSelectionConfirmation,
@@ -869,6 +881,10 @@ struct VaultGalleryView: View {
         } message: {
             Text(message ?? "")
         }
+    }
+
+    private var galleryLifecycleView: some View {
+        galleryAlertView
         .task(id: session.activeVaultID) {
             await resetMediaNavigationAndWait()
             store = nil
