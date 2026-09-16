@@ -22,6 +22,17 @@ evidence remains in `docs/PROJECT_CHECKPOINT.md`.
   passed the full test suite and Swift CodeQL. Signing-only preflight run
   [#35099850522](https://github.com/Frankbell84/KeyHollow/actions/runs/35099850522)
   also passed before upload authorization.
+- PR [#72](https://github.com/Frankbell84/KeyHollow/pull/72) merged the exact
+  reviewed Vault Catalog Search head
+  `0707c5a67e8d4383f544f8551ee2953f6d37447c` through regular merge commit
+  `38fc86455832c298e6ea05d57e95b6ce23c48e56`.
+- Exact merged-main CI run
+  [#35112438984](https://github.com/Frankbell84/KeyHollow/actions/runs/35112438984)
+  passed the complete build-and-test lane and Swift CodeQL with no annotations.
+  Merged-main security-test artifact `10453536410` has SHA-256
+  `54864a84f06c8fdcaf11af06c0d9042b6be284008fd6537989d8a2909ca1d740`;
+  simulator artifact `10453616091` has SHA-256
+  `62cfcac0365075a86cf447df0f660e92bd87ca12c273a1299f3228a718e41b9d`.
 - Prior Build 40 accepted production source: exact `main` commit
   `54bd2d6887f3ca0e476339fce05e90dd59ba963f`.
 - PR [#56](https://github.com/Frankbell84/KeyHollow/pull/56) merged the exact
@@ -102,21 +113,26 @@ evidence remains in `docs/PROJECT_CHECKPOINT.md`.
 
 ## Current task
 
-Build 46 is accepted. Preserve exact accepted source
-`2bbb0836526c6397265d14dfcb156df574f819c5` as the release baseline. The current
-in-progress task is Vault Catalog Search on isolated branch
-`feature/vault-catalog-search`, created directly from that accepted `origin/main`
-commit.
+Build 46 remains the physically accepted production baseline. Vault Catalog
+Search is now merged to protected `main` at exact commit
+`38fc86455832c298e6ea05d57e95b6ce23c48e56`, and the exact-main complete test
+suite plus Swift CodeQL passed. The current task is the isolated Build 47 release
+candidate on `release/build47-vault-catalog-search`.
 
-The proposal is mapped in `docs/VAULT_CATALOG_SEARCH.md`. Its working tree adds
-a separately compiled, dependency-free matching module and application-owned
-current-location filtering. The module receives bounded display text only and
-cannot access vault identity, protected records, storage, cryptography, archive
-handling, media payloads, URLs, or mutation capabilities. Search does not add
-sorting, recursive traversal, content indexing, nested folders, or archive
-changes. Local architecture and security gates pass; macOS compilation, the
-complete XCTest suite, Swift CodeQL, review, merge, release packaging, and
-physical-device acceptance have not yet occurred.
+Build 47 changes only the application and thumbnail-extension build number from
+46 to 47 and records the completed merge evidence. It must pass release-branch
+review, protected merge, exact-main CI and CodeQL, and the no-upload signing
+preflight before any separately authorized TestFlight upload. Physical-device
+acceptance must then complete the Vault Catalog Search checks in
+`docs/DEVICE_TEST_PLAN.md`. No signing preflight authorizes upload, tester-group
+expansion, or App Store promotion.
+
+Vault Catalog Search remains a separately compiled, dependency-free matching
+module with application-owned current-location filtering. It receives bounded
+display text only and cannot access vault identity, protected records, storage,
+cryptography, archive handling, media payloads, URLs, or mutation capabilities.
+This release does not add sorting, recursive traversal, content indexing,
+nested folders, or archive changes.
 
 ## Unified Media Navigation candidate
 
