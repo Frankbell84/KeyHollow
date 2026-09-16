@@ -45,7 +45,7 @@ struct BackupVerificationCenterView: View {
                 }
             }
         }
-        .sheet(item: $filePickerRequest, onDismiss: filePickerDidDismiss) { request in
+        .sheet(item: $filePickerRequest) { request in
             BackupVerificationDocumentImporter { url in
                 finishFileSelection(url, requestID: request.id)
             }
@@ -64,6 +64,11 @@ struct BackupVerificationCenterView: View {
             publishMessage("Verification canceled because KeyHollow locked.")
         }
         .onDisappear {
+            // Presenting UIDocumentPickerViewController can temporarily remove
+            // this view from the visible hierarchy. The picker delegate still
+            // owns the authoritative selected/cancelled result, so do not tear
+            // down its request while that system interaction is active.
+            guard !systemInteractionOpen else { return }
             invalidateFilePicker()
             let protectedTaskWasActive = cancelVerification()
             finishSystemInteractionIfNeeded()
@@ -197,14 +202,6 @@ struct BackupVerificationCenterView: View {
         }
 
         stageSelectedArchive(from: url)
-    }
-
-    private func filePickerDidDismiss() {
-        finishSystemInteractionIfNeeded()
-        guard activePickerRequestID != nil else { return }
-        activePickerRequestID = nil
-        filePickerRequest = nil
-        publishMessage("File selection canceled.")
     }
 
     private func invalidateFilePicker() {

@@ -1651,7 +1651,9 @@ def main() -> int:
         "private func discardSelectedArchiveChecked() throws",
         "private static func discardChecked(_ archive: StagedVaultFile) -> Bool",
         "activePickerRequestID",
-        "filePickerDidDismiss",
+        ".sheet(item: $filePickerRequest)",
+        "documentPickerWasCancelled",
+        "guard !systemInteractionOpen else { return }",
         "Task.detached(priority: .userInitiated)",
         "await session.cancelSensitiveTaskAndWait(taskID)",
     ):

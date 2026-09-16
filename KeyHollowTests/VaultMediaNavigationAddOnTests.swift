@@ -200,6 +200,15 @@ final class VaultMediaNavigationAddOnTests: XCTestCase {
         XCTAssertNotEqual(image.kind, video.kind)
     }
 
+    func testApplicationChromeTapDoesNotCompeteWithNativeVideoControls() {
+        XCTAssertTrue(
+            VaultMediaChromeInteractionPolicy.acceptsContentTap(for: .image)
+        )
+        XCTAssertFalse(
+            VaultMediaChromeInteractionPolicy.acceptsContentTap(for: .video)
+        )
+    }
+
     private func makeItems(count: Int) -> [VaultMediaNavigationItem] {
         (0..<count).map { index in
             item(

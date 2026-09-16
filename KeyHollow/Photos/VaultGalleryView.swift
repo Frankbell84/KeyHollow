@@ -713,7 +713,7 @@ struct VaultGalleryView: View {
                 finishGeneralFileExport(prepared)
             }
         }
-        .sheet(
+        .fullScreenCover(
             isPresented: Binding(
                 get: { mediaNavigationQueue != nil },
                 set: { isPresented in
@@ -805,6 +805,11 @@ struct VaultGalleryView: View {
             cancelMediaNavigationForLifecycle()
         }
         .onDisappear {
+            // A full-screen media cover temporarily removes the gallery from
+            // the visible hierarchy. The cover owns the active playback/image
+            // lifecycle; session revocation still cancels it through the
+            // security-epoch observer above.
+            guard mediaNavigationQueue == nil else { return }
             cancelMediaNavigationForLifecycle()
         }
     }
@@ -820,7 +825,15 @@ struct VaultGalleryView: View {
                     && !isMediaImageZoomed
                     && isMediaNavigationContentReady(queue),
                 onSelectionChange: selectMediaNavigationItem,
-                onChromeToggleRequested: toggleMediaChrome
+                onChromeToggleRequested: {
+                    // AVPlayerViewController owns taps on video playback and
+                    // fullscreen controls. Only image pages use a content tap
+                    // to reveal or hide KeyHollow's action overlay.
+                    guard VaultMediaChromeInteractionPolicy.acceptsContentTap(
+                        for: queue.currentItem.kind
+                    ) else { return }
+                    toggleMediaChrome()
+                }
             ) { item in
                 mediaNavigationActiveContent(item)
             }
