@@ -1,5 +1,4 @@
 import Foundation
-import KeyHollowNestedFolderAddOn
 
 private final class FolderManifestTransaction: @unchecked Sendable {
     private let lock = NSRecursiveLock()
@@ -40,6 +39,15 @@ private final class FolderManifestTransactionRegistry: @unchecked Sendable {
     }
 }
 
+private enum FolderHierarchyValidationError: Error {
+    case cycle
+    case duplicateFolderID
+    case duplicateSiblingName
+    case invalidDepth
+    case invalidParent
+    case selfParent
+}
+
 public actor VaultFolderPresentationStore {
     public enum StoreError: Error, Equatable {
         case accessMismatch
@@ -62,6 +70,7 @@ public actor VaultFolderPresentationStore {
     public static let maximumManifestByteCount = 8 * 1_024 * 1_024
     public static let legacyMaximumManifestByteCount = 33_554_432
     public static let maximumFolderCount = 10_000
+    public static let maximumFolderDepth = 8
     public static let maximumMembershipCount = 20_000
     public static let maximumStoredThumbnailCount = 20_000
 
@@ -190,8 +199,8 @@ public actor VaultFolderPresentationStore {
             )
             manifest.folders.append(folder)
             do {
-                _ = try hierarchy(for: manifest)
-            } catch let error as VaultNestedFolderPolicyError {
+                try validateFolderHierarchy(manifest.folders)
+            } catch let error as FolderHierarchyValidationError {
                 throw Self.storeError(for: error)
             }
             try validateGrowth(
@@ -222,8 +231,8 @@ public actor VaultFolderPresentationStore {
 
             manifest.folders[index].name = name
             do {
-                _ = try hierarchy(for: manifest)
-            } catch let error as VaultNestedFolderPolicyError {
+                try validateFolderHierarchy(manifest.folders)
+            } catch let error as FolderHierarchyValidationError {
                 throw Self.storeError(for: error)
             }
             try validateGrowth(
@@ -259,8 +268,8 @@ public actor VaultFolderPresentationStore {
                 manifest.memberships.removeAll { $0.folderID == id }
             }
             do {
-                _ = try hierarchy(for: manifest)
-            } catch let error as VaultNestedFolderPolicyError {
+                try validateFolderHierarchy(manifest.folders)
+            } catch let error as FolderHierarchyValidationError {
                 throw Self.storeError(for: error)
             }
             try saveManifest(manifest)
@@ -271,21 +280,21 @@ public actor VaultFolderPresentationStore {
         try manifestTransaction.withLock {
             var manifest = try loadManifest()
             let originalManifest = manifest
-            let policy = try hierarchy(for: manifest)
-            let moved: [VaultNestedFolderDescriptor]
-            do {
-                moved = try policy.movingFolder(id: id, to: parentID)
-            } catch let error as VaultNestedFolderPolicyError {
-                throw Self.storeError(for: error)
+            guard let index = manifest.folders.firstIndex(where: { $0.id == id }) else {
+                throw StoreError.folderNotFound
             }
-            let indexByID = Dictionary(uniqueKeysWithValues: manifest.folders.indices.map {
-                (manifest.folders[$0].id, $0)
-            })
-            for folder in moved {
-                guard let index = indexByID[folder.id] else {
-                    throw StoreError.invalidManifest
+            guard manifest.folders[index].parentID != parentID else { return }
+            if let parentID {
+                guard parentID != id else { throw StoreError.invalidFolderMove }
+                guard manifest.folders.contains(where: { $0.id == parentID }) else {
+                    throw StoreError.folderNotFound
                 }
-                manifest.folders[index].parentID = folder.parentID
+            }
+            manifest.folders[index].parentID = parentID
+            do {
+                try validateFolderHierarchy(manifest.folders)
+            } catch let error as FolderHierarchyValidationError {
+                throw Self.storeError(for: error)
             }
             try validateGrowth(
                 from: originalManifest,
@@ -506,8 +515,14 @@ public actor VaultFolderPresentationStore {
 
         var folderIDs = Set<UUID>()
         for folder in manifest.folders {
-            _ = try normalizedFolderName(folder.name)
-            guard folderIDs.insert(folder.id).inserted else {
+            let normalizedName: String
+            do {
+                normalizedName = try normalizedFolderName(folder.name)
+            } catch {
+                throw StoreError.invalidManifest
+            }
+            guard normalizedName == folder.name,
+                  folderIDs.insert(folder.id).inserted else {
                 throw StoreError.invalidManifest
             }
         }
@@ -517,7 +532,7 @@ public actor VaultFolderPresentationStore {
             throw StoreError.invalidManifest
         }
         do {
-            _ = try hierarchy(for: manifest)
+            try validateFolderHierarchy(manifest.folders)
         } catch {
             throw StoreError.invalidManifest
         }
@@ -594,37 +609,61 @@ public actor VaultFolderPresentationStore {
         }
     }
 
-    private static func storeError(
-        for error: VaultNestedFolderPolicyError
-    ) -> StoreError {
+    private static func storeError(for error: FolderHierarchyValidationError) -> StoreError {
         switch error {
         case .duplicateSiblingName:
             .duplicateFolderName
         case .invalidDepth:
             .folderDepthLimitReached
-        case .folderNotFound, .invalidParent:
+        case .invalidParent:
             .folderNotFound
         case .cycle, .selfParent:
             .invalidFolderMove
-        case .duplicateFolderID, .folderLimitExceeded, .invalidName:
+        case .duplicateFolderID:
             .invalidManifest
         }
     }
 
-    private func hierarchy(
-        for manifest: VaultFolderPresentationManifest
-    ) throws -> VaultNestedFolderHierarchy {
-        try VaultNestedFolderHierarchy(
-            folders: manifest.folders.enumerated().map { offset, folder in
-                VaultNestedFolderDescriptor(
-                    id: folder.id,
-                    parentID: folder.parentID,
-                    name: folder.name,
-                    createdAt: folder.createdAt,
-                    stableOrdinal: offset
-                )
+    private func validateFolderHierarchy(_ folders: [VaultFolderRecord]) throws {
+        var foldersByID: [UUID: VaultFolderRecord] = [:]
+        foldersByID.reserveCapacity(folders.count)
+        for folder in folders {
+            guard foldersByID.updateValue(folder, forKey: folder.id) == nil else {
+                throw FolderHierarchyValidationError.duplicateFolderID
             }
-        )
+        }
+
+        var siblingNames: [UUID?: Set<String>] = [:]
+        for folder in folders {
+            if let parentID = folder.parentID {
+                guard parentID != folder.id else {
+                    throw FolderHierarchyValidationError.selfParent
+                }
+                guard foldersByID[parentID] != nil else {
+                    throw FolderHierarchyValidationError.invalidParent
+                }
+            }
+            let collisionKey = Self.folderNameCollisionKey(folder.name)
+            guard siblingNames[folder.parentID, default: []].insert(collisionKey).inserted else {
+                throw FolderHierarchyValidationError.duplicateSiblingName
+            }
+        }
+
+        for folder in folders {
+            var visited = Set<UUID>()
+            var cursor: UUID? = folder.id
+            var depth = 0
+            while let folderID = cursor {
+                guard visited.insert(folderID).inserted else {
+                    throw FolderHierarchyValidationError.cycle
+                }
+                depth += 1
+                guard depth <= Self.maximumFolderDepth else {
+                    throw FolderHierarchyValidationError.invalidDepth
+                }
+                cursor = foldersByID[folderID]?.parentID
+            }
+        }
     }
 
     private func commitManifestCiphertext(_ ciphertext: Data) throws {

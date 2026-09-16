@@ -20,7 +20,8 @@ small local core with narrow adapters around it.
 | `AddOns/BackupVerification` | Immutable archive-verification report values and read-only result presentation | Recovery credentials, vault keys, ciphertext, staging URLs, protected stores, archive parsing, installation, application navigation |
 | `AddOns/CatalogSearch` | Bounded matching and stable ordering of already-sanitized display metadata | Vault identity, record identifiers, stores, keys, URLs, payloads, folder manifests, mutation, recursive traversal, archive formats |
 | `AddOns/GeneralFileSupport` | Encrypted general-file records, manifests, blobs, and protected ingress/egress staging | Vault keys, photo storage, SwiftUI/UIKit, portable archive formats |
-| `AddOns/FolderPresentation` | Folder metadata, neutral content references, and encrypted presentation thumbnails | Vault keys, protected photo/file content, SwiftUI/UIKit, portable archive formats |
+| `AddOns/FolderPresentation` | Folder metadata, neutral content references, encrypted presentation thumbnails, and independent validation of its persisted manifest hierarchy | Vault keys, protected photo/file content, SwiftUI/UIKit, portable archive formats, concrete UI-policy add-ons |
+| `AddOns/NestedFolder` | Immutable folder-metadata policy for bounded breadcrumbs, navigation, and valid move destinations | Persisted manifests, stores, keys, sessions, ciphertext, protected records, mutations, SwiftUI/UIKit |
 | `UI/VaultGallery*` | Source-neutral grid layout, tile metadata, folder presentation, and selection behavior | Vault keys, ciphertext, protected stores, decryption, portable archive formats |
 | `AddOns/MediaNavigation` | Immutable typed media descriptors, bounded non-wrapping paging rules, active-page presentation, and navigation accessibility | Vault keys, encrypted records or stores, ciphertext, plaintext payloads, file URLs, sessions, folder persistence, portable archive formats |
 | `AddOns/SecurePreview` | Bounded image type/size policy, off-main image preparation, and secure preview presentation | Vault keys, encrypted persistence, session ownership, portable archive formats |
@@ -97,15 +98,28 @@ interfaces and bridges the unlocked session capability; neither the protected
 vault core nor the photo core imports the add-on.
 
 `KeyHollowFolderPresentationAddOn` owns only folder metadata, neutral content
-references, and encrypted presentation thumbnails. It does not import or own
-the photo store, general-file store, vault key, transfer coordinator, or UI.
-The application maps protected-store record IDs into neutral references and
-supplies scoped seal/open access while the unlocked session is valid. Deleting
-a folder returns its references to the root gallery and cannot delete protected
-content. Single-item and mixed-selection moves update only the encrypted folder
-manifest; a batch is committed with one authenticated manifest write and never
-moves or rewrites photo or general-file ciphertext. Removing the add-on leaves
-the protected stores and existing `.khvault` format operational.
+references, encrypted presentation thumbnails, and the encrypted folder
+manifest. It validates persisted parent relationships, sibling-name
+uniqueness, cycle freedom, and bounded depth without importing a concrete
+UI-policy add-on. It does not import or own the photo store, general-file store,
+vault key, transfer coordinator, or UI. The application maps protected-store
+record IDs into neutral references and supplies scoped seal/open access while
+the unlocked session is valid. Deleting a folder reparents its direct content
+references and direct child folders to the deleted folder's parent (which may
+be the root) and cannot delete protected content. Single-item and
+mixed-selection moves update only the encrypted folder manifest; a batch is
+committed with one authenticated manifest write and never moves or rewrites
+photo or general-file ciphertext. Removing the add-on leaves the protected
+stores and existing `.khvault` format operational.
+
+`KeyHollowNestedFolderAddOn` owns only immutable, bounded folder-metadata
+policy used for breadcrumbs, current-location navigation, and valid parent
+destinations. It does not read, validate, encrypt, or persist a folder manifest
+and has no mutation capability. The application composition layer maps
+FolderPresentation records into the add-on's neutral descriptors, applies its
+results to the gallery UI, and sends user-authorized mutations back through
+FolderPresentation. Neither add-on imports the other; replacing the navigation
+policy cannot weaken the persisted-manifest validation boundary.
 
 `KeyHollowCatalogSearchAddOn` owns only bounded, dependency-free display-text
 matching and stable catalog-ordering policies. The application composition

@@ -152,8 +152,6 @@ targets:
     platform: iOS
     sources:
       - path: KeyHollow/AddOns/FolderPresentation
-    dependencies:
-      - target: KeyHollowNestedFolderAddOn
     settings:
       base:
         PRODUCT_NAME: KeyHollowFolderPresentationAddOn

@@ -2,6 +2,7 @@ import CryptoKit
 import Foundation
 import XCTest
 import KeyHollowCryptoCore
+import KeyHollowNestedFolderAddOn
 @testable import KeyHollowFolderPresentationAddOn
 
 final class VaultFolderPresentationAddOnTests: XCTestCase {
@@ -120,6 +121,122 @@ final class VaultFolderPresentationAddOnTests: XCTestCase {
         await XCTAssertThrowsErrorAsync(try await fixture.store.loadManifest()) { error in
             XCTAssertEqual(error as? VaultFolderPresentationStore.StoreError, .invalidManifest)
         }
+    }
+
+    func testStoredHierarchyRejectsOrphanCycleAndDepthOverflow() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+
+        let orphan = VaultFolderRecord(
+            id: UUID(),
+            name: "Orphan",
+            createdAt: Date(),
+            parentID: UUID()
+        )
+        try fixture.writeManifest(hierarchyManifest(folders: [orphan]))
+        await XCTAssertThrowsErrorAsync(try await fixture.store.loadManifest()) { error in
+            XCTAssertEqual(error as? VaultFolderPresentationStore.StoreError, .invalidManifest)
+        }
+
+        let firstID = UUID()
+        let secondID = UUID()
+        let cycle = [
+            VaultFolderRecord(
+                id: firstID,
+                name: "First",
+                createdAt: Date(),
+                parentID: secondID
+            ),
+            VaultFolderRecord(
+                id: secondID,
+                name: "Second",
+                createdAt: Date(),
+                parentID: firstID
+            ),
+        ]
+        try fixture.writeManifest(hierarchyManifest(folders: cycle))
+        await XCTAssertThrowsErrorAsync(try await fixture.store.loadManifest()) { error in
+            XCTAssertEqual(error as? VaultFolderPresentationStore.StoreError, .invalidManifest)
+        }
+
+        var depthOverflow: [VaultFolderRecord] = []
+        var parentID: UUID?
+        for index in 0...VaultFolderPresentationStore.maximumFolderDepth {
+            let folder = VaultFolderRecord(
+                id: UUID(),
+                name: "Level \(index)",
+                createdAt: Date(timeIntervalSinceReferenceDate: TimeInterval(index)),
+                parentID: parentID
+            )
+            depthOverflow.append(folder)
+            parentID = folder.id
+        }
+        try fixture.writeManifest(hierarchyManifest(folders: depthOverflow))
+        await XCTAssertThrowsErrorAsync(try await fixture.store.loadManifest()) { error in
+            XCTAssertEqual(error as? VaultFolderPresentationStore.StoreError, .invalidManifest)
+        }
+    }
+
+    func testStoredHierarchyRejectsNoncanonicalAndDuplicateSiblingNames() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+
+        try fixture.writeManifest(hierarchyManifest(folders: [
+            VaultFolderRecord(
+                id: UUID(),
+                name: " Padded",
+                createdAt: Date()
+            ),
+        ]))
+        await XCTAssertThrowsErrorAsync(try await fixture.store.loadManifest()) { error in
+            XCTAssertEqual(error as? VaultFolderPresentationStore.StoreError, .invalidManifest)
+        }
+
+        try fixture.writeManifest(hierarchyManifest(folders: [
+            VaultFolderRecord(
+                id: UUID(),
+                name: "Receipts\u{0000}",
+                createdAt: Date()
+            ),
+        ]))
+        await XCTAssertThrowsErrorAsync(try await fixture.store.loadManifest()) { error in
+            XCTAssertEqual(error as? VaultFolderPresentationStore.StoreError, .invalidManifest)
+        }
+
+        let parent = VaultFolderRecord(id: UUID(), name: "Parent", createdAt: Date())
+        try fixture.writeManifest(hierarchyManifest(folders: [
+            parent,
+            VaultFolderRecord(
+                id: UUID(),
+                name: "Receipts",
+                createdAt: Date(),
+                parentID: parent.id
+            ),
+            VaultFolderRecord(
+                id: UUID(),
+                name: "RECEIPTS",
+                createdAt: Date(),
+                parentID: parent.id
+            ),
+        ]))
+        await XCTAssertThrowsErrorAsync(try await fixture.store.loadManifest()) { error in
+            XCTAssertEqual(error as? VaultFolderPresentationStore.StoreError, .invalidManifest)
+        }
+    }
+
+    func testNestedPolicyLimitsMatchPresentationPersistenceLimits() {
+        XCTAssertEqual(
+            VaultFolderPresentationStore.maximumFolderDepth,
+            VaultNestedFolderHierarchy.maximumDepth
+        )
+        XCTAssertEqual(
+            VaultFolderPresentationStore.maximumFolderNameLength,
+            VaultNestedFolderDescriptor.maximumNameCharacterCount
+        )
+        XCTAssertEqual(
+            VaultFolderPresentationStore.maximumFolderCount,
+            VaultNestedFolderHierarchy.maximumFolderCount
+        )
     }
 
     func testSiblingNameRulesAllowSameNameInDifferentParents() async throws {
@@ -295,6 +412,29 @@ final class VaultFolderPresentationAddOnTests: XCTestCase {
         let unchangedManifest = try await fixture.store.loadManifest()
         XCTAssertEqual(unchangedManifest.folders.count, 1)
         XCTAssertEqual(try Data(contentsOf: fixture.manifestURL), manifestBefore)
+    }
+
+    func testFolderNameLimitsRejectOverlongAndControlCharactersWithoutPersistence() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        let overlongName = String(
+            repeating: "A",
+            count: VaultFolderPresentationStore.maximumFolderNameLength + 1
+        )
+
+        await XCTAssertThrowsErrorAsync(
+            try await fixture.store.createFolder(named: overlongName)
+        ) { error in
+            XCTAssertEqual(error as? VaultFolderPresentationStore.StoreError, .invalidFolderName)
+        }
+        await XCTAssertThrowsErrorAsync(
+            try await fixture.store.createFolder(named: "Receipts\u{0000}")
+        ) { error in
+            XCTAssertEqual(error as? VaultFolderPresentationStore.StoreError, .invalidFolderName)
+        }
+
+        let manifest = try await fixture.store.loadManifest()
+        XCTAssertTrue(manifest.folders.isEmpty)
     }
 
     func testFolderNameCollisionNormalizationIsConsistentForCreateAndRename() async throws {
@@ -743,6 +883,17 @@ final class VaultFolderPresentationAddOnTests: XCTestCase {
             XCTAssertEqual(error as? VaultFolderPresentationStore.StoreError, .invalidStorageRoot)
         }
     }
+}
+
+private func hierarchyManifest(
+    folders: [VaultFolderRecord]
+) -> VaultFolderPresentationManifest {
+    VaultFolderPresentationManifest(
+        version: VaultFolderPresentationManifest.hierarchyVersion,
+        folders: folders,
+        memberships: [],
+        thumbnails: []
+    )
 }
 
 private struct Fixture {

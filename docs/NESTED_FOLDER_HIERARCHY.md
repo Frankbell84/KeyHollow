@@ -23,9 +23,9 @@ build-number change, upload, merge, or tester expansion.
 
 | Concern | Current owner | Required additive change |
 | --- | --- | --- |
-| Folder records, item membership, encrypted manifest | `KeyHollowFolderPresentationAddOn` | Add versioned parent relationships and transactional hierarchy mutations |
-| Cycle, depth, descendant, breadcrumb, and destination policy | New `KeyHollowNestedFolderAddOn` | Pure bounded value-policy module with no storage or key access |
-| Grid, search, sort, selection, move, and navigation wiring | Application composition plus `KeyHollowGalleryUI` | Build one immutable current-location snapshot and route folder actions through the existing stores |
+| Folder records, item membership, encrypted manifest | `KeyHollowFolderPresentationAddOn` | Add versioned parent relationships, independently validate every persisted hierarchy, and commit transactional hierarchy mutations |
+| Breadcrumb, current-location navigation, descendant, and destination policy | New `KeyHollowNestedFolderAddOn` | Pure bounded metadata-policy module with no manifest, storage, key, or mutation access |
+| Grid, search, sort, selection, move, and navigation wiring | Application composition plus `KeyHollowGalleryUI` | Map FolderPresentation records into neutral NestedFolder descriptors, build one immutable current-location snapshot, and route mutations back through FolderPresentation |
 | Photos and general files | Existing protected stores | No change; encrypted payloads never move when presentation membership changes |
 | Portable `.khvault` backup | `KeyHollowTransferCore` | No format change; existing disclosure that folders are not preserved remains authoritative |
 
@@ -33,7 +33,11 @@ The new policy add-on may receive only immutable folder identifiers, bounded
 display names, parent identifiers, timestamps, and stable ordinals. It must not
 receive a vault identifier, key, session, encrypted manifest, record, store,
 URL, ciphertext, plaintext payload, thumbnail bytes, archive parser, or
-mutation closure.
+mutation closure. `KeyHollowFolderPresentationAddOn` and
+`KeyHollowNestedFolderAddOn` do not import each other. FolderPresentation owns
+its persisted-manifest validation independently; the application composition
+layer performs the one-way mapping into NestedFolder metadata for UI policy and
+sends approved mutations back through the FolderPresentation store.
 
 ## Compatibility contract
 
@@ -101,9 +105,11 @@ and preservation of a previously valid authenticated manifest.
 1. Start an isolated feature branch from exact accepted Build 48 source
    `fd2f39f079f3dca853f09e2d67caa8a5cd2eab5c`.
 2. Add the independently compiled `KeyHollowNestedFolderAddOn` with strict
-   concurrency, warnings as errors, and architecture allowlists.
-3. Add pure hierarchy tests covering cycles, depth, sibling collisions,
-   deterministic breadcrumbs, moves, deletion reparenting, and hostile input.
+   concurrency, warnings as errors, architecture allowlists, and no dependency
+   edge to or from `KeyHollowFolderPresentationAddOn`.
+3. Add FolderPresentation persistence tests for cycles, depth, sibling
+   collisions, deletion reparenting, and hostile manifests, plus pure
+   NestedFolder policy tests for deterministic breadcrumbs and destinations.
 4. Add encrypted-store tests covering v1 compatibility, v2 migration,
    cancellation, commit-state recovery, size limits, and access revocation.
 5. Add application tests for search, sort, selection, media queues, folder

@@ -99,6 +99,7 @@ FILE_RECOGNITION_PREFIX = "KeyHollow/AddOns/FileRecognition/"
 BACKUP_VERIFICATION_PREFIX = "KeyHollow/AddOns/BackupVerification/"
 CATALOG_SEARCH_PREFIX = "KeyHollow/AddOns/CatalogSearch/"
 GENERAL_FILE_SUPPORT_PREFIX = "KeyHollow/AddOns/GeneralFileSupport/"
+FOLDER_PRESENTATION_PREFIX = "KeyHollow/AddOns/FolderPresentation/"
 SECURE_PREVIEW_PREFIX = "KeyHollow/AddOns/SecurePreview/"
 ENCRYPTED_VIDEO_PREFIX = "KeyHollow/AddOns/EncryptedVideo/"
 MEDIA_NAVIGATION_PREFIX = "KeyHollow/AddOns/MediaNavigation/"
@@ -983,13 +984,16 @@ def main() -> int:
         project,
         "KeyHollowFolderPresentationAddOn",
     )
-    if folder_presentation_target is None or len(re.findall(
-        r"(?m)^      - target: KeyHollowNestedFolderAddOn\s*$",
-        folder_presentation_target,
-    )) != 1:
+    if folder_presentation_target is None:
         violations.append(
-            "project.yml: KeyHollowFolderPresentationAddOn must depend on "
-            "KeyHollowNestedFolderAddOn exactly once"
+            "project.yml: KeyHollowFolderPresentationAddOn target is missing"
+        )
+    elif yaml_key_present(folder_presentation_target, "dependencies") or re.search(
+        r"(?m)^[ \t]+<<\s*:", folder_presentation_target
+    ):
+        violations.append(
+            "project.yml: KeyHollowFolderPresentationAddOn must remain "
+            "dependency-free; concrete add-ons are composed only by the app"
         )
 
     nested_folder_tests_target = target_body(project, "KeyHollowTests")
@@ -2118,6 +2122,15 @@ def main() -> int:
                         f"{path}: nested-folder add-on must remain metadata-only; "
                         f"found {forbidden_capability}"
                     )
+
+        if path.startswith(FOLDER_PRESENTATION_PREFIX):
+            if "KeyHollowNestedFolderAddOn" in imported or re.search(
+                r"\bVaultNestedFolder", source
+            ):
+                violations.append(
+                    f"{path}: folder-presentation must not depend on the concrete "
+                    "nested-folder add-on; compose both only in the application target"
+                )
 
         if path.startswith(BACKUP_VERIFICATION_PREFIX):
             expected_imports = BACKUP_VERIFICATION_IMPORTS.get(path)

@@ -1370,12 +1370,13 @@ struct VaultGalleryView: View {
                 }
             }
 
-            ForEach(sortedFolders) { folder in
-                if folder.id != activeFolderID {
+            ForEach(allFolderDestinations) { destination in
+                if let folderID = destination.folderID,
+                   folderID != activeFolderID {
                     Button {
-                        moveSelectedItems(to: folder.id)
+                        moveSelectedItems(to: folderID)
                     } label: {
-                        Label(folderPathTitle(folder.id), systemImage: "folder")
+                        Label(destination.title, systemImage: "folder")
                     }
                 }
             }
@@ -1414,7 +1415,8 @@ struct VaultGalleryView: View {
                     createdAt: folder.createdAt,
                     stableOrdinal: offset
                 )
-            }
+            },
+            maximumDepth: VaultFolderPresentationStore.maximumFolderDepth
         )
     }
 
@@ -1423,13 +1425,28 @@ struct VaultGalleryView: View {
     }
 
     private var visibleGalleryFolders: [VaultGalleryFolder] {
-        visibleFolders.map {
+        let counts = directEntryCountByFolderID
+        return visibleFolders.map {
             VaultGalleryFolder(
                 id: $0.id,
                 name: $0.name,
-                itemCount: itemCount(in: $0.id)
+                itemCount: counts[$0.id, default: 0]
             )
         }
+    }
+
+    private var directEntryCountByFolderID: [UUID: Int] {
+        var counts: [UUID: Int] = [:]
+        counts.reserveCapacity(folderManifest.folders.count)
+        for membership in folderManifest.memberships {
+            counts[membership.folderID, default: 0] += 1
+        }
+        for folder in folderManifest.folders {
+            if let parentID = folder.parentID {
+                counts[parentID, default: 0] += 1
+            }
+        }
+        return counts
     }
 
     private var activeCatalogSearchQuery: VaultCatalogSearchQuery {
@@ -1513,18 +1530,40 @@ struct VaultGalleryView: View {
         return destinations.map { destinationID in
             VaultFolderDestination(
                 folderID: destinationID,
-                title: destinationID.map(folderPathTitle) ?? "Vault Root"
+                title: destinationID.map {
+                    folderPathTitle($0, using: hierarchy)
+                } ?? "Vault Root"
             )
         }
     }
 
-    private func folderPathTitle(_ folderID: UUID) -> String {
-        guard let hierarchy = nestedFolderHierarchy,
-              let path = try? hierarchy.breadcrumb(to: folderID) else {
-            return folderManifest.folders.first(where: { $0.id == folderID })?.name
-                ?? "Folder"
+    private var allFolderDestinations: [VaultFolderDestination] {
+        guard let hierarchy = nestedFolderHierarchy else {
+            return sortedFolders.map {
+                VaultFolderDestination(
+                    folderID: $0.id,
+                    title: VaultFolderPathPresentation.destinationTitle(path: [$0.name])
+                )
+            }
         }
-        return path.map(\.name).joined(separator: " / ")
+        return sortedFolders.map {
+            VaultFolderDestination(
+                folderID: $0.id,
+                title: folderPathTitle($0.id, using: hierarchy)
+            )
+        }
+    }
+
+    private func folderPathTitle(
+        _ folderID: UUID,
+        using hierarchy: VaultNestedFolderHierarchy
+    ) -> String {
+        guard let path = try? hierarchy.breadcrumb(to: folderID) else {
+            let fallback = folderManifest.folders.first(where: { $0.id == folderID })?.name
+                ?? "Folder"
+            return VaultFolderPathPresentation.destinationTitle(path: [fallback])
+        }
+        return VaultFolderPathPresentation.destinationTitle(path: path.map(\.name))
     }
 
     private var galleryTitle: String {
@@ -1579,11 +1618,6 @@ struct VaultGalleryView: View {
         folderManifest.memberships.first { $0.item == item }?.folderID
     }
 
-    private func itemCount(in folderID: UUID) -> Int {
-        folderManifest.memberships.filter { $0.folderID == folderID }.count
-            + folderManifest.folders.filter { $0.parentID == folderID }.count
-    }
-
     @ViewBuilder
     private func moveDestinationMenu(
         for item: VaultPresentedContentReference
@@ -1602,12 +1636,13 @@ struct VaultGalleryView: View {
                     }
                 }
 
-                ForEach(sortedFolders) { folder in
-                    if folder.id != currentFolderID {
+                ForEach(allFolderDestinations) { destination in
+                    if let folderID = destination.folderID,
+                       folderID != currentFolderID {
                         Button {
-                            move(item, to: folder.id)
+                            move(item, to: folderID)
                         } label: {
-                            Label(folderPathTitle(folder.id), systemImage: "folder")
+                            Label(destination.title, systemImage: "folder")
                         }
                     }
                 }
@@ -1883,6 +1918,7 @@ struct VaultGalleryView: View {
               !isWorking else { return }
 
         let folderToRename = folderBeingRenamed
+        let destinationParentID = activeFolderID
         showingFolderEditor = false
         folderBeingRenamed = nil
         folderNameDraft = ""
@@ -1896,7 +1932,7 @@ struct VaultGalleryView: View {
                 } else {
                     _ = try await presentationStore.createFolder(
                         named: name,
-                        in: activeFolderID
+                        in: destinationParentID
                     )
                 }
                 folderManifest = try await presentationStore.loadManifest()

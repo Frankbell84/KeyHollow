@@ -18,7 +18,7 @@ public struct VaultNestedFolderDescriptor: Identifiable, Hashable, Sendable {
     ) {
         self.id = id
         self.parentID = parentID
-        self.name = String(name.prefix(Self.maximumNameCharacterCount))
+        self.name = name
         self.createdAt = createdAt
         self.stableOrdinal = stableOrdinal
     }
@@ -55,6 +55,10 @@ public struct VaultNestedFolderHierarchy: Sendable {
     public let folders: [VaultNestedFolderDescriptor]
 
     private let foldersByID: [UUID: VaultNestedFolderDescriptor]
+    private let childrenByParentID: [UUID?: [UUID]]
+    private let depthByID: [UUID: Int]
+    private let siblingNamesByParentID: [UUID?: Set<String>]
+    private let maximumDepthLimit: Int
 
     public init(
         folders: [VaultNestedFolderDescriptor],
@@ -79,6 +83,7 @@ public struct VaultNestedFolderHierarchy: Sendable {
         }
 
         var siblingNames: [UUID?: Set<String>] = [:]
+        var childrenByParentID: [UUID?: [UUID]] = [:]
         for folder in folders {
             if let parentID = folder.parentID {
                 guard parentID != folder.id else {
@@ -92,8 +97,11 @@ public struct VaultNestedFolderHierarchy: Sendable {
             guard siblingNames[folder.parentID, default: []].insert(collisionKey).inserted else {
                 throw VaultNestedFolderPolicyError.duplicateSiblingName
             }
+            childrenByParentID[folder.parentID, default: []].append(folder.id)
         }
 
+        var depthByID: [UUID: Int] = [:]
+        depthByID.reserveCapacity(folders.count)
         for folder in folders {
             var visited = Set<UUID>()
             var cursor: UUID? = folder.id
@@ -108,15 +116,20 @@ public struct VaultNestedFolderHierarchy: Sendable {
                 }
                 cursor = indexed[folderID]?.parentID
             }
+            depthByID[folder.id] = depth
         }
 
         self.folders = folders
         self.foldersByID = indexed
+        self.childrenByParentID = childrenByParentID
+        self.depthByID = depthByID
+        self.siblingNamesByParentID = siblingNames
+        self.maximumDepthLimit = maximumDepth
     }
 
     public func children(of parentID: UUID?) -> [VaultNestedFolderDescriptor] {
-        folders
-            .filter { $0.parentID == parentID }
+        childrenByParentID[parentID, default: []]
+            .compactMap { foldersByID[$0] }
             .sorted(by: Self.stableOrder)
     }
 
@@ -134,7 +147,7 @@ public struct VaultNestedFolderHierarchy: Sendable {
             path.append(folder)
             cursor = folder.parentID
         }
-        return path.reversed()
+        return Array(path.reversed())
     }
 
     public func movingFolder(
@@ -157,7 +170,10 @@ public struct VaultNestedFolderHierarchy: Sendable {
         let moved = folders.map {
             $0.id == folderID ? $0.replacingParent(with: parentID) : $0
         }
-        return try Self(folders: moved).folders
+        return try Self(
+            folders: moved,
+            maximumDepth: maximumDepthLimit
+        ).folders
     }
 
     public func validParentDestinations(
@@ -166,6 +182,18 @@ public struct VaultNestedFolderHierarchy: Sendable {
         guard let folder = foldersByID[folderID] else {
             throw VaultNestedFolderPolicyError.folderNotFound
         }
+        let collisionKey = Self.nameCollisionKey(folder.name)
+        var forbiddenParentIDs = Set([folderID])
+        var subtreeHeight = 1
+        var pending = childrenByParentID[folderID, default: []].map { ($0, 2) }
+        while let (currentID, relativeDepth) = pending.popLast() {
+            forbiddenParentIDs.insert(currentID)
+            subtreeHeight = max(subtreeHeight, relativeDepth)
+            pending.append(contentsOf: childrenByParentID[currentID, default: []].map {
+                ($0, relativeDepth + 1)
+            })
+        }
+
         var candidates: [UUID?] = [nil]
         candidates.append(contentsOf: folders
             .sorted(by: Self.stableOrder)
@@ -173,7 +201,16 @@ public struct VaultNestedFolderHierarchy: Sendable {
 
         return candidates.filter { candidate in
             guard candidate != folder.parentID else { return false }
-            return (try? movingFolder(id: folderID, to: candidate)) != nil
+            if let candidate {
+                guard !forbiddenParentIDs.contains(candidate),
+                      let parentDepth = depthByID[candidate],
+                      parentDepth + subtreeHeight <= maximumDepthLimit else {
+                    return false
+                }
+            } else if subtreeHeight > maximumDepthLimit {
+                return false
+            }
+            return !siblingNamesByParentID[candidate, default: []].contains(collisionKey)
         }
     }
 

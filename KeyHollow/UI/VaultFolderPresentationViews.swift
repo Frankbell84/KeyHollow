@@ -25,6 +25,21 @@ public struct VaultFolderBreadcrumbSegment: Identifiable, Equatable, Sendable {
     }
 }
 
+public enum VaultFolderPathPresentation {
+    public static func destinationTitle(
+        rootTitle: String = "Vault Root",
+        path: [String]
+    ) -> String {
+        ([rootTitle] + path.map(escapedSegment)).joined(separator: " › ")
+    }
+
+    private static func escapedSegment(_ name: String) -> String {
+        name
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "›", with: "\\›")
+    }
+}
+
 public struct VaultFolderBreadcrumbView: View {
     let segments: [VaultFolderBreadcrumbSegment]
     let navigate: (UUID?) -> Void
@@ -40,7 +55,8 @@ public struct VaultFolderBreadcrumbView: View {
     public var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 6) {
-                ForEach(Array(segments.enumerated()), id: \.element.id) { offset, segment in
+                ForEach(segments.indices, id: \.self) { offset in
+                    let segment = segments[offset]
                     if offset > 0 {
                         Image(systemName: "chevron.right")
                             .font(.caption.weight(.semibold))
@@ -52,7 +68,9 @@ public struct VaultFolderBreadcrumbView: View {
                     }
                     .buttonStyle(.plain)
                     .font(.subheadline.weight(offset == segments.count - 1 ? .semibold : .regular))
-                    .foregroundStyle(offset == segments.count - 1 ? .primary : .tint)
+                    .foregroundStyle(
+                        offset == segments.count - 1 ? Color.primary : Color.accentColor
+                    )
                 }
             }
             .padding(.horizontal)

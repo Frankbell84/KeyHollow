@@ -71,6 +71,24 @@ final class VaultNestedFolderAddOnTests: XCTestCase {
         }
     }
 
+    func testRejectsOverlongAndControlCharacterNamesWithoutTruncating() {
+        let overlongName = String(
+            repeating: "A",
+            count: VaultNestedFolderDescriptor.maximumNameCharacterCount + 1
+        )
+        XCTAssertThrowsError(try VaultNestedFolderHierarchy(folders: [
+            descriptor(overlongName, ordinal: 0),
+        ])) { error in
+            XCTAssertEqual(error as? VaultNestedFolderPolicyError, .invalidName)
+        }
+
+        XCTAssertThrowsError(try VaultNestedFolderHierarchy(folders: [
+            descriptor("Receipts\u{0000}", ordinal: 0),
+        ])) { error in
+            XCTAssertEqual(error as? VaultNestedFolderPolicyError, .invalidName)
+        }
+    }
+
     func testMovingFolderRejectsDescendantAndDepthOverflow() throws {
         let root = descriptor("Root", ordinal: 0)
         let child = descriptor("Child", parentID: root.id, ordinal: 1)
@@ -97,6 +115,64 @@ final class VaultNestedFolderAddOnTests: XCTestCase {
             try deepHierarchy.movingFolder(id: movableParent.id, to: parentID)
         ) { error in
             XCTAssertEqual(error as? VaultNestedFolderPolicyError, .invalidDepth)
+        }
+    }
+
+    func testCustomMaximumDepthIsPreservedForMovesAndDestinations() throws {
+        let destinationRoot = descriptor("Destination", ordinal: 0)
+        let destinationChild = descriptor(
+            "Destination Child",
+            parentID: destinationRoot.id,
+            ordinal: 1
+        )
+        let movable = descriptor("Movable", ordinal: 2)
+        let movableChild = descriptor(
+            "Movable Child",
+            parentID: movable.id,
+            ordinal: 3
+        )
+        let hierarchy = try VaultNestedFolderHierarchy(
+            folders: [destinationRoot, destinationChild, movable, movableChild],
+            maximumDepth: 3
+        )
+
+        let destinations = try hierarchy.validParentDestinations(for: movable.id)
+        XCTAssertTrue(destinations.contains { $0 == destinationRoot.id })
+        XCTAssertFalse(destinations.contains { $0 == destinationChild.id })
+
+        XCTAssertNoThrow(
+            try hierarchy.movingFolder(id: movable.id, to: destinationRoot.id)
+        )
+        XCTAssertThrowsError(
+            try hierarchy.movingFolder(id: movable.id, to: destinationChild.id)
+        ) { error in
+            XCTAssertEqual(error as? VaultNestedFolderPolicyError, .invalidDepth)
+        }
+    }
+
+    func testSiblingNameCollisionIsExcludedFromMoveDestinations() throws {
+        let sourceParent = descriptor("Source", ordinal: 0)
+        let destinationParent = descriptor("Destination", ordinal: 1)
+        let movable = descriptor(
+            "Receipts",
+            parentID: sourceParent.id,
+            ordinal: 2
+        )
+        let existingSibling = descriptor(
+            "RECEIPTS",
+            parentID: destinationParent.id,
+            ordinal: 3
+        )
+        let hierarchy = try VaultNestedFolderHierarchy(
+            folders: [sourceParent, destinationParent, movable, existingSibling]
+        )
+
+        let destinations = try hierarchy.validParentDestinations(for: movable.id)
+        XCTAssertFalse(destinations.contains { $0 == destinationParent.id })
+        XCTAssertThrowsError(
+            try hierarchy.movingFolder(id: movable.id, to: destinationParent.id)
+        ) { error in
+            XCTAssertEqual(error as? VaultNestedFolderPolicyError, .duplicateSiblingName)
         }
     }
 
