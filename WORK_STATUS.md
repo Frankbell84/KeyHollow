@@ -1,6 +1,6 @@
 # KeyHollow Work Status
 
-Updated: 2026-09-11
+Updated: 2026-09-16
 
 This is the authoritative operational resume point. Historical Build 38
 evidence remains in `docs/PROJECT_CHECKPOINT.md`.
@@ -8,6 +8,21 @@ evidence remains in `docs/PROJECT_CHECKPOINT.md`.
 ## Provenance
 
 - Current accepted production source: exact `main` commit
+  `2bbb0836526c6397265d14dfcb156df574f819c5`.
+- Build 46 completed protected signing and upload in workflow
+  [#35101488529](https://github.com/Frankbell84/KeyHollow/actions/runs/35101488529),
+  processed successfully in App Store Connect, and is assigned only to
+  `KeyHollow Internal`.
+- Frank physically tested Build 46 and confirmed Backup Verification, media
+  swiping, and encrypted-video playback are all working correctly. Build 46 is
+  the accepted baseline for subsequent add-ons.
+- PR [#71](https://github.com/Frankbell84/KeyHollow/pull/71) merged the Build 46
+  release candidate into `main`; merged-main CI run
+  [#35097283447](https://github.com/Frankbell84/KeyHollow/actions/runs/35097283447)
+  passed the full test suite and Swift CodeQL. Signing-only preflight run
+  [#35099850522](https://github.com/Frankbell84/KeyHollow/actions/runs/35099850522)
+  also passed before upload authorization.
+- Prior Build 40 accepted production source: exact `main` commit
   `54bd2d6887f3ca0e476339fce05e90dd59ba963f`.
 - PR [#56](https://github.com/Frankbell84/KeyHollow/pull/56) merged the exact
   reviewed signing-verifier correction head
@@ -87,22 +102,21 @@ evidence remains in `docs/PROJECT_CHECKPOINT.md`.
 
 ## Current task
 
-Build 40 is accepted and its production credential cutover is complete. Preserve
-exact accepted source `54bd2d6887f3ca0e476339fce05e90dd59ba963f`
-as the release baseline. The current in-progress task is Unified Media
-Navigation on isolated branch `feature/unified-media-navigation`, created from
-repository baseline `c8fa6dc1076f8ee4b2f7dca543e97072687758eb`.
+Build 46 is accepted. Preserve exact accepted source
+`2bbb0836526c6397265d14dfcb156df574f819c5` as the release baseline. The current
+in-progress task is Vault Catalog Search on isolated branch
+`feature/vault-catalog-search`, created directly from that accepted `origin/main`
+commit.
 
-The proposal is mapped in `docs/UNIFIED_MEDIA_NAVIGATION.md`. The branch now
-contains a separately targeted, presentation-only module with immutable
-source-qualified media IDs, image/video descriptors, ordered non-wrapping queue
-state, active-page swipe presentation, and accessibility metadata. Application
-composition, explicit image/video release barriers, lifecycle integration,
-save/delete serialization, retryable failures, and local security gates are
-complete in the working tree. Swift compilation and the complete XCTest suite
-remain pending macOS pull-request CI. No merged-main result, signed candidate,
-TestFlight assignment, or physical-device acceptance is recorded for this
-feature yet.
+The proposal is mapped in `docs/VAULT_CATALOG_SEARCH.md`. Its working tree adds
+a separately compiled, dependency-free matching module and application-owned
+current-location filtering. The module receives bounded display text only and
+cannot access vault identity, protected records, storage, cryptography, archive
+handling, media payloads, URLs, or mutation capabilities. Search does not add
+sorting, recursive traversal, content indexing, nested folders, or archive
+changes. Local architecture and security gates pass; macOS compilation, the
+complete XCTest suite, Swift CodeQL, review, merge, release packaging, and
+physical-device acceptance have not yet occurred.
 
 ## Unified Media Navigation candidate
 

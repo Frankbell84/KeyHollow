@@ -3,12 +3,71 @@ import Foundation
 import UIKit
 import XCTest
 @testable import KeyHollow
+@testable import KeyHollowCatalogSearchAddOn
 @testable import KeyHollowGalleryUI
 @testable import KeyHollowGeneralFileSupportAddOn
 @testable import KeyHollowMediaNavigationAddOn
 @testable import KeyHollowPhotoCore
 
 final class VaultGalleryPresentationTests: XCTestCase {
+    func testCatalogSearchFiltersVisibleSnapshotAndMediaQueue() throws {
+        let importedAt = Date(timeIntervalSinceReferenceDate: 800)
+        let photo = VaultPhotoRecord(
+            id: UUID(),
+            importedAt: importedAt,
+            blobName: "photo.khp",
+            thumbnailName: "photo.kht",
+            displayName: "Family 2026.HEIC",
+            originalByteCount: 2_048
+        )
+        let video = VaultGeneralFileRecord(
+            id: UUID(),
+            importedAt: importedAt.addingTimeInterval(-1),
+            displayName: "Family 2026.mp4",
+            contentTypeIdentifier: "public.mpeg-4",
+            originalByteCount: 4_096,
+            blobName: "video.khg"
+        )
+        let document = VaultGeneralFileRecord(
+            id: UUID(),
+            importedAt: importedAt.addingTimeInterval(-2),
+            displayName: "Family 2026.pdf",
+            contentTypeIdentifier: "com.adobe.pdf",
+            originalByteCount: 8_192,
+            blobName: "document.khg"
+        )
+        let unrelated = VaultGeneralFileRecord(
+            id: UUID(),
+            importedAt: importedAt.addingTimeInterval(-3),
+            displayName: "Receipt.pdf",
+            contentTypeIdentifier: "com.adobe.pdf",
+            originalByteCount: 1_024,
+            blobName: "receipt.khg"
+        )
+
+        let filtered = VaultGalleryContentSnapshot(items: [
+            .generalFile(unrelated),
+            .generalFile(document),
+            .generalFile(video),
+            .photo(photo),
+        ]).filtering(with: VaultCatalogSearchQuery("2026 family"))
+
+        XCTAssertEqual(filtered.presentations.count, 3)
+        XCTAssertEqual(filtered.presentations.map(\.title), [
+            "Family 2026",
+            "Family 2026.mp4",
+            "Family 2026.pdf",
+        ])
+        let queue = try filtered.mediaNavigationQueue(
+            startingAt: VaultGalleryContentItem.photo(photo).mediaNavigationID
+        )
+        XCTAssertEqual(queue.count, 2)
+        XCTAssertEqual(queue.items.map(\.title), [
+            "Family 2026",
+            "Family 2026.mp4",
+        ])
+    }
+
     func testGalleryModuleContractUsesImmutableSourceNeutralValues() {
         let itemID = UUID()
         let importedAt = Date(timeIntervalSinceReferenceDate: 500)

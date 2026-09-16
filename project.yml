@@ -119,6 +119,20 @@ targets:
         DEFINES_MODULE: YES
         SKIP_INSTALL: YES
 
+  KeyHollowCatalogSearchAddOn:
+    type: library.static
+    platform: iOS
+    sources:
+      - path: KeyHollow/AddOns/CatalogSearch
+    settings:
+      base:
+        PRODUCT_NAME: KeyHollowCatalogSearchAddOn
+        SWIFT_VERSION: 5.0
+        SWIFT_STRICT_CONCURRENCY: complete
+        SWIFT_TREAT_WARNINGS_AS_ERRORS: YES
+        DEFINES_MODULE: YES
+        SKIP_INSTALL: YES
+
   KeyHollowGeneralFileSupportAddOn:
     type: library.static
     platform: iOS
@@ -249,6 +263,7 @@ targets:
         excludes:
           - AddOns/FileRecognition
           - AddOns/BackupVerification
+          - AddOns/CatalogSearch
           - AddOns/GeneralFileSupport
           - AddOns/EncryptedVideo
           - AddOns/FolderPresentation
@@ -283,6 +298,7 @@ targets:
         embed: true
       - target: KeyHollowFileRecognitionAddOn
       - target: KeyHollowBackupVerificationAddOn
+      - target: KeyHollowCatalogSearchAddOn
       - target: KeyHollowGeneralFileSupportAddOn
       - target: KeyHollowEncryptedVideoAddOn
       - target: KeyHollowFolderPresentationAddOn
@@ -348,6 +364,8 @@ targets:
         link: false
       - target: KeyHollowBackupVerificationAddOn
         link: false
+      - target: KeyHollowCatalogSearchAddOn
+        link: false
       - target: KeyHollowGeneralFileSupportAddOn
         link: false
       - target: KeyHollowEncryptedVideoAddOn
@@ -395,6 +413,7 @@ schemes:
         KeyHollowVaultThumbnailExtension: all
         KeyHollowFileRecognitionAddOn: all
         KeyHollowBackupVerificationAddOn: all
+        KeyHollowCatalogSearchAddOn: all
         KeyHollowGeneralFileSupportAddOn: all
         KeyHollowEncryptedVideoAddOn: all
         KeyHollowFolderPresentationAddOn: all

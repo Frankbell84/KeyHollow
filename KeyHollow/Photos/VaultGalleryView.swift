@@ -1,6 +1,7 @@
 import SwiftUI
 import UIKit
 import UniformTypeIdentifiers
+import KeyHollowCatalogSearchAddOn
 import KeyHollowEncryptedVideoAddOn
 import KeyHollowFolderPresentationAddOn
 import KeyHollowGalleryUI
@@ -211,6 +212,17 @@ struct VaultGalleryContentSnapshot {
         try VaultMediaNavigationQueue(
             items: mediaNavigationItems,
             selectedID: id
+        )
+    }
+
+    func filtering(
+        with query: VaultCatalogSearchQuery
+    ) -> VaultGalleryContentSnapshot {
+        guard !query.isEmpty else { return self }
+        return VaultGalleryContentSnapshot(
+            items: orderedSources.filter {
+                query.matches($0.presentationItem.title)
+            }
         )
     }
 }
@@ -589,6 +601,7 @@ struct VaultGalleryView: View {
     @State private var importMode: VaultImportMode = .copy
     @State private var isSelecting = false
     @State private var selection = VaultGallerySelection()
+    @State private var searchText = ""
     @State private var isWorking = false
     @State private var message: String?
     @State private var importProgress: VaultImportProgress?
@@ -612,21 +625,24 @@ struct VaultGalleryView: View {
         )
 
     var body: some View {
-        let snapshot = makeVisibleGallerySnapshot()
+        let snapshot = filteredVisibleGallerySnapshot
 
         VStack(spacing: 0) {
             galleryHeader(visibleItemIDs: snapshot.selectableItems)
             Divider()
 
+            if !isSelecting {
+                catalogSearchBar
+                Divider()
+            }
+
             VaultGalleryGridView(
                 isContentLoaded: contentStoresLoaded,
                 isWorking: isWorking,
-                emptyTitle: activeFolderID == nil ? "Empty Vault" : "Empty Folder",
-                emptyDescription: emptyGalleryDescription,
-                emptySystemImage: activeFolderID == nil
-                    ? "photo.on.rectangle.angled"
-                    : "folder",
-                folders: visibleGalleryFolders,
+                emptyTitle: galleryEmptyTitle,
+                emptyDescription: galleryEmptyDescription,
+                emptySystemImage: galleryEmptySystemImage,
+                folders: filteredVisibleGalleryFolders,
                 items: snapshot.presentations
             ) { folder in
                 VaultFolderTileView(
@@ -788,6 +804,7 @@ struct VaultGalleryView: View {
             presentationStore = nil
             folderManifest = .empty
             activeFolderID = nil
+            searchText = ""
             contentStoresLoaded = false
             thumbnails = [:]
             generalFileThumbnails = [:]
@@ -802,7 +819,16 @@ struct VaultGalleryView: View {
             contentStoresLoaded = session.hasActiveAccess
         }
         .onChange(of: session.securityEpoch) { _, _ in
+            searchText = ""
             cancelMediaNavigationForLifecycle()
+        }
+        .onChange(of: activeFolderID) { _, _ in
+            searchText = ""
+            leaveSelectionMode()
+        }
+        .onChange(of: searchText) { _, _ in
+            guard isSelecting else { return }
+            selection.reconcile(validItems: filteredVisibleGallerySnapshot.selectableItems)
         }
         .onDisappear {
             // A full-screen media cover temporarily removes the gallery from
@@ -1139,6 +1165,38 @@ struct VaultGalleryView: View {
         .padding(.vertical, 12)
     }
 
+    private var catalogSearchBar: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
+
+            TextField("Search this location", text: $searchText)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .accessibilityLabel("Search this vault location")
+
+            if !activeCatalogSearchQuery.isEmpty {
+                Button {
+                    searchText = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Clear search")
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 9)
+        .background(
+            Color(uiColor: .secondarySystemBackground),
+            in: RoundedRectangle(cornerRadius: 11)
+        )
+        .padding(.horizontal)
+        .padding(.vertical, 8)
+    }
+
     private var selectionActionBar: some View {
         HStack {
             selectionTransferAction
@@ -1252,6 +1310,20 @@ struct VaultGalleryView: View {
         }
     }
 
+    private var activeCatalogSearchQuery: VaultCatalogSearchQuery {
+        VaultCatalogSearchQuery(searchText)
+    }
+
+    private var filteredVisibleGalleryFolders: [VaultGalleryFolder] {
+        let query = activeCatalogSearchQuery
+        guard !query.isEmpty else { return visibleGalleryFolders }
+        return visibleGalleryFolders.filter { query.matches($0.name) }
+    }
+
+    private var filteredVisibleGallerySnapshot: VaultGalleryContentSnapshot {
+        makeVisibleGallerySnapshot().filtering(with: activeCatalogSearchQuery)
+    }
+
     private func makeVisibleGallerySnapshot() -> VaultGalleryContentSnapshot {
         var folderIDByItem: [VaultPresentedContentReference: UUID] = [:]
         folderIDByItem.reserveCapacity(folderManifest.memberships.count)
@@ -1298,11 +1370,30 @@ struct VaultGalleryView: View {
         activeFolder?.name ?? "Vault"
     }
 
-    private var emptyGalleryDescription: String {
+    private var galleryEmptyTitle: String {
+        if !activeCatalogSearchQuery.isEmpty {
+            return "No Results"
+        }
+        return activeFolderID == nil ? "Empty Vault" : "Empty Folder"
+    }
+
+    private var galleryEmptyDescription: String {
+        if !activeCatalogSearchQuery.isEmpty {
+            return "Try a different search in this vault location."
+        }
         if activeFolderID == nil {
             return "Import photos or files to store encrypted copies inside this vault."
         }
         return "Move photos or files here from a selection or an item's menu."
+    }
+
+    private var galleryEmptySystemImage: String {
+        if !activeCatalogSearchQuery.isEmpty {
+            return "magnifyingglass"
+        }
+        return activeFolderID == nil
+            ? "photo.on.rectangle.angled"
+            : "folder"
     }
 
     private var hasSelectionMoveDestination: Bool {
@@ -2580,7 +2671,7 @@ struct VaultGalleryView: View {
     }
 
     private var visibleSelectableItems: [VaultGallerySelection.Item] {
-        makeVisibleGallerySnapshot().selectableItems
+        filteredVisibleGallerySnapshot.selectableItems
     }
 
     private var allValidSelectableItems: [VaultGallerySelection.Item] {
