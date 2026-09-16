@@ -6,6 +6,7 @@ import KeyHollowPhotosAdapter
 enum PickedVaultPhotoEvent: @unchecked Sendable {
     case started(total: Int)
     case photo(PickedVaultPhoto)
+    case video(PickedVaultVideo)
     case failed
     case finished
 }
@@ -77,7 +78,7 @@ private final class SecurePhotoPickerProgressOverlay {
     func update(_ progress: SecurePhotoPickerProgressState) {
         statusLabel.text = progress.statusText
         progressView.setProgress(Float(progress.fractionCompleted), animated: true)
-        container.accessibilityLabel = "Importing photos"
+        container.accessibilityLabel = "Importing photos and videos"
         container.accessibilityValue = progress.statusText
     }
 
@@ -101,7 +102,7 @@ struct SecurePhotoPicker: UIViewControllerRepresentable {
 
     func makeUIViewController(context: Context) -> PHPickerViewController {
         var configuration = PHPickerConfiguration(photoLibrary: .shared())
-        configuration.filter = .images
+        configuration.filter = .any(of: [.images, .videos])
         configuration.selectionLimit = selectionLimit
         configuration.preferredAssetRepresentationMode = .current
 
@@ -156,11 +157,17 @@ struct SecurePhotoPicker: UIViewControllerRepresentable {
 
                 await SequentialPhotoBatchProcessor.process(
                     results,
-                    load: ApplePhotoPickerItemLoader.loadPhoto,
-                    consume: { photo in
-                        // Awaiting the consumer is the memory back-pressure:
-                        // encrypted storage completes before the next UIImage is loaded.
-                        await onPicked(.photo(photo))
+                    load: ApplePhotoPickerItemLoader.loadMedia,
+                    consume: { media in
+                        // Awaiting the consumer is the memory/disk back-pressure:
+                        // encrypted storage completes before the next full item is loaded.
+                        switch media {
+                        case .photo(let photo):
+                            await onPicked(.photo(photo))
+                        case .video(let video):
+                            await onPicked(.video(video))
+                            video.discard()
+                        }
                         progress.advance()
                         overlay.update(progress)
                     },

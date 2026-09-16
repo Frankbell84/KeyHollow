@@ -2,6 +2,7 @@ import Foundation
 import Photos
 @preconcurrency import PhotosUI
 @preconcurrency import UIKit
+import UniformTypeIdentifiers
 
 public struct PickedVaultPhoto: Identifiable, @unchecked Sendable {
     public let id = UUID()
@@ -21,6 +22,69 @@ public struct PickedVaultPhoto: Identifiable, @unchecked Sendable {
         self.originalData = originalData
         self.thumbnailData = thumbnailData
     }
+}
+
+private final class PickedVaultVideoLease: @unchecked Sendable {
+    let fileURL: URL
+
+    private let rootURL: URL
+    private let lock = NSLock()
+    private var isDiscarded = false
+
+    init(fileURL: URL, rootURL: URL) {
+        self.fileURL = fileURL
+        self.rootURL = rootURL
+    }
+
+    func discard() {
+        lock.lock()
+        guard !isDiscarded else {
+            lock.unlock()
+            return
+        }
+        isDiscarded = true
+        lock.unlock()
+        try? FileManager.default.removeItem(at: rootURL)
+    }
+
+    deinit {
+        discard()
+    }
+}
+
+/// A Photos-origin video staged under complete file protection only long enough
+/// for the application-owned encrypted general-file store to consume it. The
+/// lease removes the plaintext if import is cancelled, fails, or is abandoned.
+public struct PickedVaultVideo: Identifiable, @unchecked Sendable {
+    public let id = UUID()
+    public let sourceAssetIdentifier: String?
+    public let displayName: String
+
+    private let lease: PickedVaultVideoLease
+
+    fileprivate init(
+        sourceAssetIdentifier: String?,
+        displayName: String,
+        fileURL: URL,
+        rootURL: URL
+    ) {
+        self.sourceAssetIdentifier = sourceAssetIdentifier
+        self.displayName = displayName
+        lease = PickedVaultVideoLease(fileURL: fileURL, rootURL: rootURL)
+    }
+
+    public var fileURL: URL {
+        lease.fileURL
+    }
+
+    public func discard() {
+        lease.discard()
+    }
+}
+
+public enum PickedVaultMedia: @unchecked Sendable {
+    case photo(PickedVaultPhoto)
+    case video(PickedVaultVideo)
 }
 
 public enum SequentialPhotoBatchProcessor {
@@ -49,6 +113,28 @@ public enum SequentialPhotoBatchProcessor {
 }
 
 public enum ApplePhotoPickerItemLoader {
+    /// Mirrors the authenticated general-file ingress ceiling. A Photos video
+    /// larger than this is rejected before it is copied into app-owned
+    /// temporary storage.
+    public static let maximumVideoByteCount: UInt64 = 100 * 1_024 * 1_024
+
+    nonisolated public static func loadMedia(
+        _ result: PHPickerResult
+    ) async throws -> PickedVaultMedia {
+        let provider = result.itemProvider
+        if let videoTypeIdentifier = provider.registeredTypeIdentifiers.first(where: {
+            UTType($0)?.conforms(to: .movie) == true
+        }) {
+            return .video(
+                try await loadVideo(
+                    result,
+                    typeIdentifier: videoTypeIdentifier
+                )
+            )
+        }
+        return .photo(try await loadPhoto(result))
+    }
+
     /// Full-resolution images are decoded, normalized, and returned one at a
     /// time. Plaintext image data is never written to KeyHollow storage here.
     nonisolated public static func loadPhoto(
@@ -83,6 +169,135 @@ public enum ApplePhotoPickerItemLoader {
             originalData: originalData,
             thumbnailData: thumbnailData
         )
+    }
+
+    private nonisolated static func loadVideo(
+        _ result: PHPickerResult,
+        typeIdentifier: String
+    ) async throws -> PickedVaultVideo {
+        let provider = result.itemProvider
+        return try await withCheckedThrowingContinuation {
+            (continuation: CheckedContinuation<PickedVaultVideo, Error>) in
+            provider.loadFileRepresentation(forTypeIdentifier: typeIdentifier) {
+                sourceURL,
+                error in
+                if let error {
+                    continuation.resume(throwing: error)
+                    return
+                }
+                guard let sourceURL else {
+                    continuation.resume(throwing: CocoaError(.fileReadUnknown))
+                    return
+                }
+
+                do {
+                    let staged = try stageVideo(
+                        from: sourceURL,
+                        suggestedName: provider.suggestedName,
+                        typeIdentifier: typeIdentifier
+                    )
+                    continuation.resume(
+                        returning: PickedVaultVideo(
+                            sourceAssetIdentifier: result.assetIdentifier,
+                            displayName: staged.fileURL.lastPathComponent,
+                            fileURL: staged.fileURL,
+                            rootURL: staged.rootURL
+                        )
+                    )
+                } catch {
+                    continuation.resume(throwing: error)
+                }
+            }
+        }
+    }
+
+    private nonisolated static func stageVideo(
+        from sourceURL: URL,
+        suggestedName: String?,
+        typeIdentifier: String
+    ) throws -> (rootURL: URL, fileURL: URL) {
+        let fileManager = FileManager.default
+        let values = try sourceURL.resourceValues(forKeys: [
+            .isRegularFileKey,
+            .isSymbolicLinkKey,
+            .fileSizeKey
+        ])
+        guard values.isRegularFile == true,
+              values.isSymbolicLink != true,
+              let fileSize = values.fileSize,
+              fileSize > 0 else {
+            throw CocoaError(.fileReadCorruptFile)
+        }
+        guard UInt64(fileSize) <= maximumVideoByteCount else {
+            throw CocoaError(.fileReadTooLarge)
+        }
+
+        let containerURL = fileManager.temporaryDirectory
+            .appendingPathComponent("KeyHollowPhotoPickerImports", isDirectory: true)
+        let rootURL = containerURL
+            .appendingPathComponent(UUID().uuidString.lowercased(), isDirectory: true)
+        try fileManager.createDirectory(
+            at: rootURL,
+            withIntermediateDirectories: true,
+            attributes: [.protectionKey: FileProtectionType.complete]
+        )
+
+        do {
+            try protectAndExclude(containerURL)
+            try protectAndExclude(rootURL)
+            let fileName = safeVideoFileName(
+                suggestedName: suggestedName,
+                sourceURL: sourceURL,
+                typeIdentifier: typeIdentifier
+            )
+            let fileURL = rootURL.appendingPathComponent(fileName, isDirectory: false)
+            try fileManager.copyItem(at: sourceURL, to: fileURL)
+            try protectAndExclude(fileURL)
+
+            let copiedValues = try fileURL.resourceValues(forKeys: [
+                .isRegularFileKey,
+                .isSymbolicLinkKey,
+                .fileSizeKey
+            ])
+            guard copiedValues.isRegularFile == true,
+                  copiedValues.isSymbolicLink != true,
+                  copiedValues.fileSize == fileSize else {
+                throw CocoaError(.fileReadCorruptFile)
+            }
+            return (rootURL, fileURL)
+        } catch {
+            try? fileManager.removeItem(at: rootURL)
+            throw error
+        }
+    }
+
+    private nonisolated static func safeVideoFileName(
+        suggestedName: String?,
+        sourceURL: URL,
+        typeIdentifier: String
+    ) -> String {
+        let proposed = (suggestedName ?? sourceURL.lastPathComponent) as NSString
+        var leaf = URL(fileURLWithPath: proposed.lastPathComponent).lastPathComponent
+            .replacingOccurrences(of: ":", with: "-")
+        if leaf.isEmpty {
+            leaf = "Vault Video"
+        }
+        if (leaf as NSString).pathExtension.isEmpty,
+           let fileExtension = UTType(typeIdentifier)?.preferredFilenameExtension {
+            leaf += ".\(fileExtension)"
+        }
+        return String(leaf.prefix(180))
+    }
+
+    private nonisolated static func protectAndExclude(_ url: URL) throws {
+        try FileManager.default.setAttributes(
+            [.protectionKey: FileProtectionType.complete],
+            ofItemAtPath: url.path
+        )
+        var values = URLResourceValues()
+        values.isExcludedFromBackup = true
+        var mutableURL = url
+        try mutableURL.setResourceValues(values)
     }
 
     private nonisolated static func thumbnailJPEG(from image: UIImage) -> Data? {

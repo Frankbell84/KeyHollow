@@ -278,6 +278,285 @@ public struct VaultSecureImageSurface: UIViewRepresentable {
     }
 }
 
+public enum VaultSecureImageZoomPolicy {
+    public static let minimumScale: CGFloat = 1
+    public static let doubleTapScale: CGFloat = 2.5
+    public static let maximumScale: CGFloat = 5
+
+    public static func clampedScale(_ scale: CGFloat) -> CGFloat {
+        min(maximumScale, max(minimumScale, scale))
+    }
+
+    public static func isZoomed(_ scale: CGFloat) -> Bool {
+        scale > minimumScale + 0.01
+    }
+
+    public static func doubleTapDestination(from scale: CGFloat) -> CGFloat {
+        isZoomed(scale) ? minimumScale : doubleTapScale
+    }
+}
+
+/// Native photo-style presentation for one authenticated image. Pinch and
+/// double-tap zoom stay inside this separately compiled presentation module;
+/// the caller receives only a zoom-state signal so horizontal paging can be
+/// disabled while the user pans a magnified image.
+@MainActor
+public struct VaultSecureZoomableImageSurface: UIViewRepresentable {
+    private let renderedImage: VaultSecureRenderedImage
+    private let accessibilityLabel: String
+    private let onImageWillAttach: () -> Bool
+    private let onImageReleased: () -> Void
+    private let onZoomStateChange: (Bool) -> Void
+
+    public init(
+        renderedImage: VaultSecureRenderedImage,
+        accessibilityLabel: String,
+        onImageWillAttach: @escaping () -> Bool = { true },
+        onImageReleased: @escaping () -> Void = {},
+        onZoomStateChange: @escaping (Bool) -> Void = { _ in }
+    ) {
+        self.renderedImage = renderedImage
+        self.accessibilityLabel = accessibilityLabel
+        self.onImageWillAttach = onImageWillAttach
+        self.onImageReleased = onImageReleased
+        self.onZoomStateChange = onZoomStateChange
+    }
+
+    public func makeCoordinator() -> Coordinator {
+        Coordinator(
+            onImageWillAttach: onImageWillAttach,
+            onImageReleased: onImageReleased,
+            onZoomStateChange: onZoomStateChange
+        )
+    }
+
+    public func makeUIView(context: Context) -> UIScrollView {
+        let scrollView = VaultSecureZoomScrollView()
+        scrollView.backgroundColor = .clear
+        scrollView.delegate = context.coordinator
+        scrollView.minimumZoomScale = VaultSecureImageZoomPolicy.minimumScale
+        scrollView.maximumZoomScale = VaultSecureImageZoomPolicy.maximumScale
+        scrollView.bouncesZoom = true
+        scrollView.showsHorizontalScrollIndicator = false
+        scrollView.showsVerticalScrollIndicator = false
+        scrollView.decelerationRate = .fast
+        scrollView.contentInsetAdjustmentBehavior = .never
+        scrollView.panGestureRecognizer.isEnabled = false
+
+        let imageView = scrollView.secureImageView
+        imageView.backgroundColor = .clear
+        imageView.clipsToBounds = true
+        imageView.contentMode = .scaleAspectFit
+        imageView.isAccessibilityElement = true
+        imageView.accessibilityTraits = .image
+        imageView.accessibilityLabel = accessibilityLabel
+
+        context.coordinator.scrollView = scrollView
+        if context.coordinator.attachIfAllowed() {
+            imageView.image = renderedImage.image
+        }
+
+        let doubleTap = UITapGestureRecognizer(
+            target: context.coordinator,
+            action: #selector(Coordinator.handleDoubleTap(_:))
+        )
+        doubleTap.numberOfTapsRequired = 2
+        scrollView.addGestureRecognizer(doubleTap)
+        imageView.accessibilityCustomActions = [
+            UIAccessibilityCustomAction(
+                name: "Zoom in",
+                target: context.coordinator,
+                selector: #selector(Coordinator.zoomIn)
+            ),
+            UIAccessibilityCustomAction(
+                name: "Reset zoom",
+                target: context.coordinator,
+                selector: #selector(Coordinator.resetZoom)
+            )
+        ]
+        return scrollView
+    }
+
+    public func updateUIView(_ scrollView: UIScrollView, context: Context) {
+        guard let scrollView = scrollView as? VaultSecureZoomScrollView else { return }
+        context.coordinator.update(
+            onImageWillAttach: onImageWillAttach,
+            onImageReleased: onImageReleased,
+            onZoomStateChange: onZoomStateChange
+        )
+        scrollView.secureImageView.accessibilityLabel = accessibilityLabel
+        scrollView.secureImageView.image = context.coordinator.isAttached
+            ? renderedImage.image
+            : nil
+        scrollView.setNeedsLayout()
+    }
+
+    public func sizeThatFits(
+        _ proposal: ProposedViewSize,
+        uiView: UIScrollView,
+        context: Context
+    ) -> CGSize? {
+        guard let width = proposal.width,
+              let height = proposal.height else { return nil }
+        return CGSize(width: max(0, width), height: max(0, height))
+    }
+
+    public static func dismantleUIView(
+        _ scrollView: UIScrollView,
+        coordinator: Coordinator
+    ) {
+        (scrollView as? VaultSecureZoomScrollView)?.secureImageView.image = nil
+        coordinator.release()
+    }
+
+    @MainActor
+    public final class Coordinator: NSObject, UIScrollViewDelegate {
+        fileprivate weak var scrollView: VaultSecureZoomScrollView?
+        private var onImageWillAttach: () -> Bool
+        private var onImageReleased: () -> Void
+        private var onZoomStateChange: (Bool) -> Void
+        private var lastReportedZoomState = false
+        fileprivate private(set) var isAttached = false
+
+        fileprivate init(
+            onImageWillAttach: @escaping () -> Bool,
+            onImageReleased: @escaping () -> Void,
+            onZoomStateChange: @escaping (Bool) -> Void
+        ) {
+            self.onImageWillAttach = onImageWillAttach
+            self.onImageReleased = onImageReleased
+            self.onZoomStateChange = onZoomStateChange
+        }
+
+        fileprivate func update(
+            onImageWillAttach: @escaping () -> Bool,
+            onImageReleased: @escaping () -> Void,
+            onZoomStateChange: @escaping (Bool) -> Void
+        ) {
+            self.onImageWillAttach = onImageWillAttach
+            self.onImageReleased = onImageReleased
+            self.onZoomStateChange = onZoomStateChange
+        }
+
+        fileprivate func attachIfAllowed() -> Bool {
+            guard !isAttached, onImageWillAttach() else { return false }
+            isAttached = true
+            return true
+        }
+
+        fileprivate func release() {
+            guard isAttached else { return }
+            isAttached = false
+            onImageReleased()
+        }
+
+        public func viewForZooming(in scrollView: UIScrollView) -> UIView? {
+            self.scrollView?.secureImageView
+        }
+
+        public func scrollViewDidZoom(_ scrollView: UIScrollView) {
+            guard let scrollView = scrollView as? VaultSecureZoomScrollView else { return }
+            scrollView.centerZoomedContent()
+            reportZoomStateIfNeeded(scrollView.zoomScale)
+        }
+
+        @objc fileprivate func handleDoubleTap(_ recognizer: UITapGestureRecognizer) {
+            guard let scrollView else { return }
+            let destination = VaultSecureImageZoomPolicy.doubleTapDestination(
+                from: scrollView.zoomScale
+            )
+            if VaultSecureImageZoomPolicy.isZoomed(destination) {
+                let location = recognizer.location(in: scrollView.secureImageView)
+                zoom(to: destination, centeredAt: location, in: scrollView)
+            } else {
+                scrollView.setZoomScale(destination, animated: true)
+            }
+        }
+
+        @objc fileprivate func zoomIn() -> Bool {
+            guard let scrollView else { return false }
+            let center = CGPoint(
+                x: scrollView.secureImageView.bounds.midX,
+                y: scrollView.secureImageView.bounds.midY
+            )
+            zoom(
+                to: VaultSecureImageZoomPolicy.doubleTapScale,
+                centeredAt: center,
+                in: scrollView
+            )
+            return true
+        }
+
+        @objc fileprivate func resetZoom() -> Bool {
+            guard let scrollView else { return false }
+            scrollView.setZoomScale(
+                VaultSecureImageZoomPolicy.minimumScale,
+                animated: true
+            )
+            return true
+        }
+
+        private func zoom(
+            to scale: CGFloat,
+            centeredAt point: CGPoint,
+            in scrollView: UIScrollView
+        ) {
+            let destination = VaultSecureImageZoomPolicy.clampedScale(scale)
+            let width = scrollView.bounds.width / destination
+            let height = scrollView.bounds.height / destination
+            let rect = CGRect(
+                x: point.x - width / 2,
+                y: point.y - height / 2,
+                width: width,
+                height: height
+            )
+            scrollView.zoom(to: rect, animated: true)
+        }
+
+        private func reportZoomStateIfNeeded(_ scale: CGFloat) {
+            let isZoomed = VaultSecureImageZoomPolicy.isZoomed(scale)
+            scrollView?.panGestureRecognizer.isEnabled = isZoomed
+            guard isZoomed != lastReportedZoomState else { return }
+            lastReportedZoomState = isZoomed
+            onZoomStateChange(isZoomed)
+        }
+    }
+}
+
+@MainActor
+fileprivate final class VaultSecureZoomScrollView: UIScrollView {
+    let secureImageView = VaultSecureAspectFitImageView()
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        addSubview(secureImageView)
+    }
+
+    required init?(coder: NSCoder) {
+        nil
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        if !VaultSecureImageZoomPolicy.isZoomed(zoomScale) {
+            secureImageView.frame = bounds
+            contentSize = bounds.size
+        }
+        centerZoomedContent()
+    }
+
+    func centerZoomedContent() {
+        let horizontal = max(0, (bounds.width - contentSize.width) / 2)
+        let vertical = max(0, (bounds.height - contentSize.height) / 2)
+        contentInset = UIEdgeInsets(
+            top: vertical,
+            left: horizontal,
+            bottom: vertical,
+            right: horizontal
+        )
+    }
+}
+
 /// UIImageView normally exposes the attached image's pixel dimensions as its
 /// intrinsic size. A secure preview attaches after SwiftUI has already laid out
 /// the placeholder, so that behavior can replace the fitted viewport with the

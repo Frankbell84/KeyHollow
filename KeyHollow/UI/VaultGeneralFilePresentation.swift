@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 import UniformTypeIdentifiers
 import KeyHollowGeneralFileSupportAddOn
 
@@ -67,5 +68,105 @@ enum GeneralFileImportPresentation {
             return "Encrypted \(result.importedCount) \(noun) into this vault. The originals were kept."
         }
         return "No files were imported. Choose regular files up to 100 MB; vault backups, folders, apps, and executable files are excluded."
+    }
+}
+
+struct GeneralFileImportProgressState: Equatable, Sendable {
+    let total: Int
+    private(set) var completed = 0
+    private(set) var importedCount = 0
+    private(set) var failedCount = 0
+
+    init(total: Int) {
+        self.total = max(0, total)
+    }
+
+    var fractionCompleted: Double {
+        guard total > 0 else { return 0 }
+        return min(1, Double(completed) / Double(total))
+    }
+
+    var statusText: String {
+        guard total > 0 else { return "Preparing files" }
+        if completed == total {
+            let noun = total == 1 ? "file" : "files"
+            return "Encrypted \(completed) of \(total) \(noun)"
+        }
+        return "Encrypting file \(completed + 1) of \(total)"
+    }
+
+    mutating func advance(succeeded: Bool) {
+        guard completed < total else { return }
+        completed += 1
+        if succeeded {
+            importedCount += 1
+        } else {
+            failedCount += 1
+        }
+    }
+
+    var result: VaultGeneralFileImportResult {
+        VaultGeneralFileImportResult(
+            importedCount: importedCount,
+            failedCount: failedCount
+        )
+    }
+}
+
+@MainActor
+enum GeneralFileImportCoordinator {
+    static func importFiles(
+        at urls: [URL],
+        using store: VaultGeneralFileStore,
+        progressDidChange: (GeneralFileImportProgressState) -> Void
+    ) async throws -> VaultGeneralFileImportResult {
+        guard urls.count <= VaultGeneralFileStore.maximumBatchCount else {
+            throw VaultGeneralFileStore.StoreError.batchTooLarge
+        }
+
+        var progress = GeneralFileImportProgressState(total: urls.count)
+        progressDidChange(progress)
+        for url in urls {
+            try Task.checkCancellation()
+            do {
+                _ = try await store.importFile(at: url)
+                progress.advance(succeeded: true)
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch {
+                progress.advance(succeeded: false)
+            }
+            progressDidChange(progress)
+        }
+        return progress.result
+    }
+}
+
+struct GeneralFileImportProgressView: View {
+    let progress: GeneralFileImportProgressState
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.32)
+                .ignoresSafeArea()
+
+            VStack(spacing: 14) {
+                HStack(spacing: 10) {
+                    if progress.completed < progress.total {
+                        ProgressView()
+                    }
+                    Text(progress.statusText)
+                        .font(.headline)
+                }
+                ProgressView(value: progress.fractionCompleted, total: 1)
+                    .frame(width: 230)
+            }
+            .padding(.horizontal, 24)
+            .padding(.vertical, 20)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Importing files")
+        .accessibilityValue(progress.statusText)
     }
 }

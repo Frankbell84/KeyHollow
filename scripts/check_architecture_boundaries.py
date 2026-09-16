@@ -1870,6 +1870,7 @@ def main() -> int:
                 "Photos",
                 "PhotosUI",
                 "UIKit",
+                "UniformTypeIdentifiers",
             }
             if unexpected:
                 violations.append(
@@ -3250,7 +3251,7 @@ def main() -> int:
         ".interactiveDismissDisabled()",
         "onSelectionChange: selectMediaNavigationItem",
         "mediaNavigationActiveContent(item)",
-        "VaultSecureImageSurface(",
+        "VaultSecureZoomableImageSurface(",
         "imagePreview.imageWillAttach(item.id)",
         "imagePreview.imageDidRelease(item.id)",
     ):
@@ -3287,6 +3288,7 @@ def main() -> int:
                 "isNavigationEnabled: !isSavingPreview",
                 "&& !isDeletingMedia",
                 "&& !isClosingMediaNavigation",
+                "&& !isMediaImageZoomed",
                 "&& isMediaNavigationContentReady(queue)",
                 "onSelectionChange: selectMediaNavigationItem",
             ),
@@ -3323,25 +3325,30 @@ def main() -> int:
             media_active_content_body,
             (
                 "case .image:",
-                "if let active = imagePreview.active",
-                "active.id == item.id",
-                "VaultSecureImageSurface(",
-                "renderedImage: active.preview.displayImage",
+                "VaultMediaImagePage(",
+                "coordinator: imagePreview",
+                "item: item",
+                "loadGeneration: mediaNavigationGeneration",
                 "onImageWillAttach:",
                 "imagePreview.imageWillAttach(item.id)",
                 "onImageReleased:",
                 "imagePreview.imageDidRelease(item.id)",
-                ".frame(maxWidth: .infinity, maxHeight: .infinity)",
+                "onZoomStateChange:",
+                "isMediaImageZoomed = isZoomed",
             ),
         )
-        and media_active_content_body.count("VaultSecureImageSurface(") == 1
+        and media_active_content_body.count("VaultMediaImagePage(") == 1
         and "Image(uiImage:" not in media_active_content_body
         and "VaultSecureImagePreviewView(" not in media_active_content_body
+        and gallery_executable.count("VaultSecureZoomableImageSurface(") == 1
+        and "@ObservedObject var coordinator: VaultImagePreviewCoordinator"
+        in gallery_executable
+        and "try await Task.sleep(for: .milliseconds(250))" in gallery_executable
     ):
         violations.append(
             "KeyHollow/Photos/VaultGalleryView.swift: unified images must use "
-            "exactly one observable VaultSecureImageSurface wired to the "
-            "app-owned image lifetime coordinator"
+            "exactly one observable zoomable secure image surface wired to the "
+            "app-owned image lifetime coordinator with completion-driven loading"
         )
 
     if not (
