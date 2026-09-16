@@ -7,6 +7,15 @@ private enum VaultMediaNavigationPagerMetrics {
     static let videoControlExclusionHeightRatio: CGFloat = 0.24
 }
 
+/// Keeps application chrome gestures away from AVKit's native playback and
+/// fullscreen controls. Images have no native control overlay, so their single
+/// tap remains available to reveal or hide KeyHollow's action header.
+public enum VaultMediaChromeInteractionPolicy {
+    public static func acceptsContentTap(for kind: VaultMediaNavigationKind) -> Bool {
+        kind == .image
+    }
+}
+
 /// A single-surface pager for an application-owned active payload. The content
 /// builder is invoked only for `queue.currentItem`; this add-on never builds
 /// adjacent full-resolution pages or requests media on its own.

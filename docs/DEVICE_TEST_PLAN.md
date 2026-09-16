@@ -170,6 +170,8 @@ archives. Do not use the only copy of a real backup for tamper tests.
   picker prevents selection of an unsupported item. If a Files provider offers
   a mislabeled unsupported item, confirm KeyHollow rejects it. Confirm no old
   filename, recovery code, report, or success state survives those transitions.
+- Choose a valid `.khvault` from Files and confirm the selection advances into
+  protected staging instead of being reported as a canceled file selection.
 - Start verification of a representative large archive and cancel once during
   **Copying backup into protected storage...** and once during
   **Authenticating every file...**. Repeat
@@ -214,6 +216,9 @@ archives. Do not use the only copy of a real backup for tamper tests.
   least five times, rotate while fullscreen, seek, pause, resume, and then
   dismiss normally. Reject any stopped playback, black surface, duplicated
   audio, cleanup alert, or need to reopen the video.
+- Confirm the media viewer fully covers the gallery presentation, video-control
+  taps do not reveal KeyHollow's action header, and AVKit's fullscreen control
+  remains unobstructed in portrait and landscape.
 - Open portrait, landscape, screenshot, Files-origin image, and video items.
   Confirm the action header overlays rather than resizes media, disappears
   after three seconds, returns on tap and after a swipe, and that no permanent
