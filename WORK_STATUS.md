@@ -17,6 +17,15 @@ evidence remains in `docs/PROJECT_CHECKPOINT.md`.
   [#35127821582](https://github.com/Frankbell84/KeyHollow/actions/runs/35127821582).
   App Store Connect completed processing and shows only `KeyHollow Internal`.
   Frank physically tested Vault Catalog Search and confirmed that it works.
+- PR [#74](https://github.com/Frankbell84/KeyHollow/pull/74) merged the exact
+  reviewed Vault Catalog Sorting head
+  `a6f71053917b40f4f9b6bef236121d80c3670d98` through regular merge commit
+  `aa950882db02bd40849df459acf3e2030b18ad6b`.
+- Exact merged-main CI run
+  [#35136592165](https://github.com/Frankbell84/KeyHollow/actions/runs/35136592165)
+  passed the complete build-and-test lane and Swift CodeQL. Simulator artifact
+  `10464031925` and security-test artifact `10463962186` were retained by the
+  workflow.
 - Build 46 completed protected signing and upload in workflow
   [#35101488529](https://github.com/Frankbell84/KeyHollow/actions/runs/35101488529),
   processed successfully in App Store Connect, and is assigned only to
@@ -121,26 +130,24 @@ evidence remains in `docs/PROJECT_CHECKPOINT.md`.
 
 ## Current task
 
-Build 47 is the physically accepted production baseline. Vault Catalog Search
-is merged to protected `main` at exact commit
-`9eb107a259082be049f57a5d83ff27a67a37989a`, the exact-main complete test suite
-and Swift CodeQL passed, the signing-only preflight passed, and the signed build
-processed successfully for `KeyHollow Internal` only. Frank confirmed the
-feature works on a physical iPhone.
+Build 47 is the physically accepted production baseline. Vault Catalog Sorting
+is now merged to protected `main` at exact commit
+`aa950882db02bd40849df459acf3e2030b18ad6b`, and the exact-main complete test
+suite plus Swift CodeQL passed in run `35136592165`.
 
-The current task is the isolated Vault Catalog Sorting phase on
-`feature/vault-catalog-sorting`, created directly from that exact accepted main
-commit. It extends the existing dependency-free catalog presentation module
-with bounded sanitized titles, timestamps, and stable ordinals only. It cannot
-access vault or record identifiers, protected records, storage, cryptography,
-archive handling, media payloads, URLs, folder manifests, or mutation
-capabilities.
+The current task is the isolated Build 48 release candidate on
+`release/build48-vault-catalog-sorting`, created directly from that reviewed
+merged-main commit. Build 48 changes only the application and thumbnail-
+extension build number from 47 to 48, refreshes the required `project.yml`
+security hash, and records completed merge evidence. It must pass release-
+branch review, protected merge, exact-main CI and CodeQL, and the no-upload
+signing preflight before any separately authorized TestFlight upload.
 
-The default **Vault Order** must preserve the accepted Build 47 behavior:
-root folders by name and visible mixed items newest-first. Optional name and
-date orders may reorder only the current immutable presentation snapshot.
-Search, selection, media queues, import/export, folder membership, protected
-stores, and `.khvault` compatibility must remain unchanged.
+Physical-device acceptance must then complete the Vault Catalog Sorting checks
+in `docs/DEVICE_TEST_PLAN.md`. The add-on remains presentation-only and receives
+bounded sanitized titles, timestamps, and stable ordinals; protected stores,
+cryptography, archive formats, folder membership, media payloads, and mutation
+paths remain unchanged.
 
 ## Unified Media Navigation candidate
 
@@ -589,20 +596,20 @@ only boundary.
 1. Preserve exact accepted Build 47 source
    `9eb107a259082be049f57a5d83ff27a67a37989a` as the rollback and comparison
    baseline.
-2. Complete and locally harden the isolated Vault Catalog Sorting candidate.
-3. Publish only the reviewed sorting head through a draft pull request and
-   require the complete macOS build, test, security, and CodeQL gates.
-4. Merge only that exact reviewed head through protected `main`, then require
+2. Publish only the reviewed Build 48 packaging head through a draft pull
+   request and require the complete macOS build, test, security, and CodeQL
+   gates.
+3. Merge only that exact reviewed head through protected `main`, then require
    complete exact-main CI and a no-upload signing preflight.
-5. Produce a separately authorized Internal TestFlight build for the physical-
-   device plan. Do not expand to Family or external testers without a separate
-   decision.
+4. Produce a separately authorized Internal TestFlight build for the physical-
+   device sorting plan. Do not expand to Family or external testers without a
+   separate decision.
 
 ## Frank's decisions required
 
 Frank's action-time decision is required for:
 
-- Publishing or merging any revision that would supersede the accepted Build 40
+- Publishing or merging any revision that would supersede the accepted Build 47
   source baseline.
 - Creating or changing GitHub environments, branch protection, reviewers, or
   secrets.
