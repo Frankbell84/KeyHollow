@@ -13,6 +13,7 @@ SOURCE_ROOT = ROOT / "KeyHollow"
 PROJECT_FILE = ROOT / "project.yml"
 ADDON_ROOT = SOURCE_ROOT / "AddOns"
 BACKUP_VERIFICATION_ROOT = ADDON_ROOT / "BackupVerification"
+CATALOG_SEARCH_ROOT = ADDON_ROOT / "CatalogSearch"
 ENCRYPTED_VIDEO_ROOT = ADDON_ROOT / "EncryptedVideo"
 MEDIA_NAVIGATION_ROOT = ADDON_ROOT / "MediaNavigation"
 THUMBNAIL_EXTENSION_ROOT = ROOT / "KeyHollowVaultThumbnailExtension"
@@ -95,6 +96,7 @@ GALLERY_UI_MODULE_FILES = {
 }
 FILE_RECOGNITION_PREFIX = "KeyHollow/AddOns/FileRecognition/"
 BACKUP_VERIFICATION_PREFIX = "KeyHollow/AddOns/BackupVerification/"
+CATALOG_SEARCH_PREFIX = "KeyHollow/AddOns/CatalogSearch/"
 GENERAL_FILE_SUPPORT_PREFIX = "KeyHollow/AddOns/GeneralFileSupport/"
 SECURE_PREVIEW_PREFIX = "KeyHollow/AddOns/SecurePreview/"
 ENCRYPTED_VIDEO_PREFIX = "KeyHollow/AddOns/EncryptedVideo/"
@@ -107,6 +109,9 @@ ENCRYPTED_VIDEO_MODULE_FILES = {
 BACKUP_VERIFICATION_MODULE_FILES = {
     "KeyHollow/AddOns/BackupVerification/BackupVerificationReport.swift",
     "KeyHollow/AddOns/BackupVerification/BackupVerificationReportView.swift",
+}
+CATALOG_SEARCH_MODULE_FILES = {
+    "KeyHollow/AddOns/CatalogSearch/VaultCatalogSearchQuery.swift",
 }
 MEDIA_NAVIGATION_MODULE_FILES = {
     "KeyHollow/AddOns/MediaNavigation/VaultMediaNavigationModels.swift",
@@ -762,6 +767,129 @@ def main() -> int:
                 violations.append(
                     "project.yml: KeyHollowGalleryUI depends on protected/content "
                     f"module {forbidden_dependency} instead of immutable presentation values"
+                )
+
+    catalog_search_target = target_body(project, "KeyHollowCatalogSearchAddOn")
+    catalog_search_target_count = len(
+        re.findall(r"(?m)^  KeyHollowCatalogSearchAddOn:\s*$", project)
+    )
+    if catalog_search_target is None:
+        violations.append(
+            "project.yml: KeyHollowCatalogSearchAddOn target is missing"
+        )
+    else:
+        if catalog_search_target_count != 1:
+            violations.append(
+                "project.yml: expected exactly one KeyHollowCatalogSearchAddOn "
+                f"target, found {catalog_search_target_count}"
+            )
+        expected_sources = {"KeyHollow/AddOns/CatalogSearch"}
+        declared_sources = set(
+            re.findall(
+                r"(?m)^      - path: ([^\r\n]+)$",
+                catalog_search_target,
+            )
+        )
+        if declared_sources != expected_sources:
+            violations.append(
+                "project.yml: KeyHollowCatalogSearchAddOn source ownership "
+                f"changed; expected {sorted(expected_sources)}, "
+                f"got {sorted(declared_sources)}"
+            )
+        for marker in (
+            "type: library.static",
+            "platform: iOS",
+            "PRODUCT_NAME: KeyHollowCatalogSearchAddOn",
+            "SWIFT_STRICT_CONCURRENCY: complete",
+            "SWIFT_TREAT_WARNINGS_AS_ERRORS: YES",
+            "DEFINES_MODULE: YES",
+            "SKIP_INSTALL: YES",
+        ):
+            if marker not in catalog_search_target:
+                violations.append(
+                    "project.yml: KeyHollowCatalogSearchAddOn is missing "
+                    f"{marker!r}"
+                )
+        if yaml_key_present(catalog_search_target, "dependencies") or re.search(
+            r"(?m)^[ \t]+<<\s*:", catalog_search_target
+        ):
+            violations.append(
+                "project.yml: KeyHollowCatalogSearchAddOn must remain "
+                "dependency-free"
+            )
+
+    if app_target is not None:
+        if len(re.findall(
+            r"(?m)^      - target: KeyHollowCatalogSearchAddOn\s*$",
+            app_target,
+        )) != 1:
+            violations.append(
+                "project.yml: KeyHollow must compose "
+                "KeyHollowCatalogSearchAddOn exactly once"
+            )
+        if len(re.findall(
+            r"(?m)^          - AddOns/CatalogSearch\s*$",
+            app_target,
+        )) != 1:
+            violations.append(
+                "project.yml: KeyHollow must exclude AddOns/CatalogSearch "
+                "exactly once"
+            )
+
+    catalog_search_tests_target = target_body(project, "KeyHollowTests")
+    if catalog_search_tests_target is None:
+        violations.append("project.yml: KeyHollowTests target is missing")
+    elif len(re.findall(
+        r"(?m)^      - target: KeyHollowCatalogSearchAddOn\s*$\n"
+        r"^        link: false\s*$",
+        catalog_search_tests_target,
+    )) != 1:
+        violations.append(
+            "project.yml: KeyHollowTests must depend on "
+            "KeyHollowCatalogSearchAddOn exactly once with link: false"
+        )
+
+    if project.count("        KeyHollowCatalogSearchAddOn: all") != 1:
+        violations.append(
+            "project.yml: KeyHollow scheme must build "
+            "KeyHollowCatalogSearchAddOn exactly once"
+        )
+
+    catalog_search_sources = (
+        {relative(path) for path in CATALOG_SEARCH_ROOT.rglob("*.swift")}
+        if CATALOG_SEARCH_ROOT.exists()
+        else set()
+    )
+    if catalog_search_sources != CATALOG_SEARCH_MODULE_FILES:
+        violations.append(
+            "KeyHollow/AddOns/CatalogSearch: source ownership changed; "
+            f"expected {sorted(CATALOG_SEARCH_MODULE_FILES)}, "
+            f"got {sorted(catalog_search_sources)}"
+        )
+    catalog_search_file = (
+        CATALOG_SEARCH_ROOT / "VaultCatalogSearchQuery.swift"
+    )
+    if catalog_search_file.is_file():
+        catalog_search_source = swift_executable_text(
+            catalog_search_file.read_text(encoding="utf-8")
+        )
+        for required in (
+            "public struct VaultCatalogSearchQuery: Equatable, Sendable",
+            "public static let maximumQueryCharacterCount = 256",
+            "public static let maximumCandidateCharacterCount = 1_024",
+            "rawValue.prefix(Self.maximumQueryCharacterCount)",
+            "candidate.prefix(Self.maximumCandidateCharacterCount)",
+            ".caseInsensitive",
+            ".diacriticInsensitive",
+            ".widthInsensitive",
+            "normalizedTerms.allSatisfy {",
+            "normalizedCandidate.contains($0)",
+        ):
+            if required not in catalog_search_source:
+                violations.append(
+                    "KeyHollow/AddOns/CatalogSearch/"
+                    "VaultCatalogSearchQuery.swift: bounded metadata-only "
+                    f"matching is missing {required!r}"
                 )
 
     media_navigation_target = target_body(
@@ -1775,6 +1903,38 @@ def main() -> int:
                     f"{path}: file-recognition add-on imports outside its allowlist: "
                     f"{', '.join(sorted(unexpected))}"
                 )
+
+        if path.startswith(CATALOG_SEARCH_PREFIX):
+            if imported != {"Foundation"}:
+                violations.append(
+                    f"{path}: catalog-search imports changed; expected "
+                    f"['Foundation'], got {sorted(imported)}"
+                )
+            for forbidden_capability in (
+                "VaultSession",
+                "VaultUnlockService",
+                "VaultAccessCapability",
+                "VaultPhotoRecord",
+                "VaultPhotoStore",
+                "VaultGeneralFileRecord",
+                "VaultGeneralFileStore",
+                "VaultFolderRecord",
+                "VaultFolderPresentationStore",
+                "VaultMediaNavigationItem",
+                "PortableArchiveCredential",
+                "EncryptedVaultTransferCoordinator",
+                "CryptoBox",
+                "SymmetricKey",
+                "FileManager",
+                "FileHandle",
+                "URL",
+                "Data",
+            ):
+                if re.search(rf"\b{forbidden_capability}\b", source):
+                    violations.append(
+                        f"{path}: catalog-search add-on must remain display-text "
+                        f"only; found {forbidden_capability}"
+                    )
 
         if path.startswith(BACKUP_VERIFICATION_PREFIX):
             expected_imports = BACKUP_VERIFICATION_IMPORTS.get(path)
@@ -3190,6 +3350,7 @@ def main() -> int:
         or "VaultEncryptedVideoPlayerView(" in gallery_executable
     )
     for required in (
+        "import KeyHollowCatalogSearchAddOn",
         "import KeyHollowGalleryUI",
         "import KeyHollowMediaNavigationAddOn",
         "import KeyHollowSecurePreviewAddOn",
@@ -3206,11 +3367,20 @@ def main() -> int:
         'Label("Move", systemImage: "folder")',
         "presentationStore.move(items, to: folderID)",
         "selectedPresentedReferences",
-        "let snapshot = makeVisibleGallerySnapshot()",
+        "let snapshot = filteredVisibleGallerySnapshot",
         "VaultGalleryContentSnapshot",
         "galleryItemCell(item, snapshot: snapshot)",
-        "folders: visibleGalleryFolders",
+        "folders: filteredVisibleGalleryFolders",
         "items: snapshot.presentations",
+        "@State private var searchText = \"\"",
+        "VaultCatalogSearchQuery(searchText)",
+        "makeVisibleGallerySnapshot().filtering(with: activeCatalogSearchQuery)",
+        "query.matches($0.presentationItem.title)",
+        "visibleGalleryFolders.filter { query.matches($0.name) }",
+        "selection.reconcile(validItems: filteredVisibleGallerySnapshot.selectableItems)",
+        "searchText = \"\"",
+        'TextField("Search this location", text: $searchText)',
+        'return "No Results"',
         "priority: .utility",
         "actor VaultGeneralFileThumbnailPipeline",
         "private var waiters: [PermitWaiter]",

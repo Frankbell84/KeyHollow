@@ -138,6 +138,47 @@ Completing this written plan does not itself record a pass.
   items. Reject the candidate for new gallery lag, swipe hitching, runaway memory
   growth, a crash, missing thumbnails, or delayed cleanup symptoms.
 
+## Vault Catalog Search candidate
+
+Run these checks only after the isolated feature branch has passed its automated
+review gates and a separately authorized Internal TestFlight build is available.
+Search is limited to display names in the current visible location.
+
+- At vault root, search for part of a root-level photo name, Files-origin image
+  name, video name, document name, and folder name. Confirm only matching tiles
+  remain, every result keeps its established thumbnail/icon and metadata layout,
+  and clearing the query restores the exact accepted order without flicker.
+- Enter a folder and repeat the mixed-media search. Confirm results come only
+  from that folder, root items and other folders never appear, and moving back
+  to root clears the query rather than applying a hidden stale filter.
+- Search using different letter case, an unaccented spelling for a title with
+  accents, and full-width characters for an ordinary-width title. Confirm the
+  intended item matches. Enter two terms in reverse order and confirm both terms
+  must be present; confirm a one-term near miss does not appear.
+- Enter a query with no matches. Confirm the dedicated **No Results** state is
+  shown, the vault is not described as empty, clearing remains available, and
+  no item, folder, or count is changed.
+- With a nonempty query, enter selection mode, choose individual results, then
+  use **Select All**. Confirm the count and selection circles cover only visible
+  filtered items. Export, move, and delete disposable selected fixtures and
+  confirm no hidden nonmatching item is affected.
+- From filtered results, open a Photos-origin image, Files-origin image, and
+  supported video. Swipe forward and backward and confirm navigation contains
+  only compatible matching media in visible order. Confirm PDFs and unsupported
+  files still use the established file-management route.
+- Search by a folder name, enter that folder, return to root, change vaults,
+  lock, background, and force-quit. Confirm the query clears at each scope or
+  security transition, the privacy shield and relock behavior are unchanged,
+  and no previous-vault text or result flashes after unlock.
+- Repeat the accepted mixed 26-item performance case while typing, clearing,
+  scrolling, selecting, opening, and dismissing results. Reject the candidate
+  for input lag, thumbnail churn, gallery hitching, increased open/swipe delay,
+  a crash, or runaway memory growth.
+- Re-run imports from Photos and Files, folder creation/moves, Backup
+  Verification, image zoom/swipe, encrypted-video playback/fullscreen, and
+  non-photo export. Confirm an active or recently cleared search does not alter
+  those accepted paths.
+
 ## Backup Verification Center
 
 Run these checks with a TestFlight-delivered candidate and disposable test
