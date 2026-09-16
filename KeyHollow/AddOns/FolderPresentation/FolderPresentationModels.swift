@@ -21,11 +21,18 @@ public struct VaultFolderRecord: Codable, Identifiable, Hashable, Sendable {
     public let id: UUID
     public var name: String
     public let createdAt: Date
+    public var parentID: UUID?
 
-    public init(id: UUID, name: String, createdAt: Date) {
+    public init(
+        id: UUID,
+        name: String,
+        createdAt: Date,
+        parentID: UUID? = nil
+    ) {
         self.id = id
         self.name = name
         self.createdAt = createdAt
+        self.parentID = parentID
     }
 }
 
@@ -50,7 +57,9 @@ public struct VaultPresentationThumbnailRecord: Codable, Hashable, Sendable {
 }
 
 public struct VaultFolderPresentationManifest: Codable, Equatable, Sendable {
-    public static let currentVersion = 1
+    public static let flatVersion = 1
+    public static let hierarchyVersion = 2
+    public static let currentVersion = hierarchyVersion
 
     public let version: Int
     public var folders: [VaultFolderRecord]
@@ -71,10 +80,21 @@ public struct VaultFolderPresentationManifest: Codable, Equatable, Sendable {
 
     public static var empty: VaultFolderPresentationManifest {
         VaultFolderPresentationManifest(
-            version: currentVersion,
+            version: flatVersion,
             folders: [],
             memberships: [],
             thumbnails: []
+        )
+    }
+
+    func normalizedForPersistence() -> Self {
+        Self(
+            version: folders.contains(where: { $0.parentID != nil })
+                ? Self.hierarchyVersion
+                : Self.flatVersion,
+            folders: folders,
+            memberships: memberships,
+            thumbnails: thumbnails
         )
     }
 }

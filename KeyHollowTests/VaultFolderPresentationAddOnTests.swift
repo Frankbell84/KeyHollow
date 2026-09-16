@@ -67,6 +67,157 @@ final class VaultFolderPresentationAddOnTests: XCTestCase {
         XCTAssertTrue(deletedManifest.folders.isEmpty)
     }
 
+    func testNestedFolderCreationWritesVersionTwoAndPreservesVersionOneCompatibility() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+
+        let rootFolder = try await fixture.store.createFolder(named: "Root Folder")
+        var manifest = try await fixture.store.loadManifest()
+        XCTAssertEqual(manifest.version, VaultFolderPresentationManifest.flatVersion)
+        XCTAssertNil(manifest.folders.first?.parentID)
+
+        let child = try await fixture.store.createFolder(
+            named: "Child",
+            in: rootFolder.id
+        )
+        manifest = try await fixture.store.loadManifest()
+        XCTAssertEqual(manifest.version, VaultFolderPresentationManifest.hierarchyVersion)
+        XCTAssertEqual(manifest.folders.first(where: { $0.id == child.id })?.parentID, rootFolder.id)
+
+        try await fixture.store.moveFolder(id: child.id, to: nil)
+        manifest = try await fixture.store.loadManifest()
+        XCTAssertEqual(manifest.version, VaultFolderPresentationManifest.flatVersion)
+        XCTAssertTrue(manifest.folders.allSatisfy { $0.parentID == nil })
+    }
+
+    func testManifestVersionsFailClosedForHierarchyInV1AndUnknownFutureVersion() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        let parent = VaultFolderRecord(id: UUID(), name: "Parent", createdAt: Date())
+        let child = VaultFolderRecord(
+            id: UUID(),
+            name: "Child",
+            createdAt: Date(),
+            parentID: parent.id
+        )
+
+        try fixture.writeManifest(VaultFolderPresentationManifest(
+            version: VaultFolderPresentationManifest.flatVersion,
+            folders: [parent, child],
+            memberships: [],
+            thumbnails: []
+        ))
+        await XCTAssertThrowsErrorAsync(try await fixture.store.loadManifest()) { error in
+            XCTAssertEqual(error as? VaultFolderPresentationStore.StoreError, .invalidManifest)
+        }
+
+        try fixture.writeManifest(VaultFolderPresentationManifest(
+            version: VaultFolderPresentationManifest.currentVersion + 1,
+            folders: [],
+            memberships: [],
+            thumbnails: []
+        ))
+        await XCTAssertThrowsErrorAsync(try await fixture.store.loadManifest()) { error in
+            XCTAssertEqual(error as? VaultFolderPresentationStore.StoreError, .invalidManifest)
+        }
+    }
+
+    func testSiblingNameRulesAllowSameNameInDifferentParents() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        let firstParent = try await fixture.store.createFolder(named: "First")
+        let secondParent = try await fixture.store.createFolder(named: "Second")
+        _ = try await fixture.store.createFolder(named: "Receipts", in: firstParent.id)
+        _ = try await fixture.store.createFolder(named: "receipts", in: secondParent.id)
+
+        await XCTAssertThrowsErrorAsync(
+            try await fixture.store.createFolder(named: "RECEIPTS", in: firstParent.id)
+        ) { error in
+            XCTAssertEqual(error as? VaultFolderPresentationStore.StoreError, .duplicateFolderName)
+        }
+    }
+
+    func testFolderMoveRejectsCycleWithoutChangingManifest() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        let parent = try await fixture.store.createFolder(named: "Parent")
+        let child = try await fixture.store.createFolder(named: "Child", in: parent.id)
+        let original = try await fixture.store.loadManifest()
+
+        await XCTAssertThrowsErrorAsync(
+            try await fixture.store.moveFolder(id: parent.id, to: child.id)
+        )
+
+        let unchanged = try await fixture.store.loadManifest()
+        XCTAssertEqual(unchanged, original)
+    }
+
+    func testDeletingNestedFolderReparentsDirectChildrenAndItems() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        let grandparent = try await fixture.store.createFolder(named: "Grandparent")
+        let parent = try await fixture.store.createFolder(named: "Parent", in: grandparent.id)
+        let child = try await fixture.store.createFolder(named: "Child", in: parent.id)
+        let item = VaultPresentedContentReference(kind: .generalFile, id: UUID())
+        try await fixture.store.move(item, to: parent.id)
+
+        try await fixture.store.deleteFolder(id: parent.id)
+        let manifest = try await fixture.store.loadManifest()
+
+        XCTAssertFalse(manifest.folders.contains { $0.id == parent.id })
+        XCTAssertEqual(
+            manifest.folders.first(where: { $0.id == child.id })?.parentID,
+            grandparent.id
+        )
+        XCTAssertEqual(
+            manifest.memberships.first(where: { $0.item == item })?.folderID,
+            grandparent.id
+        )
+    }
+
+    func testDeleteRejectsSiblingCollisionWithoutChangingManifest() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        let parent = try await fixture.store.createFolder(named: "Parent")
+        _ = try await fixture.store.createFolder(named: "Receipts", in: parent.id)
+        let nested = try await fixture.store.createFolder(named: "Nested", in: parent.id)
+        _ = try await fixture.store.createFolder(named: "receipts", in: nested.id)
+        let original = try await fixture.store.loadManifest()
+
+        await XCTAssertThrowsErrorAsync(
+            try await fixture.store.deleteFolder(id: nested.id)
+        ) { error in
+            XCTAssertEqual(
+                error as? VaultFolderPresentationStore.StoreError,
+                .duplicateFolderName
+            )
+        }
+
+        let unchanged = try await fixture.store.loadManifest()
+        XCTAssertEqual(unchanged, original)
+    }
+
+    func testFolderMoveAcceptsAuthenticatedManifestWhenReplaceCommitsThenThrows() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        let parent = try await fixture.store.createFolder(named: "Parent")
+        let child = try await fixture.store.createFolder(named: "Child", in: parent.id)
+        let faultingStore = try VaultFolderPresentationStore(
+            vaultID: fixture.access.vaultID,
+            access: fixture.access,
+            storageRoot: fixture.storageRoot,
+            manifestCommitDidComplete: {
+                throw FolderManifestCommitTestError.committedThenThrew
+            }
+        )
+
+        try await faultingStore.moveFolder(id: child.id, to: nil)
+
+        let durable = try await fixture.store.loadManifest()
+        XCTAssertEqual(durable.version, VaultFolderPresentationManifest.flatVersion)
+        XCTAssertNil(durable.folders.first(where: { $0.id == child.id })?.parentID)
+    }
+
     func testMovingBetweenFoldersAndRootKeepsAtMostOneMembership() async throws {
         let fixture = try Fixture()
         defer { fixture.cleanup() }

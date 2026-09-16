@@ -200,7 +200,7 @@ PRIVILEGED_SOURCE_SHA256 = {
         "9ff597ee8db1228de2e91df3863a34e83c73305b2f00fe08faf5a931929cdee3"
     ),
     "scripts/check_architecture_boundaries.py": (
-        "cca602bab85deccaa9268814c525e125b21c7e8700081343b89a5c5d1fa6956f"
+        "a5936daacf60f633391d19b5fa22034a356f18c6b7ed7c1e33d869a660da7914"
     ),
     "scripts/check_privacy_manifest.py": (
         "c8c255c8d6465aafd04f941daa4bee3fa0f3a9881390032666f3eb38fa0c979a"
@@ -209,7 +209,7 @@ PRIVILEGED_SOURCE_SHA256 = {
         "232f0b11e50aba390d23206692ba3c3ec9e72fa83af2dd30876bc3486188ee9d"
     ),
     "project.yml": (
-        "b1a800cb04975648b30aa00b0719d51c2cfad8738d40ccc4522241b791a396cd"
+        "8e5198f1b01a387b0dbe8d448717df32c86dce14c4c70b1e3c491031b8d6b369"
     ),
 }
 

@@ -13,11 +13,61 @@ public struct VaultGalleryFolder: Identifiable, Equatable, Sendable {
     }
 }
 
+public struct VaultFolderBreadcrumbSegment: Identifiable, Equatable, Sendable {
+    public let id: String
+    public let folderID: UUID?
+    public let title: String
+
+    public init(folderID: UUID?, title: String) {
+        self.id = folderID?.uuidString ?? "vault-root"
+        self.folderID = folderID
+        self.title = title
+    }
+}
+
+public struct VaultFolderBreadcrumbView: View {
+    let segments: [VaultFolderBreadcrumbSegment]
+    let navigate: (UUID?) -> Void
+
+    public init(
+        segments: [VaultFolderBreadcrumbSegment],
+        navigate: @escaping (UUID?) -> Void
+    ) {
+        self.segments = segments
+        self.navigate = navigate
+    }
+
+    public var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                ForEach(Array(segments.enumerated()), id: \.element.id) { offset, segment in
+                    if offset > 0 {
+                        Image(systemName: "chevron.right")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                            .accessibilityHidden(true)
+                    }
+                    Button(segment.title) {
+                        navigate(segment.folderID)
+                    }
+                    .buttonStyle(.plain)
+                    .font(.subheadline.weight(offset == segments.count - 1 ? .semibold : .regular))
+                    .foregroundStyle(offset == segments.count - 1 ? .primary : .tint)
+                }
+            }
+            .padding(.horizontal)
+            .padding(.vertical, 8)
+        }
+        .accessibilityLabel("Folder path")
+    }
+}
+
 public struct VaultFolderTileView: View {
     let folder: VaultGalleryFolder
     let isEnabled: Bool
     let open: () -> Void
     let rename: () -> Void
+    let move: () -> Void
     let delete: () -> Void
 
     private var itemDescription: String {
@@ -29,12 +79,14 @@ public struct VaultFolderTileView: View {
         isEnabled: Bool,
         open: @escaping () -> Void,
         rename: @escaping () -> Void,
+        move: @escaping () -> Void,
         delete: @escaping () -> Void
     ) {
         self.folder = folder
         self.isEnabled = isEnabled
         self.open = open
         self.rename = rename
+        self.move = move
         self.delete = delete
     }
 
@@ -60,6 +112,9 @@ public struct VaultFolderTileView: View {
         .contextMenu {
             Button(action: rename) {
                 Label("Rename Folder", systemImage: "pencil")
+            }
+            Button(action: move) {
+                Label("Move Folder", systemImage: "folder")
             }
             Button(role: .destructive, action: delete) {
                 Label("Delete Folder", systemImage: "trash")

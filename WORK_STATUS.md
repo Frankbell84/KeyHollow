@@ -144,11 +144,13 @@ Build 48 is the physically accepted production baseline at exact protected
 sorting, selection, mixed-media navigation, encrypted-video playback, backup
 verification, imports, exports, and folder moves remain accepted on-device.
 
-The current task is a design-only phase entry for Nested Folder Hierarchy. The
-mapping is recorded in `docs/NESTED_FOLDER_HIERARCHY.md`. No implementation,
-manifest migration, build-number change, TestFlight upload, or tester expansion
-is authorized by this checkpoint. The protected photo, general-file, crypto,
-vault, and transfer modules remain unchanged.
+The current task is the isolated Nested Folder Hierarchy implementation on
+`feature/nested-folder-hierarchy`. The compatibility mapping is recorded in
+`docs/NESTED_FOLDER_HIERARCHY.md`. The candidate adds a separately compiled,
+metadata-only hierarchy policy and versioned folder-presentation metadata. It
+does not change the build number, portable archive, protected photo or general-
+file ciphertext, crypto, vault, or transfer modules. It has not been pushed,
+reviewed by pull-request CI, merged, signed, uploaded, or assigned to testers.
 
 ## Unified Media Navigation candidate
 
@@ -597,11 +599,10 @@ only boundary.
 1. Preserve exact accepted Build 48 source
    `fd2f39f079f3dca853f09e2d67caa8a5cd2eab5c` as the rollback and comparison
    baseline.
-2. Review the bounded Nested Folder Hierarchy contract in
-   `docs/NESTED_FOLDER_HIERARCHY.md` before implementation.
-3. If explicitly approved, create the isolated feature branch directly from
-   the accepted Build 48 baseline and implement only the compiled hierarchy
-   policy, versioned folder-presentation metadata, and current-location UI.
+2. Complete local structural, architecture, release-hygiene, workflow-security,
+   and privacy checks for the isolated hierarchy candidate.
+3. Publish only the reviewed exact feature head through a draft pull request,
+   then require the complete macOS build, test, security, and CodeQL gates.
 4. Keep `.khvault` files blocked as ordinary vault content and leave portable
    archive behavior unchanged. Do not expand Build 48 to Family or external
    testers without a separate decision.

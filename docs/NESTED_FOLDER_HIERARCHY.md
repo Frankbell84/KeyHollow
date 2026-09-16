@@ -1,9 +1,10 @@
 # Nested Folder Hierarchy
 
-Nested Folder Hierarchy is the next proposed file-management refinement after
-the physically accepted Build 48 catalog search and sorting baseline. This
-phase is a mapping and compatibility contract only. It does not authorize an
-implementation, build-number change, upload, or tester expansion.
+Nested Folder Hierarchy is the next file-management refinement after the
+physically accepted Build 48 catalog search and sorting baseline. The mapping
+and compatibility contract below were completed before implementation began.
+Implementation remains isolated on its feature branch and does not authorize a
+build-number change, upload, merge, or tester expansion.
 
 ## Product boundary
 

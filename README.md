@@ -36,5 +36,6 @@ Native iOS implementation is in active development. Build 48 from exact
 `main` commit `fd2f39f079f3dca853f09e2d67caa8a5cd2eab5c` is the accepted
 device-tested baseline. Vault Catalog Search and Vault Catalog Sorting are
 accepted presentation-only add-ons. Nested Folder Hierarchy is in a bounded
-design-mapping phase; no hierarchy implementation or storage migration is yet
-authorized.
+isolated implementation phase. It has not changed the accepted Build 48
+baseline, completed pull-request CI, changed the build number, or entered a
+signed TestFlight release.
