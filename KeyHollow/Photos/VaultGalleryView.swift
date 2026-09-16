@@ -16,6 +16,23 @@ private enum VaultImportMode {
     case move
 }
 
+private extension VaultCatalogSortOrder {
+    var title: String {
+        switch self {
+        case .vaultOrder:
+            "Vault Order"
+        case .newestFirst:
+            "Newest First"
+        case .oldestFirst:
+            "Oldest First"
+        case .nameAscending:
+            "Name A–Z"
+        case .nameDescending:
+            "Name Z–A"
+        }
+    }
+}
+
 private struct VaultImportProgress {
     let mode: VaultImportMode
     let total: Int
@@ -171,8 +188,12 @@ struct VaultGalleryContentSnapshot {
     let orderedSources: [VaultGalleryContentItem]
     let presentations: [VaultGalleryPresentationItem]
     let sourceByID: [VaultGallerySelection.Item: VaultGalleryContentItem]
+    private let sortOrder: VaultCatalogSortOrder
 
-    init(items: [VaultGalleryContentItem]) {
+    init(
+        items: [VaultGalleryContentItem],
+        sortOrder: VaultCatalogSortOrder = .vaultOrder
+    ) {
         let entries = items.map { source in
             (source: source, presentation: source.presentationItem)
         }.sorted {
@@ -181,11 +202,24 @@ struct VaultGalleryContentSnapshot {
                 $1.presentation
             )
         }
+        let orderedOffsets = sortOrder.orderedOffsets(
+            for: entries.enumerated().map { offset, entry in
+                VaultCatalogSortDescriptor(
+                    title: entry.presentation.title,
+                    timestamp: entry.presentation.importedAt,
+                    stableOrdinal: offset
+                )
+            }
+        )
+        let orderedEntries = orderedOffsets.map { entries[$0] }
 
-        orderedSources = entries.map(\.source)
-        presentations = entries.map(\.presentation)
+        self.sortOrder = sortOrder
+        orderedSources = orderedEntries.map(\.source)
+        presentations = orderedEntries.map(\.presentation)
         sourceByID = Dictionary(
-            uniqueKeysWithValues: entries.map { ($0.presentation.id, $0.source) }
+            uniqueKeysWithValues: orderedEntries.map {
+                ($0.presentation.id, $0.source)
+            }
         )
     }
 
@@ -222,7 +256,8 @@ struct VaultGalleryContentSnapshot {
         return VaultGalleryContentSnapshot(
             items: orderedSources.filter {
                 query.matches($0.presentationItem.title)
-            }
+            },
+            sortOrder: sortOrder
         )
     }
 }
@@ -602,6 +637,7 @@ struct VaultGalleryView: View {
     @State private var isSelecting = false
     @State private var selection = VaultGallerySelection()
     @State private var searchText = ""
+    @State private var catalogSortOrder: VaultCatalogSortOrder = .vaultOrder
     @State private var isWorking = false
     @State private var message: String?
     @State private var importProgress: VaultImportProgress?
@@ -1186,6 +1222,19 @@ struct VaultGalleryView: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel("Clear search")
             }
+
+            Menu {
+                Picker("Sort", selection: $catalogSortOrder) {
+                    ForEach(VaultCatalogSortOrder.allCases, id: \.self) { order in
+                        Text(order.title).tag(order)
+                    }
+                }
+            } label: {
+                Image(systemName: "arrow.up.arrow.down.circle")
+                    .font(.title3)
+            }
+            .accessibilityLabel("Sort vault items")
+            .accessibilityValue(catalogSortOrder.title)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 9)
@@ -1291,9 +1340,22 @@ struct VaultGalleryView: View {
     }
 
     private var sortedFolders: [VaultFolderRecord] {
-        folderManifest.folders.sorted {
-            $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
+        let source = folderManifest.folders
+        if catalogSortOrder == .vaultOrder {
+            return source.sorted {
+                $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
+            }
         }
+        let offsets = catalogSortOrder.orderedOffsets(
+            for: source.enumerated().map { offset, folder in
+                VaultCatalogSortDescriptor(
+                    title: folder.name,
+                    timestamp: folder.createdAt,
+                    stableOrdinal: offset
+                )
+            }
+        )
+        return offsets.map { source[$0] }
     }
 
     private var visibleFolders: [VaultFolderRecord] {
@@ -1344,7 +1406,10 @@ struct VaultGalleryView: View {
             items.append(.generalFile(record))
         }
 
-        return VaultGalleryContentSnapshot(items: items)
+        return VaultGalleryContentSnapshot(
+            items: items,
+            sortOrder: catalogSortOrder
+        )
     }
 
     private var visiblePhotoRecords: [VaultPhotoRecord] {

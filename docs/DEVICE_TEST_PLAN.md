@@ -179,6 +179,41 @@ Search is limited to display names in the current visible location.
   non-photo export. Confirm an active or recently cleared search does not alter
   those accepted paths.
 
+## Vault Catalog Sorting candidate
+
+Run these checks only after the isolated feature branch has passed its automated
+review gates and a separately authorized Internal TestFlight build is available.
+Sorting is limited to already-visible presentation metadata in the current
+location.
+
+- At vault root, confirm **Vault Order** exactly preserves the accepted baseline:
+  folders by name and mixed items newest-first.
+- Exercise **Newest First**, **Oldest First**, **Name A–Z**, and **Name Z–A**
+  with root folders plus Photos-origin images, Files-origin images, videos, and
+  documents. Confirm folders remain ahead of items and every tile keeps its
+  established thumbnail/icon, title, size, and selection-circle alignment.
+- Use titles that differ by case, accents, full-width characters, and embedded
+  numbers such as `Item 2` and `Item 10`. Confirm name order is natural and
+  stable without tiles jumping between recompositions.
+- Enter a folder and repeat every order. Return to root and confirm the chosen
+  presentation order remains active without changing folder membership.
+- Apply a search under every order. Confirm clearing search restores the same
+  chosen order, **Select All** includes only visible results, and no hidden item
+  is exported, moved, or deleted.
+- Open a filtered or sorted image/video and swipe in both directions. Confirm
+  the media queue follows the visible order and never crosses the current
+  folder boundary. Confirm PDFs and unsupported files retain the file route.
+- Lock, background, switch vaults, and force-quit while sorted. Confirm no prior
+  vault title flashes, no protected metadata is persisted by the sort policy,
+  and a fresh launch returns safely to **Vault Order**.
+- Repeat the accepted mixed 26-item performance case while changing order,
+  searching, scrolling, selecting, opening media, importing, and dismissing.
+  Reject the candidate for thumbnail churn, input lag, gallery hitching,
+  increased open/swipe delay, a crash, or runaway memory growth.
+- Re-run folder moves, Backup Verification, image zoom/swipe, encrypted-video
+  playback/fullscreen, Photos and Files import progress, and non-photo export.
+  Confirm catalog ordering does not alter any accepted path.
+
 ## Backup Verification Center
 
 Run these checks with a TestFlight-delivered candidate and disposable test
