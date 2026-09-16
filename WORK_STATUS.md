@@ -18,6 +18,22 @@ evidence remains in `docs/PROJECT_CHECKPOINT.md`.
   App Store Connect completed processing and shows only `KeyHollow Internal`.
   Frank physically tested Vault Catalog Sorting and confirmed that it works as
   intended. Build 48 is the accepted rollback and comparison baseline.
+- PR [#76](https://github.com/Frankbell84/KeyHollow/pull/76) merged the exact
+  reviewed Nested Folder Hierarchy head
+  `9bf85319f7cf3fe7c141908889723569db55eb54` through regular merge commit
+  `32951baf7685672f05410641801a5c80980a74ac`.
+- Exact merged-main CI run
+  [#35160039341](https://github.com/Frankbell84/KeyHollow/actions/runs/35160039341)
+  passed the complete build-and-test lane and Swift CodeQL. Security-test
+  artifact `10473226011` has SHA-256
+  `0547ecbcc4ffbfa245a7bdccfe1344eae74391f97e0e479d5ecdaadbef81d028`;
+  simulator artifact `10472616756` has SHA-256
+  `c3937c0afe5f2cb6d60f8951f61592ba5cdf4b77f9ca4799b2200211b4c84ead`.
+- Protected signing-only preflight run
+  [#35161736010](https://github.com/Frankbell84/KeyHollow/actions/runs/35161736010)
+  verified that exact merged source, production signing material, the packaged
+  privacy manifest, and both app signatures without uploading or publishing a
+  build. Temporary signing material was removed by the workflow.
 - Build 47 completed exact-main CI in run
   [#35124289873](https://github.com/Frankbell84/KeyHollow/actions/runs/35124289873),
   protected signing-only preflight in run
@@ -144,13 +160,23 @@ Build 48 is the physically accepted production baseline at exact protected
 sorting, selection, mixed-media navigation, encrypted-video playback, backup
 verification, imports, exports, and folder moves remain accepted on-device.
 
-The current task is the isolated Nested Folder Hierarchy implementation on
-`feature/nested-folder-hierarchy`. The compatibility mapping is recorded in
-`docs/NESTED_FOLDER_HIERARCHY.md`. The candidate adds a separately compiled,
-metadata-only hierarchy policy and versioned folder-presentation metadata. It
-does not change the build number, portable archive, protected photo or general-
-file ciphertext, crypto, vault, or transfer modules. It has not been pushed,
-reviewed by pull-request CI, merged, signed, uploaded, or assigned to testers.
+Nested Folder Hierarchy is now merged to protected `main` at exact commit
+`32951baf7685672f05410641801a5c80980a74ac`. Exact-main build, test, security,
+and CodeQL gates passed in run `35160039341`; signing-only preflight run
+`35161736010` also passed without uploading or publishing a build.
+
+The current task is the isolated Build 49 release candidate on
+`release/build49-nested-folder-hierarchy`, created directly from that reviewed
+merged-main commit. Build 49 changes only the application and thumbnail-
+extension build number from 48 to 49, refreshes the required `project.yml`
+security hash, and records completed merge evidence. It must pass release-
+branch review, protected merge, exact-main CI and CodeQL, and a no-upload
+signing preflight before any separately authorized TestFlight upload.
+
+Physical-device acceptance must then complete the Nested Folder Hierarchy
+checks in `docs/DEVICE_TEST_PLAN.md`. The add-on remains metadata-only and
+separately compiled; protected records, cryptography, archive formats, media
+payloads, and ciphertext remain unchanged.
 
 ## Unified Media Navigation candidate
 
@@ -599,19 +625,20 @@ only boundary.
 1. Preserve exact accepted Build 48 source
    `fd2f39f079f3dca853f09e2d67caa8a5cd2eab5c` as the rollback and comparison
    baseline.
-2. Complete local structural, architecture, release-hygiene, workflow-security,
-   and privacy checks for the isolated hierarchy candidate.
-3. Publish only the reviewed exact feature head through a draft pull request,
-   then require the complete macOS build, test, security, and CodeQL gates.
-4. Keep `.khvault` files blocked as ordinary vault content and leave portable
-   archive behavior unchanged. Do not expand Build 48 to Family or external
-   testers without a separate decision.
+2. Publish only the reviewed Build 49 packaging head through a draft pull
+   request and require the complete macOS build, test, security, and CodeQL
+   gates.
+3. Merge only that exact reviewed head through protected `main`, then require
+   complete exact-main CI and a no-upload signing preflight.
+4. Produce a separately authorized Internal TestFlight build for the physical-
+   device hierarchy plan. Do not expand to Family or external testers without
+   a separate decision.
 
 ## Frank's decisions required
 
 Frank's action-time decision is required for:
 
-- Publishing or merging any revision that would supersede the accepted Build 47
+- Publishing or merging any revision that would supersede the accepted Build 48
   source baseline.
 - Creating or changing GitHub environments, branch protection, reviewers, or
   secrets.
