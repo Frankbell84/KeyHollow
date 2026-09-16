@@ -161,6 +161,20 @@ targets:
         DEFINES_MODULE: YES
         SKIP_INSTALL: YES
 
+  KeyHollowNestedFolderAddOn:
+    type: library.static
+    platform: iOS
+    sources:
+      - path: KeyHollow/AddOns/NestedFolder
+    settings:
+      base:
+        PRODUCT_NAME: KeyHollowNestedFolderAddOn
+        SWIFT_VERSION: 5.0
+        SWIFT_STRICT_CONCURRENCY: complete
+        SWIFT_TREAT_WARNINGS_AS_ERRORS: YES
+        DEFINES_MODULE: YES
+        SKIP_INSTALL: YES
+
   KeyHollowGalleryUI:
     type: library.static
     platform: iOS
@@ -267,6 +281,7 @@ targets:
           - AddOns/GeneralFileSupport
           - AddOns/EncryptedVideo
           - AddOns/FolderPresentation
+          - AddOns/NestedFolder
           - AddOns/SecurePreview
           - AddOns/MediaNavigation
           - UI/VaultGalleryGridView.swift
@@ -302,6 +317,7 @@ targets:
       - target: KeyHollowGeneralFileSupportAddOn
       - target: KeyHollowEncryptedVideoAddOn
       - target: KeyHollowFolderPresentationAddOn
+      - target: KeyHollowNestedFolderAddOn
       - target: KeyHollowGalleryUI
       - target: KeyHollowMediaNavigationAddOn
       - target: KeyHollowSecurePreviewAddOn
@@ -372,6 +388,8 @@ targets:
         link: false
       - target: KeyHollowFolderPresentationAddOn
         link: false
+      - target: KeyHollowNestedFolderAddOn
+        link: false
       - target: KeyHollowGalleryUI
         link: false
       - target: KeyHollowMediaNavigationAddOn
@@ -417,6 +435,7 @@ schemes:
         KeyHollowGeneralFileSupportAddOn: all
         KeyHollowEncryptedVideoAddOn: all
         KeyHollowFolderPresentationAddOn: all
+        KeyHollowNestedFolderAddOn: all
         KeyHollowGalleryUI: all
         KeyHollowMediaNavigationAddOn: all
         KeyHollowSecurePreviewAddOn: all

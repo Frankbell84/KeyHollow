@@ -214,6 +214,51 @@ location.
   playback/fullscreen, Photos and Files import progress, and non-photo export.
   Confirm catalog ordering does not alter any accepted path.
 
+## Nested Folder Hierarchy candidate
+
+Run these checks only after the isolated feature branch has passed its automated
+review gates and a separately authorized Internal TestFlight build is available.
+The hierarchy is presentation metadata; protected photo and file ciphertext
+must not move when folders or items are reorganized.
+
+- Open a Build 48 vault containing root folders, Photos-origin images,
+  Files-origin images, videos, PDFs, and other files. Confirm every preexisting
+  folder and item appears at root exactly as before without a conversion prompt,
+  duplicate, missing tile, or changed thumbnail.
+- Create a child folder, a grandchild, and a deeper path up to eight levels.
+  Confirm each folder opens in place, **Back** goes to the immediate parent, and
+  the breadcrumb can return directly to any ancestor or the vault root.
+- Attempt to create a ninth level. Confirm KeyHollow rejects it with a clear
+  bounded-depth message and the existing tree remains unchanged.
+- Create the same folder name under two different parents and confirm both are
+  allowed. Attempt the same case- or Unicode-equivalent name beside an existing
+  sibling and confirm it is rejected without changing either branch.
+- Use a folder tile's **Move Folder** action. Move it to root, into another
+  branch, and back. Confirm invalid destinations—its current parent, itself, and
+  every descendant—are unavailable, and the move never duplicates or loses a
+  child folder or item.
+- Place direct photos, files, and child folders in a disposable folder, then
+  delete that folder. Confirm its direct items and child folders move to the
+  deleted folder's parent in one result; no protected content is deleted.
+  Repeat with a deliberate child-name collision and confirm deletion fails
+  unchanged until the conflict is renamed or moved.
+- In root and at multiple nested levels, exercise search, every sort order,
+  individual selection, **Select All**, item move, export, delete, image zoom,
+  image/video swipe, video fullscreen, and non-media opening. Confirm every
+  operation remains limited to the current visible location and media never
+  crosses a folder boundary.
+- Lock, background, change vaults, force-quit, and relaunch from several nested
+  levels and during folder creation, move, and deletion. Confirm the privacy
+  shield and relock behavior are unchanged, no prior-vault path flashes, and a
+  committed hierarchy reopens intact.
+- Verify and restore a disposable `.khvault` backup. Confirm verification still
+  states that the current archive format does not preserve folders, restore
+  continues to place recovered content at root, and a `.khvault` file cannot be
+  imported as ordinary content or treated as an active vault inside a vault.
+- Repeat the accepted mixed 26-item performance case across several nested
+  locations. Reject the candidate for new scroll lag, thumbnail churn, delayed
+  folder opening, input lag, a crash, runaway memory growth, or data loss.
+
 ## Backup Verification Center
 
 Run these checks with a TestFlight-delivered candidate and disposable test

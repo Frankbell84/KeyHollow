@@ -8,7 +8,16 @@ evidence remains in `docs/PROJECT_CHECKPOINT.md`.
 ## Provenance
 
 - Current accepted production source: exact `main` commit
-  `9eb107a259082be049f57a5d83ff27a67a37989a`.
+  `fd2f39f079f3dca853f09e2d67caa8a5cd2eab5c`.
+- Build 48 completed exact-main CI in run
+  [#35142349830](https://github.com/Frankbell84/KeyHollow/actions/runs/35142349830),
+  protected signing-only preflight in run
+  [#35145472764](https://github.com/Frankbell84/KeyHollow/actions/runs/35145472764),
+  and the separately authorized Internal-only upload in run
+  [#35146713445](https://github.com/Frankbell84/KeyHollow/actions/runs/35146713445).
+  App Store Connect completed processing and shows only `KeyHollow Internal`.
+  Frank physically tested Vault Catalog Sorting and confirmed that it works as
+  intended. Build 48 is the accepted rollback and comparison baseline.
 - Build 47 completed exact-main CI in run
   [#35124289873](https://github.com/Frankbell84/KeyHollow/actions/runs/35124289873),
   protected signing-only preflight in run
@@ -112,8 +121,8 @@ evidence remains in `docs/PROJECT_CHECKPOINT.md`.
 - Retained Build 39 IPA artifact: `10132108885`
 - IPA SHA-256:
   `99a3ed152df2c5bb267e5950aab27db82e51e3d22e91981f1d3d15812ced72e1`
-- The latest accepted product is version 1.0, Build 47, built from exact
-  `main` commit `9eb107a259082be049f57a5d83ff27a67a37989a`.
+- The latest accepted product is version 1.0, Build 48, built from exact
+  `main` commit `fd2f39f079f3dca853f09e2d67caa8a5cd2eab5c`.
 - Protected signed-upload workflow
   [#34602241254](https://github.com/Frankbell84/KeyHollow/actions/runs/34602241254)
   completed successfully. App Store Connect reports the binary as validated,
@@ -130,24 +139,18 @@ evidence remains in `docs/PROJECT_CHECKPOINT.md`.
 
 ## Current task
 
-Build 47 is the physically accepted production baseline. Vault Catalog Sorting
-is now merged to protected `main` at exact commit
-`aa950882db02bd40849df459acf3e2030b18ad6b`, and the exact-main complete test
-suite plus Swift CodeQL passed in run `35136592165`.
+Build 48 is the physically accepted production baseline at exact protected
+`main` commit `fd2f39f079f3dca853f09e2d67caa8a5cd2eab5c`. Catalog search,
+sorting, selection, mixed-media navigation, encrypted-video playback, backup
+verification, imports, exports, and folder moves remain accepted on-device.
 
-The current task is the isolated Build 48 release candidate on
-`release/build48-vault-catalog-sorting`, created directly from that reviewed
-merged-main commit. Build 48 changes only the application and thumbnail-
-extension build number from 47 to 48, refreshes the required `project.yml`
-security hash, and records completed merge evidence. It must pass release-
-branch review, protected merge, exact-main CI and CodeQL, and the no-upload
-signing preflight before any separately authorized TestFlight upload.
-
-Physical-device acceptance must then complete the Vault Catalog Sorting checks
-in `docs/DEVICE_TEST_PLAN.md`. The add-on remains presentation-only and receives
-bounded sanitized titles, timestamps, and stable ordinals; protected stores,
-cryptography, archive formats, folder membership, media payloads, and mutation
-paths remain unchanged.
+The current task is the isolated Nested Folder Hierarchy implementation on
+`feature/nested-folder-hierarchy`. The compatibility mapping is recorded in
+`docs/NESTED_FOLDER_HIERARCHY.md`. The candidate adds a separately compiled,
+metadata-only hierarchy policy and versioned folder-presentation metadata. It
+does not change the build number, portable archive, protected photo or general-
+file ciphertext, crypto, vault, or transfer modules. It has not been pushed,
+reviewed by pull-request CI, merged, signed, uploaded, or assigned to testers.
 
 ## Unified Media Navigation candidate
 
@@ -593,17 +596,16 @@ only boundary.
 
 ## Next action
 
-1. Preserve exact accepted Build 47 source
-   `9eb107a259082be049f57a5d83ff27a67a37989a` as the rollback and comparison
+1. Preserve exact accepted Build 48 source
+   `fd2f39f079f3dca853f09e2d67caa8a5cd2eab5c` as the rollback and comparison
    baseline.
-2. Publish only the reviewed Build 48 packaging head through a draft pull
-   request and require the complete macOS build, test, security, and CodeQL
-   gates.
-3. Merge only that exact reviewed head through protected `main`, then require
-   complete exact-main CI and a no-upload signing preflight.
-4. Produce a separately authorized Internal TestFlight build for the physical-
-   device sorting plan. Do not expand to Family or external testers without a
-   separate decision.
+2. Complete local structural, architecture, release-hygiene, workflow-security,
+   and privacy checks for the isolated hierarchy candidate.
+3. Publish only the reviewed exact feature head through a draft pull request,
+   then require the complete macOS build, test, security, and CodeQL gates.
+4. Keep `.khvault` files blocked as ordinary vault content and leave portable
+   archive behavior unchanged. Do not expand Build 48 to Family or external
+   testers without a separate decision.
 
 ## Frank's decisions required
 

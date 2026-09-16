@@ -10,6 +10,27 @@ import XCTest
 @testable import KeyHollowPhotoCore
 
 final class VaultGalleryPresentationTests: XCTestCase {
+    func testFolderDestinationTitlesRemainUnambiguous() {
+        let root = VaultFolderPathPresentation.destinationTitle(path: [])
+        let folderNamedRoot = VaultFolderPathPresentation.destinationTitle(
+            path: ["Vault Root"]
+        )
+        let slashName = VaultFolderPathPresentation.destinationTitle(path: ["A / B"])
+        let nestedPath = VaultFolderPathPresentation.destinationTitle(path: ["A", "B"])
+
+        XCTAssertEqual(root, "Vault Root")
+        XCTAssertEqual(folderNamedRoot, "Vault Root › Vault Root")
+        XCTAssertNotEqual(root, folderNamedRoot)
+        XCTAssertNotEqual(slashName, nestedPath)
+    }
+
+    func testFolderDestinationTitlesEscapePathDelimiterAndEscapeCharacter() {
+        XCTAssertEqual(
+            VaultFolderPathPresentation.destinationTitle(path: ["A › B", "C\\D"]),
+            "Vault Root › A \\› B › C\\\\D"
+        )
+    }
+
     func testCatalogSearchFiltersVisibleSnapshotAndMediaQueue() throws {
         let importedAt = Date(timeIntervalSinceReferenceDate: 800)
         let photo = VaultPhotoRecord(

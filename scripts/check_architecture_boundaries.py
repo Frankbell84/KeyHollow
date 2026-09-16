@@ -16,6 +16,7 @@ BACKUP_VERIFICATION_ROOT = ADDON_ROOT / "BackupVerification"
 CATALOG_SEARCH_ROOT = ADDON_ROOT / "CatalogSearch"
 ENCRYPTED_VIDEO_ROOT = ADDON_ROOT / "EncryptedVideo"
 MEDIA_NAVIGATION_ROOT = ADDON_ROOT / "MediaNavigation"
+NESTED_FOLDER_ROOT = ADDON_ROOT / "NestedFolder"
 THUMBNAIL_EXTENSION_ROOT = ROOT / "KeyHollowVaultThumbnailExtension"
 
 PRESENTATION_FILES = {
@@ -98,9 +99,11 @@ FILE_RECOGNITION_PREFIX = "KeyHollow/AddOns/FileRecognition/"
 BACKUP_VERIFICATION_PREFIX = "KeyHollow/AddOns/BackupVerification/"
 CATALOG_SEARCH_PREFIX = "KeyHollow/AddOns/CatalogSearch/"
 GENERAL_FILE_SUPPORT_PREFIX = "KeyHollow/AddOns/GeneralFileSupport/"
+FOLDER_PRESENTATION_PREFIX = "KeyHollow/AddOns/FolderPresentation/"
 SECURE_PREVIEW_PREFIX = "KeyHollow/AddOns/SecurePreview/"
 ENCRYPTED_VIDEO_PREFIX = "KeyHollow/AddOns/EncryptedVideo/"
 MEDIA_NAVIGATION_PREFIX = "KeyHollow/AddOns/MediaNavigation/"
+NESTED_FOLDER_PREFIX = "KeyHollow/AddOns/NestedFolder/"
 ENCRYPTED_VIDEO_MODULE_FILES = {
     "KeyHollow/AddOns/EncryptedVideo/VaultEncryptedVideoPlayerView.swift",
     "KeyHollow/AddOns/EncryptedVideo/VaultEncryptedVideoPolicy.swift",
@@ -117,6 +120,9 @@ CATALOG_SEARCH_MODULE_FILES = {
 MEDIA_NAVIGATION_MODULE_FILES = {
     "KeyHollow/AddOns/MediaNavigation/VaultMediaNavigationModels.swift",
     "KeyHollow/AddOns/MediaNavigation/VaultMediaNavigationPager.swift",
+}
+NESTED_FOLDER_MODULE_FILES = {
+    "KeyHollow/AddOns/NestedFolder/VaultNestedFolderHierarchy.swift",
 }
 MEDIA_NAVIGATION_IMPORTS = {
     "KeyHollow/AddOns/MediaNavigation/VaultMediaNavigationModels.swift": {
@@ -919,6 +925,126 @@ def main() -> int:
                     "KeyHollow/AddOns/CatalogSearch/"
                     "VaultCatalogSortOrder.swift: bounded metadata-only "
                     f"ordering is missing {required!r}"
+                )
+
+    nested_folder_target = target_body(project, "KeyHollowNestedFolderAddOn")
+    if nested_folder_target is None:
+        violations.append("project.yml: KeyHollowNestedFolderAddOn target is missing")
+    else:
+        expected_sources = {"KeyHollow/AddOns/NestedFolder"}
+        declared_sources = set(re.findall(
+            r"(?m)^      - path: ([^\r\n]+)$",
+            nested_folder_target,
+        ))
+        if declared_sources != expected_sources:
+            violations.append(
+                "project.yml: KeyHollowNestedFolderAddOn source ownership "
+                f"changed; expected {sorted(expected_sources)}, "
+                f"got {sorted(declared_sources)}"
+            )
+        for marker in (
+            "type: library.static",
+            "platform: iOS",
+            "PRODUCT_NAME: KeyHollowNestedFolderAddOn",
+            "SWIFT_STRICT_CONCURRENCY: complete",
+            "SWIFT_TREAT_WARNINGS_AS_ERRORS: YES",
+            "DEFINES_MODULE: YES",
+            "SKIP_INSTALL: YES",
+        ):
+            if marker not in nested_folder_target:
+                violations.append(
+                    "project.yml: KeyHollowNestedFolderAddOn is missing "
+                    f"{marker!r}"
+                )
+        if yaml_key_present(nested_folder_target, "dependencies") or re.search(
+            r"(?m)^[ \t]+<<\s*:", nested_folder_target
+        ):
+            violations.append(
+                "project.yml: KeyHollowNestedFolderAddOn must remain dependency-free"
+            )
+
+    if app_target is not None:
+        if len(re.findall(
+            r"(?m)^      - target: KeyHollowNestedFolderAddOn\s*$",
+            app_target,
+        )) != 1:
+            violations.append(
+                "project.yml: KeyHollow must compose "
+                "KeyHollowNestedFolderAddOn exactly once"
+            )
+        if len(re.findall(
+            r"(?m)^          - AddOns/NestedFolder\s*$",
+            app_target,
+        )) != 1:
+            violations.append(
+                "project.yml: KeyHollow must exclude AddOns/NestedFolder exactly once"
+            )
+
+    folder_presentation_target = target_body(
+        project,
+        "KeyHollowFolderPresentationAddOn",
+    )
+    if folder_presentation_target is None:
+        violations.append(
+            "project.yml: KeyHollowFolderPresentationAddOn target is missing"
+        )
+    elif yaml_key_present(folder_presentation_target, "dependencies") or re.search(
+        r"(?m)^[ \t]+<<\s*:", folder_presentation_target
+    ):
+        violations.append(
+            "project.yml: KeyHollowFolderPresentationAddOn must remain "
+            "dependency-free; concrete add-ons are composed only by the app"
+        )
+
+    nested_folder_tests_target = target_body(project, "KeyHollowTests")
+    if nested_folder_tests_target is None or len(re.findall(
+        r"(?m)^      - target: KeyHollowNestedFolderAddOn\s*$\n"
+        r"^        link: false\s*$",
+        nested_folder_tests_target or "",
+    )) != 1:
+        violations.append(
+            "project.yml: KeyHollowTests must depend on "
+            "KeyHollowNestedFolderAddOn exactly once with link: false"
+        )
+
+    if project.count("        KeyHollowNestedFolderAddOn: all") != 1:
+        violations.append(
+            "project.yml: KeyHollow scheme must build "
+            "KeyHollowNestedFolderAddOn exactly once"
+        )
+
+    nested_folder_sources = (
+        {relative(path) for path in NESTED_FOLDER_ROOT.rglob("*.swift")}
+        if NESTED_FOLDER_ROOT.exists()
+        else set()
+    )
+    if nested_folder_sources != NESTED_FOLDER_MODULE_FILES:
+        violations.append(
+            "KeyHollow/AddOns/NestedFolder: source ownership changed; "
+            f"expected {sorted(NESTED_FOLDER_MODULE_FILES)}, "
+            f"got {sorted(nested_folder_sources)}"
+        )
+
+    nested_folder_file = NESTED_FOLDER_ROOT / "VaultNestedFolderHierarchy.swift"
+    if nested_folder_file.is_file():
+        nested_folder_source = swift_executable_text(
+            nested_folder_file.read_text(encoding="utf-8")
+        )
+        for required in (
+            "public struct VaultNestedFolderDescriptor:",
+            "public enum VaultNestedFolderPolicyError:",
+            "public struct VaultNestedFolderHierarchy:",
+            "public static let maximumFolderCount = 10_000",
+            "public static let maximumDepth = 8",
+            "public func breadcrumb(to folderID: UUID)",
+            "public func movingFolder(",
+            "public func validParentDestinations(",
+        ):
+            if required not in nested_folder_source:
+                violations.append(
+                    "KeyHollow/AddOns/NestedFolder/"
+                    "VaultNestedFolderHierarchy.swift: bounded hierarchy policy "
+                    f"is missing {required!r}"
                 )
 
     media_navigation_target = target_body(
@@ -1964,6 +2090,47 @@ def main() -> int:
                         f"{path}: catalog-search add-on must remain display-text "
                         f"only; found {forbidden_capability}"
                     )
+
+        if path.startswith(NESTED_FOLDER_PREFIX):
+            if imported != {"Foundation"}:
+                violations.append(
+                    f"{path}: nested-folder imports changed; expected "
+                    f"['Foundation'], got {sorted(imported)}"
+                )
+            for forbidden_capability in (
+                "VaultSession",
+                "VaultUnlockService",
+                "VaultAccessCapability",
+                "VaultPhotoRecord",
+                "VaultPhotoStore",
+                "VaultGeneralFileRecord",
+                "VaultGeneralFileStore",
+                "VaultFolderRecord",
+                "VaultFolderPresentationStore",
+                "VaultMediaNavigationItem",
+                "PortableArchiveCredential",
+                "EncryptedVaultTransferCoordinator",
+                "CryptoBox",
+                "SymmetricKey",
+                "FileManager",
+                "FileHandle",
+                "URL",
+                "Data",
+            ):
+                if re.search(rf"\b{forbidden_capability}\b", source):
+                    violations.append(
+                        f"{path}: nested-folder add-on must remain metadata-only; "
+                        f"found {forbidden_capability}"
+                    )
+
+        if path.startswith(FOLDER_PRESENTATION_PREFIX):
+            if "KeyHollowNestedFolderAddOn" in imported or re.search(
+                r"\bVaultNestedFolder", source
+            ):
+                violations.append(
+                    f"{path}: folder-presentation must not depend on the concrete "
+                    "nested-folder add-on; compose both only in the application target"
+                )
 
         if path.startswith(BACKUP_VERIFICATION_PREFIX):
             expected_imports = BACKUP_VERIFICATION_IMPORTS.get(path)
@@ -4519,7 +4686,9 @@ def main() -> int:
         "rejection, session-tracked saves, and retryable failure state; "
         "KeyHollowEncryptedVideoAddOn remains capability-free and independently "
         "compiled; KeyHollowBackupVerificationAddOn remains report-only and "
-        "independently compiled; registered add-ons remain independently compiled; "
+        "independently compiled; KeyHollowNestedFolderAddOn remains bounded, "
+        "metadata-only, and independently compiled; registered add-ons remain "
+        "independently compiled; "
         "and core storage, "
         "cryptography, session, and transfer code "
         "remain free of UI, Photos, network, and remote SDK concerns."

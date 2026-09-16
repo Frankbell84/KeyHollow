@@ -22,8 +22,8 @@ KeyHollow is a native iOS privacy application built around multiple independent 
 - Unified three-column gallery with encrypted folder organization
 - Reference-restricted playback and bounded encrypted thumbnails for in-limit videos
 - Read-only local verification of portable encrypted vault backups without installation
-- Unified image/video swipe navigation is being developed as a separate,
-  presentation-only add-on
+- Unified image/video swipe navigation with bounded active-payload loading
+- Current-location vault catalog search and stable presentation-only sorting
 - No claims of absolute coercion or forensic resistance
 
 ## Engineering rule
@@ -32,8 +32,10 @@ KeyHollow is a security product first. Cryptographic design, key derivation, sec
 
 ## Status
 
-Native iOS implementation is in active development. Build 40 remains the
-accepted device-tested baseline. Unified Media Navigation is implemented and
-locally hardened on an isolated feature branch; it has not yet completed
-pull-request CI, merged-main verification, signed-build delivery, or
-physical-device acceptance.
+Native iOS implementation is in active development. Build 48 from exact
+`main` commit `fd2f39f079f3dca853f09e2d67caa8a5cd2eab5c` is the accepted
+device-tested baseline. Vault Catalog Search and Vault Catalog Sorting are
+accepted presentation-only add-ons. Nested Folder Hierarchy is in a bounded
+isolated implementation phase. It has not changed the accepted Build 48
+baseline, completed pull-request CI, changed the build number, or entered a
+signed TestFlight release.
