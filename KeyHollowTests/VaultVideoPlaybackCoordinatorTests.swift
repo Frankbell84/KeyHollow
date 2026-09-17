@@ -2,7 +2,7 @@ import CryptoKit
 import Foundation
 import XCTest
 import KeyHollowCryptoCore
-import KeyHollowEncryptedVideoAddOn
+@testable import KeyHollowEncryptedVideoAddOn
 import KeyHollowGeneralFileSupportAddOn
 @testable import KeyHollow
 
@@ -206,6 +206,56 @@ final class VaultVideoPlaybackCoordinatorTests: XCTestCase {
         XCTAssertTrue(fixture.preparedPlaintextFiles().isEmpty)
     }
 
+    func testPlaybackSessionTerminalStopGatesPlaintextDeletion() async throws {
+        let fixture = try VideoPlaybackFixture()
+        defer { fixture.cleanup() }
+        let record = try await fixture.importFile(named: "Portrait.mov")
+        let cleanupReachedPlayerBarrier = VideoPlaybackEventCounter()
+        let coordinator = VaultVideoPlaybackCoordinator(
+            validatePlayable: { _ in },
+            playerReleaseWaitObserver: {
+                await cleanupReachedPlayerBarrier.record()
+            }
+        )
+        let prepareTask = Task { @MainActor in
+            try await coordinator.prepare(record, using: fixture.store)
+        }
+        let active = try await waitForActive(record.id, in: coordinator)
+        let playbackURL = active.playback.fileURL
+        let session = VaultEncryptedVideoPlaybackSession(
+            waitForFailure: { _ in await waitForVideoSessionCancellation() }
+        )
+
+        XCTAssertTrue(
+            session.activate(
+                playback: active.playback,
+                onPlayerWillAttach: {
+                    coordinator.playerWillAttach(active.playback.id)
+                },
+                onPlayerReleased: {
+                    coordinator.playerDidRelease(active.playback.id)
+                }
+            )
+        )
+
+        let cleanup = Task { @MainActor in
+            await coordinator.dismissAndWait()
+        }
+        try await cleanupReachedPlayerBarrier.waitForCount(1)
+
+        XCTAssertTrue(FileManager.default.fileExists(atPath: playbackURL.path))
+        XCTAssertNotNil(session.retainedPlayerController.player)
+
+        await session.stopAndWait()
+        await cleanup.value
+        await assertCancellation(of: prepareTask)
+
+        XCTAssertNil(session.retainedPlayerController.player)
+        XCTAssertNil(session.activePlayer)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: playbackURL.path))
+        XCTAssertTrue(fixture.preparedPlaintextFiles().isEmpty)
+    }
+
     func testPlayerCannotAttachAfterDismissalStarts() async throws {
         let fixture = try VideoPlaybackFixture()
         defer { fixture.cleanup() }
@@ -370,6 +420,13 @@ private actor VideoPlaybackEventCounter {
             await Task.yield()
         }
     }
+}
+
+private func waitForVideoSessionCancellation() async -> Bool {
+    while !Task.isCancelled {
+        await Task.yield()
+    }
+    return false
 }
 
 private struct VideoPlaybackFixture {

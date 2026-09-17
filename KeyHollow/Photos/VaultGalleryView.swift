@@ -660,6 +660,8 @@ struct VaultGalleryView: View {
     @State private var isMediaImageZoomed = false
     @StateObject private var imagePreview = VaultImagePreviewCoordinator()
     @StateObject private var videoPlayback = VaultVideoPlaybackCoordinator()
+    @StateObject private var videoPlaybackSession =
+        VaultEncryptedVideoPlaybackSession()
 
     // SwiftUI recreates View values freely. State preserves these actor
     // identities so decoding and full-payload bounds survive recomposition.
@@ -951,9 +953,9 @@ struct VaultGalleryView: View {
                     && isMediaNavigationContentReady(queue),
                 onSelectionChange: selectMediaNavigationItem,
                 onChromeToggleRequested: {
-                    // AVPlayerViewController owns taps on video playback and
-                    // fullscreen controls. Only image pages use a content tap
-                    // to reveal or hide KeyHollow's action overlay.
+                    // The module-owned video session owns its replay surface
+                    // and modal AVKit controls. Only image pages use a content
+                    // tap to reveal or hide KeyHollow's action overlay.
                     guard VaultMediaChromeInteractionPolicy.acceptsContentTap(
                         for: queue.currentItem.kind
                     ) else { return }
@@ -961,6 +963,11 @@ struct VaultGalleryView: View {
                 }
             ) { item in
                 mediaNavigationActiveContent(item)
+            }
+            .background {
+                VaultEncryptedVideoPresentationAnchorView(
+                    session: videoPlaybackSession
+                )
             }
             .overlay(alignment: .top) {
                 if isMediaChromeVisible {
@@ -1071,20 +1078,22 @@ struct VaultGalleryView: View {
             case .video:
                 if let active = videoPlayback.active,
                    VaultGalleryContentItem.generalFile(active.source).mediaNavigationID == item.id {
-                    VaultEncryptedVideoPlayerView(
-                        playback: active.playback,
-                        showsChrome: false,
-                        onPlayerWillAttach: {
-                            videoPlayback.playerWillAttach(active.playback.id)
-                        },
-                        onPlayerReleased: {
-                            videoPlayback.playerDidRelease(active.playback.id)
-                        },
-                        onDismiss: beginMediaNavigationDismissal,
-                        onFailure: { _ in
-                            handleMediaPlaybackFailure(for: item.id)
-                        }
-                    )
+                    ZStack {
+                        mediaNavigationPlaceholder(for: item.id)
+                        VaultEncryptedVideoPlayerView(
+                            session: videoPlaybackSession,
+                            playback: active.playback,
+                            onPlayerWillAttach: {
+                                videoPlayback.playerWillAttach(active.playback.id)
+                            },
+                            onPlayerReleased: {
+                                videoPlayback.playerDidRelease(active.playback.id)
+                            },
+                            onFailure: { _ in
+                                handleMediaPlaybackFailure(for: item.id)
+                            }
+                        )
+                    }
                 } else {
                     ZStack {
                         mediaNavigationPlaceholder(for: item.id)
@@ -2503,14 +2512,14 @@ struct VaultGalleryView: View {
         mediaNavigationTask = nil
         retiringTask?.cancel()
         imagePreview.dismiss()
-        videoPlayback.dismiss()
+        requestVideoPlaybackStop()
 
         mediaNavigationTask = Task { @MainActor in
             if let retiringTask {
                 await retiringTask.value
             }
             await imagePreview.dismissAndWait()
-            await videoPlayback.dismissAndWait()
+            await waitForVideoPlaybackStop()
 
             guard !Task.isCancelled,
                   isCurrentMediaSelection(id, generation: generation),
@@ -2729,9 +2738,21 @@ struct VaultGalleryView: View {
     private func handleMediaPlaybackFailure(for id: VaultMediaNavigationID) {
         guard mediaNavigationQueue?.selectedID == id,
               !isClosingMediaNavigation else { return }
-        videoPlayback.dismiss()
+        requestVideoPlaybackStop()
         failedMediaID = id
         previewMessage = "The video stopped because iOS could not continue secure playback."
+    }
+
+    private func requestVideoPlaybackStop() {
+        // The module-owned session must detach AVKit and acknowledge its player
+        // lease before the coordinator may discard the protected plaintext.
+        videoPlaybackSession.requestStop()
+        videoPlayback.dismiss()
+    }
+
+    private func waitForVideoPlaybackStop() async {
+        await videoPlaybackSession.stopAndWait()
+        await videoPlayback.dismissAndWait()
     }
 
     private func beginMediaNavigationDismissal() {
@@ -2748,14 +2769,14 @@ struct VaultGalleryView: View {
         mediaNavigationTask = nil
         retiringTask?.cancel()
         imagePreview.dismiss()
-        videoPlayback.dismiss()
+        requestVideoPlaybackStop()
 
         mediaNavigationTask = Task { @MainActor in
             if let retiringTask {
                 await retiringTask.value
             }
             await imagePreview.dismissAndWait()
-            await videoPlayback.dismissAndWait()
+            await waitForVideoPlaybackStop()
             guard mediaNavigationGeneration == dismissalGeneration else { return }
             clearMediaNavigationState()
         }
@@ -2776,14 +2797,14 @@ struct VaultGalleryView: View {
         mediaNavigationTask = nil
         retiringTask?.cancel()
         imagePreview.dismiss()
-        videoPlayback.dismiss()
+        requestVideoPlaybackStop()
 
         mediaNavigationTask = Task { @MainActor in
             if let retiringTask {
                 await retiringTask.value
             }
             await imagePreview.dismissAndWait()
-            await videoPlayback.dismissAndWait()
+            await waitForVideoPlaybackStop()
 
             guard !Task.isCancelled,
                   mediaNavigationGeneration == deletionGeneration,
@@ -2853,9 +2874,9 @@ struct VaultGalleryView: View {
         mediaNavigationTask = nil
         imageSaveTaskID = nil
         retiringTask?.cancel()
-        mediaNavigationQueue = nil
         imagePreview.dismiss()
-        videoPlayback.dismiss()
+        requestVideoPlaybackStop()
+        mediaNavigationQueue = nil
 
         if let retiringSaveTaskID {
             await session.cancelSensitiveTaskAndWait(retiringSaveTaskID)
@@ -2864,7 +2885,7 @@ struct VaultGalleryView: View {
             await retiringTask.value
         }
         await imagePreview.dismissAndWait()
-        await videoPlayback.dismissAndWait()
+        await waitForVideoPlaybackStop()
         isSavingPreview = false
         clearMediaNavigationState()
     }
@@ -2878,6 +2899,8 @@ struct VaultGalleryView: View {
             session.cancelSensitiveTask(imageSaveTaskID)
             self.imageSaveTaskID = nil
         }
+        imagePreview.dismiss()
+        requestVideoPlaybackStop()
         mediaNavigationQueue = nil
         mediaNavigationSources = [:]
         failedMediaID = nil
@@ -2885,8 +2908,6 @@ struct VaultGalleryView: View {
         isDeletingMedia = false
         isSavingPreview = false
         isMediaImageZoomed = false
-        imagePreview.dismiss()
-        videoPlayback.dismiss()
         previewMessage = nil
     }
 
@@ -2905,7 +2926,7 @@ struct VaultGalleryView: View {
         isSavingPreview = false
         isMediaImageZoomed = false
         imagePreview.dismiss()
-        videoPlayback.dismiss()
+        requestVideoPlaybackStop()
         previewMessage = nil
     }
 

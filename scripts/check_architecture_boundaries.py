@@ -145,8 +145,10 @@ ENCRYPTED_VIDEO_IMPORTS = {
     "KeyHollow/AddOns/EncryptedVideo/VaultEncryptedVideoPlayerView.swift": {
         "AVFoundation",
         "AVKit",
+        "Combine",
         "Foundation",
         "SwiftUI",
+        "UIKit",
     },
     "KeyHollow/AddOns/EncryptedVideo/VaultEncryptedVideoPolicy.swift": {
         "AVFoundation",
@@ -2824,40 +2826,158 @@ def main() -> int:
                     "player.usesExternalPlaybackWhileExternalScreenIsActive = false",
                     "controller.allowsPictureInPicturePlayback = false",
                     "controller.canStartPictureInPictureAutomaticallyFromInline = false",
-                    "VaultRestrictedVideoPlayerView",
+                    "controller.updatesNowPlayingInfoCenter = false",
+                    "controller.allowsVideoFrameAnalysis = false",
+                    "VaultEncryptedVideoPlaybackSession",
+                    "private let playerController: AVPlayerViewController",
+                    "private var item: AVPlayerItem?",
+                    "private var player: AVPlayer?",
+                    "playerController.videoGravity = .resizeAspect",
+                    "playerController.modalPresentationStyle = .fullScreen",
+                    "VaultEncryptedVideoPresentationAnchorView",
+                    "public func requestStop()",
+                    "public func stopAndWait() async",
+                    "willEndFullScreenPresentationWithAnimationCoordinator",
+                    "presentationControllerWillDismiss",
+                    "presentationControllerDidDismiss",
+                    "isAnchorReadyForPresentation",
                 ):
                     if required not in source:
                         violations.append(
                             f"{path}: reference-restricted playback, runtime "
-                            f"failure handling, or release acknowledgement is missing {required!r}"
+                            f"failure handling, stable modal ownership, or "
+                            f"release acknowledgement is missing {required!r}"
                         )
                 if "AVPlayerItem(url:" in source:
                     violations.append(
                         f"{path}: URL-based player creation bypasses the "
                         "reference-restricted asset factory"
                     )
-                if ".onDisappear" in swift_executable_text(source):
+                player_executable = swift_executable_text(source)
+                if ".onDisappear" in player_executable:
                     violations.append(
-                        f"{path}: inline disappearance cannot release the player; "
-                        "native fullscreen presentation temporarily hides the inline surface"
+                        f"{path}: transient SwiftUI disappearance cannot own "
+                        "terminal player release"
                     )
-                if source.count("onPlayerReleased()") != 1:
+                if ".task(id: playback.id)" in player_executable:
                     violations.append(
-                        f"{path}: the player release lease must be acknowledged "
-                        "exactly once, after the monitoring routine returns"
+                        f"{path}: playback ownership cannot be tied to a "
+                        "view-scoped task that fullscreen presentation may cancel"
                     )
-                terminal_release = re.search(
-                    r"let\s+didAcquirePlayerLease\s*=\s*await\s+"
-                    r"installAndMonitorPlayer\s*\(\s*\).*?"
-                    r"if\s+didAcquirePlayerLease\s*\{\s*"
-                    r"(?:\/\/[^\n]*\n\s*)*onPlayerReleased\s*\(\s*\)",
-                    source,
-                    re.DOTALL,
+                if "VaultRestrictedVideoPlayerView" in source:
+                    violations.append(
+                        f"{path}: the player controller must be presented "
+                        "directly instead of nested in an embedded child surface"
+                    )
+                for unavailable_callback in (
+                    "playerViewControllerWillBeginDismissalTransition",
+                    "playerViewControllerDidEndDismissalTransition",
+                ):
+                    if unavailable_callback in player_executable:
+                        violations.append(
+                            f"{path}: SDK-unavailable dismissal callback must "
+                            f"not return: {unavailable_callback}"
+                        )
+                stop_body = swift_block_body(source, "public func requestStop()")
+                release_body = swift_block_body(source, "private func releaseLeaseOnce()")
+                failure_monitor_body = swift_block_body(
+                    source, "private func startFailureMonitor("
                 )
-                if terminal_release is None:
+                failure_supervisor_body = swift_block_body(
+                    source, "private func schedulePlaybackFailure("
+                )
+                presentation_request_body = swift_block_body(
+                    source, "public func requestPresentation()"
+                )
+                anchor_update_body = swift_block_body(
+                    source, "func presentationAnchorDidUpdate("
+                )
+                dismissal_body = swift_block_body(
+                    source, "private func beginModalDismissal()"
+                )
+                if not (
+                    stop_body is not None
+                    and contains_in_order(
+                        stop_body,
+                        (
+                            "phase = .stopping",
+                            "canPresent = false",
+                            "player?.pause()",
+                            "endingMonitor?.cancel()",
+                            "await endingMonitor.value",
+                            "await dismissPlayerControllerIfNeeded()",
+                            "playerController.player = nil",
+                            "VaultEncryptedVideoPlayerLifecycle.release(player)",
+                            "item = nil",
+                            "player = nil",
+                            "releaseLeaseOnce()",
+                        ),
+                    )
+                ):
                     violations.append(
-                        f"{path}: release acknowledgement must occur only after "
-                        "the player-monitoring routine has fully returned"
+                        f"{path}: terminal teardown must reject presentation, "
+                        "pause, await monitor cancellation and modal dismissal, "
+                        "detach AVKit, then release the plaintext lease"
+                    )
+                if not (
+                    release_body is not None
+                    and contains_in_order(
+                        release_body,
+                        (
+                            "guard !didReleasePlayerLease else { return }",
+                            "didReleasePlayerLease = true",
+                            "let release = releasePlayerLease",
+                            "releasePlayerLease = nil",
+                            "release?()",
+                        ),
+                    )
+                ):
+                    violations.append(
+                        f"{path}: the player lease must use a one-shot release "
+                        "gate after all AVKit references are detached"
+                    )
+                if not (
+                    failure_monitor_body is not None
+                    and "schedulePlaybackFailure(after: playbackID)"
+                    in failure_monitor_body
+                    and "monitorTask = nil" not in failure_monitor_body
+                    and failure_supervisor_body is not None
+                    and contains_in_order(
+                        failure_supervisor_body,
+                        (
+                            "guard let completedMonitor = monitorTask",
+                            "await completedMonitor.value",
+                            "self.requestStop()",
+                            "failureHandler?(.unplayableVideo)",
+                        ),
+                    )
+                ):
+                    violations.append(
+                        f"{path}: runtime failure must hand off to a separate "
+                        "supervisor that proves the monitor returned before "
+                        "terminal teardown begins"
+                    )
+                if not (
+                    presentation_request_body is not None
+                    and "!isPresentationTransitionActive"
+                    in presentation_request_body
+                    and anchor_update_body is not None
+                    and "attachPresentationAnchor(controller)" in anchor_update_body
+                    and "attemptPendingPresentation()" not in anchor_update_body
+                    and dismissal_body is not None
+                    and contains_in_order(
+                        dismissal_body,
+                        (
+                            "hasPendingPresentation = false",
+                            "beginPresentationTransition()",
+                            "player?.pause()",
+                        ),
+                    )
+                ):
+                    violations.append(
+                        f"{path}: modal presentation must wait for the stable "
+                        "anchor appearance and reject queued replay during "
+                        "dismissal instead of automatically reopening"
                     )
 
         leaked_ui = imported & UI_FRAMEWORKS
@@ -3620,6 +3740,7 @@ def main() -> int:
         "@State private var imageSaveTaskID: UUID?",
         "@StateObject private var imagePreview = VaultImagePreviewCoordinator()",
         "@StateObject private var videoPlayback = VaultVideoPlaybackCoordinator()",
+        "@StateObject private var videoPlaybackSession =",
         "get: { mediaNavigationQueue != nil }",
         ".interactiveDismissDisabled()",
         "onSelectionChange: selectMediaNavigationItem",
@@ -3664,6 +3785,8 @@ def main() -> int:
                 "&& !isMediaImageZoomed",
                 "&& isMediaNavigationContentReady(queue)",
                 "onSelectionChange: selectMediaNavigationItem",
+                "VaultEncryptedVideoPresentationAnchorView(",
+                "session: videoPlaybackSession",
             ),
         )
     ):
@@ -3722,6 +3845,30 @@ def main() -> int:
             "KeyHollow/Photos/VaultGalleryView.swift: unified images must use "
             "exactly one observable zoomable secure image surface wired to the "
             "app-owned image lifetime coordinator with completion-driven loading"
+        )
+
+    if not (
+        media_active_content_body is not None
+        and contains_in_order(
+            media_active_content_body,
+            (
+                "case .video:",
+                "let active = videoPlayback.active",
+                "mediaNavigationPlaceholder(for: item.id)",
+                "VaultEncryptedVideoPlayerView(",
+                "session: videoPlaybackSession",
+                "playback: active.playback",
+                "onPlayerWillAttach:",
+                "videoPlayback.playerWillAttach(active.playback.id)",
+                "onPlayerReleased:",
+                "videoPlayback.playerDidRelease(active.playback.id)",
+            ),
+        )
+    ):
+        violations.append(
+            "KeyHollow/Photos/VaultGalleryView.swift: video pages must be a "
+            "poster/replay surface backed by the stable module-owned session "
+            "and the app-owned plaintext lease coordinator"
         )
 
     if not (
@@ -3885,11 +4032,11 @@ def main() -> int:
                 "mediaNavigationTask = nil",
                 "retiringTask?.cancel()",
                 "imagePreview.dismiss()",
-                "videoPlayback.dismiss()",
+                "requestVideoPlaybackStop()",
                 "mediaNavigationTask = Task { @MainActor in",
                 "await retiringTask.value",
                 "await imagePreview.dismissAndWait()",
-                "await videoPlayback.dismissAndWait()",
+                "await waitForVideoPlaybackStop()",
                 "guard !Task.isCancelled",
                 "isCurrentMediaSelection(id, generation: generation)",
                 "switch descriptor.kind",
@@ -4320,7 +4467,7 @@ def main() -> int:
             (
                 "guard mediaNavigationQueue?.selectedID == id",
                 "!isClosingMediaNavigation",
-                "videoPlayback.dismiss()",
+                "requestVideoPlaybackStop()",
                 "failedMediaID = id",
                 "previewMessage =",
             ),
@@ -4356,6 +4503,15 @@ def main() -> int:
                 "module-owned player surface",
             ),
             (
+                r"VaultEncryptedVideoPresentationAnchorView\s*\(",
+                "viewer-root modal presentation anchor",
+            ),
+            (
+                r"@StateObject\s+private\s+var\s+videoPlaybackSession\s*=\s*"
+                r"VaultEncryptedVideoPlaybackSession\s*\(\s*\)",
+                "stable module-owned playback session",
+            ),
+            (
                 r"await\s+videoPlayback\.dismissAndWait\s*\(\s*\)",
                 "awaited playback cleanup",
             ),
@@ -4370,6 +4526,14 @@ def main() -> int:
             (
                 r"onPlayerReleased\s*:\s*\{",
                 "player release acknowledgement wiring",
+            ),
+            (
+                r"videoPlaybackSession\.requestStop\s*\(\s*\)",
+                "module-owned terminal stop",
+            ),
+            (
+                r"await\s+videoPlaybackSession\.stopAndWait\s*\(\s*\)",
+                "awaited module-owned terminal stop",
             ),
         ):
             if re.search(pattern, gallery_executable) is None:
@@ -4493,11 +4657,11 @@ def main() -> int:
                     "mediaNavigationTask = nil",
                     "retiringTask?.cancel()",
                     "imagePreview.dismiss()",
-                    "videoPlayback.dismiss()",
+                    "requestVideoPlaybackStop()",
                     "mediaNavigationTask = Task { @MainActor in",
                     "await retiringTask.value",
                     "await imagePreview.dismissAndWait()",
-                    "await videoPlayback.dismissAndWait()",
+                    "await waitForVideoPlaybackStop()",
                     "guard mediaNavigationGeneration == dismissalGeneration else { return }",
                     "clearMediaNavigationState()",
                 ),
@@ -4543,10 +4707,10 @@ def main() -> int:
                     "mediaNavigationTask = nil",
                     "retiringTask?.cancel()",
                     "imagePreview.dismiss()",
-                    "videoPlayback.dismiss()",
+                    "requestVideoPlaybackStop()",
                     "await retiringTask.value",
                     "await imagePreview.dismissAndWait()",
-                    "await videoPlayback.dismissAndWait()",
+                    "await waitForVideoPlaybackStop()",
                     "guard !Task.isCancelled",
                     "mediaNavigationQueue?.selectedID == deletingID",
                     "await session.performSensitiveTask { _ in",
@@ -4576,14 +4740,14 @@ def main() -> int:
                     "mediaNavigationTask = nil",
                     "imageSaveTaskID = nil",
                     "retiringTask?.cancel()",
-                    "mediaNavigationQueue = nil",
                     "imagePreview.dismiss()",
-                    "videoPlayback.dismiss()",
+                    "requestVideoPlaybackStop()",
+                    "mediaNavigationQueue = nil",
                     "if let retiringSaveTaskID",
                     "await session.cancelSensitiveTaskAndWait(retiringSaveTaskID)",
                     "await retiringTask.value",
                     "await imagePreview.dismissAndWait()",
-                    "await videoPlayback.dismissAndWait()",
+                    "await waitForVideoPlaybackStop()",
                     "isSavingPreview = false",
                     "clearMediaNavigationState()",
                 ),
@@ -4607,11 +4771,11 @@ def main() -> int:
                     "if let imageSaveTaskID",
                     "session.cancelSensitiveTask(imageSaveTaskID)",
                     "self.imageSaveTaskID = nil",
+                    "imagePreview.dismiss()",
+                    "requestVideoPlaybackStop()",
                     "mediaNavigationQueue = nil",
                     "mediaNavigationSources = [:]",
                     "isSavingPreview = false",
-                    "imagePreview.dismiss()",
-                    "videoPlayback.dismiss()",
                 ),
             )
         ):
@@ -4635,7 +4799,7 @@ def main() -> int:
                     "mediaNavigationSources = [:]",
                     "isSavingPreview = false",
                     "imagePreview.dismiss()",
-                    "videoPlayback.dismiss()",
+                    "requestVideoPlaybackStop()",
                 ),
             )
         ):
