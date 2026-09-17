@@ -89,7 +89,7 @@ enum VaultEncryptedVideoPlayerSecurityPolicy {
 @MainActor
 private final class VaultRestrictedVideoPlayerContainerViewController:
     UIViewController,
-    AVPlayerViewControllerDelegate
+    @MainActor AVPlayerViewControllerDelegate
 {
     private let playerController = AVPlayerViewController()
     private var fullscreenLifecycle = VaultEncryptedVideoNativeFullscreenLifecycle()
