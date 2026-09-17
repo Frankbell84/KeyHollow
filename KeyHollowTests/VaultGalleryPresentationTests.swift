@@ -31,6 +31,181 @@ final class VaultGalleryPresentationTests: XCTestCase {
         )
     }
 
+    func testMoveDestinationCatalogShowsOnlyOneFolderLevelAtATime() {
+        let alpha = UUID()
+        let zulu = UUID()
+        let nested = UUID()
+        let catalog = VaultMoveDestinationCatalog(
+            folders: [
+                VaultMoveDestinationFolder(id: zulu, parentID: nil, name: "Zulu"),
+                VaultMoveDestinationFolder(id: nested, parentID: alpha, name: "Nested"),
+                VaultMoveDestinationFolder(id: alpha, parentID: nil, name: "Alpha"),
+            ],
+            rootIsValid: true,
+            validFolderIDs: [alpha, zulu, nested]
+        )
+
+        XCTAssertEqual(catalog.childFolders(of: nil).map(\.id), [alpha, zulu])
+        XCTAssertEqual(catalog.childFolders(of: alpha).map(\.id), [nested])
+        XCTAssertEqual(catalog.title(for: nil), "Vault Root")
+        XCTAssertEqual(catalog.title(for: nested), "Nested")
+    }
+
+    func testMoveDestinationCatalogSeparatesBrowsingFromMovePermission() {
+        let currentFolder = UUID()
+        let childDestination = UUID()
+        let catalog = VaultMoveDestinationCatalog(
+            folders: [
+                VaultMoveDestinationFolder(
+                    id: currentFolder,
+                    parentID: nil,
+                    name: "Current"
+                ),
+                VaultMoveDestinationFolder(
+                    id: childDestination,
+                    parentID: currentFolder,
+                    name: "Child"
+                ),
+            ],
+            rootIsValid: true,
+            validFolderIDs: [childDestination]
+        )
+
+        XCTAssertFalse(catalog.canMove(to: currentFolder))
+        XCTAssertTrue(catalog.canBrowse(folderID: currentFolder))
+        XCTAssertTrue(catalog.canMove(to: childDestination))
+        XCTAssertTrue(catalog.canMove(to: nil))
+    }
+
+    func testMoveDestinationCatalogBuildsSingleAndMultiItemPermissions() {
+        let first = UUID()
+        let second = UUID()
+        let folders = [
+            VaultMoveDestinationFolder(id: first, parentID: nil, name: "First"),
+            VaultMoveDestinationFolder(id: second, parentID: nil, name: "Second"),
+        ]
+
+        let rootItem = VaultMoveDestinationCatalog(
+            folders: folders,
+            currentFolderIDs: [nil]
+        )
+        XCTAssertFalse(rootItem.canMove(to: nil))
+        XCTAssertTrue(rootItem.canMove(to: first))
+        XCTAssertTrue(rootItem.canMove(to: second))
+
+        let sameFolderBatch = VaultMoveDestinationCatalog(
+            folders: folders,
+            currentFolderIDs: [first, first]
+        )
+        XCTAssertTrue(sameFolderBatch.canMove(to: nil))
+        XCTAssertFalse(sameFolderBatch.canMove(to: first))
+        XCTAssertTrue(sameFolderBatch.canMove(to: second))
+
+        let mixedLocationBatch = VaultMoveDestinationCatalog(
+            folders: folders,
+            currentFolderIDs: [nil, first]
+        )
+        XCTAssertTrue(mixedLocationBatch.canMove(to: nil))
+        XCTAssertTrue(mixedLocationBatch.canMove(to: first))
+        XCTAssertTrue(mixedLocationBatch.canMove(to: second))
+    }
+
+    func testMoveDestinationCatalogKeepsDuplicateNamesScopedByFolderID() {
+        let left = UUID()
+        let right = UUID()
+        let leftShared = UUID()
+        let rightShared = UUID()
+        let catalog = VaultMoveDestinationCatalog(
+            folders: [
+                VaultMoveDestinationFolder(id: left, parentID: nil, name: "Left"),
+                VaultMoveDestinationFolder(id: right, parentID: nil, name: "Right"),
+                VaultMoveDestinationFolder(id: leftShared, parentID: left, name: "Shared"),
+                VaultMoveDestinationFolder(id: rightShared, parentID: right, name: "Shared"),
+            ],
+            rootIsValid: true,
+            validFolderIDs: [left, right, leftShared, rightShared]
+        )
+
+        XCTAssertEqual(catalog.childFolders(of: left).map(\.id), [leftShared])
+        XCTAssertEqual(catalog.childFolders(of: right).map(\.id), [rightShared])
+        XCTAssertEqual(catalog.title(for: leftShared), "Shared")
+        XCTAssertEqual(catalog.title(for: rightShared), "Shared")
+        XCTAssertNotEqual(leftShared, rightShared)
+    }
+
+    func testMoveDestinationCatalogSupportsEightLevelDrillDown() {
+        let identifiers = (0..<8).map { _ in UUID() }
+        let folders = identifiers.enumerated().map { offset, identifier in
+            VaultMoveDestinationFolder(
+                id: identifier,
+                parentID: offset == 0 ? nil : identifiers[offset - 1],
+                name: "Level \(offset + 1)"
+            )
+        }
+        let catalog = VaultMoveDestinationCatalog(
+            folders: folders,
+            rootIsValid: true,
+            validFolderIDs: Set(identifiers)
+        )
+
+        var parentID: UUID?
+        for expectedID in identifiers {
+            let children = catalog.childFolders(of: parentID)
+            XCTAssertEqual(children.map(\.id), [expectedID])
+            XCTAssertTrue(catalog.canBrowse(folderID: expectedID))
+            parentID = expectedID
+        }
+        XCTAssertTrue(catalog.childFolders(of: parentID).isEmpty)
+    }
+
+    func testMoveDestinationCatalogDisablesEntireForbiddenSubtree() {
+        let forbiddenParent = UUID()
+        let forbiddenChild = UUID()
+        let validSibling = UUID()
+        let catalog = VaultMoveDestinationCatalog(
+            folders: [
+                VaultMoveDestinationFolder(
+                    id: forbiddenParent,
+                    parentID: nil,
+                    name: "Source"
+                ),
+                VaultMoveDestinationFolder(
+                    id: forbiddenChild,
+                    parentID: forbiddenParent,
+                    name: "Source Child"
+                ),
+                VaultMoveDestinationFolder(
+                    id: validSibling,
+                    parentID: nil,
+                    name: "Destination"
+                ),
+            ],
+            rootIsValid: false,
+            validFolderIDs: [validSibling]
+        )
+
+        XCTAssertFalse(catalog.canBrowse(folderID: forbiddenParent))
+        XCTAssertFalse(catalog.canBrowse(folderID: forbiddenChild))
+        XCTAssertTrue(catalog.canBrowse(folderID: validSibling))
+        XCTAssertFalse(catalog.canMove(to: nil))
+    }
+
+    func testMoveDestinationCatalogTerminatesOnMalformedCycle() {
+        let first = UUID()
+        let second = UUID()
+        let catalog = VaultMoveDestinationCatalog(
+            folders: [
+                VaultMoveDestinationFolder(id: first, parentID: second, name: "First"),
+                VaultMoveDestinationFolder(id: second, parentID: first, name: "Second"),
+            ],
+            rootIsValid: false,
+            validFolderIDs: []
+        )
+
+        XCTAssertFalse(catalog.canBrowse(folderID: first))
+        XCTAssertFalse(catalog.canBrowse(folderID: second))
+    }
+
     func testCatalogSearchFiltersVisibleSnapshotAndMediaQueue() throws {
         let importedAt = Date(timeIntervalSinceReferenceDate: 800)
         let photo = VaultPhotoRecord(

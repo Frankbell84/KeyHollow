@@ -17,11 +17,17 @@ private enum VaultImportMode {
     case move
 }
 
-private struct VaultFolderDestination: Identifiable {
-    let folderID: UUID?
-    let title: String
+private enum VaultMoveTarget {
+    case item(VaultPresentedContentReference)
+    case selection(Set<VaultPresentedContentReference>)
+    case folder(VaultFolderRecord)
+}
 
-    var id: String { folderID?.uuidString ?? "vault-root" }
+private struct VaultMoveRequest: Identifiable {
+    let id = UUID()
+    let target: VaultMoveTarget
+    let prompt: String
+    let catalog: VaultMoveDestinationCatalog
 }
 
 private extension VaultCatalogSortOrder {
@@ -641,7 +647,7 @@ struct VaultGalleryView: View {
     @State private var folderBeingRenamed: VaultFolderRecord?
     @State private var folderNameDraft = ""
     @State private var folderPendingDeletion: VaultFolderRecord?
-    @State private var folderPendingMove: VaultFolderRecord?
+    @State private var moveRequest: VaultMoveRequest?
     @State private var importMode: VaultImportMode = .copy
     @State private var isSelecting = false
     @State private var selection = VaultGallerySelection()
@@ -804,8 +810,23 @@ struct VaultGalleryView: View {
         }
     }
 
-    private var galleryAlertView: some View {
+    private var galleryMoveDestinationView: some View {
         galleryPresentationView
+            .sheet(item: $moveRequest) { request in
+                VaultMoveDestinationPicker(
+                    catalog: request.catalog,
+                    prompt: request.prompt,
+                    cancel: { moveRequest = nil },
+                    move: { destinationID in
+                        moveRequest = nil
+                        performMove(request.target, to: destinationID)
+                    }
+                )
+            }
+    }
+
+    private var galleryAlertView: some View {
+        galleryMoveDestinationView
         .confirmationDialog(
             "Delete Selected Items?",
             isPresented: $showingDeleteSelectionConfirmation,
@@ -851,28 +872,6 @@ struct VaultGalleryView: View {
         } message: {
             Text("The folder will be removed. Its direct items and child folders will return to the same parent location and will not be deleted.")
         }
-        .confirmationDialog(
-            "Move Folder",
-            isPresented: Binding(
-                get: { folderPendingMove != nil },
-                set: { if !$0 { folderPendingMove = nil } }
-            ),
-            titleVisibility: .visible
-        ) {
-            ForEach(folderParentDestinations) { destination in
-                Button(destination.title) {
-                    if let folder = folderPendingMove {
-                        moveFolder(folder, to: destination.folderID)
-                    }
-                    folderPendingMove = nil
-                }
-            }
-            Button("Cancel", role: .cancel) {
-                folderPendingMove = nil
-            }
-        } message: {
-            Text("Choose a parent location. Protected photos and files do not move on disk.")
-        }
         .alert("KeyHollow", isPresented: Binding(
             get: { message != nil },
             set: { if !$0 { message = nil } }
@@ -896,7 +895,7 @@ struct VaultGalleryView: View {
             activeFolderID = nil
             folderBeingRenamed = nil
             folderPendingDeletion = nil
-            folderPendingMove = nil
+            moveRequest = nil
             folderNameDraft = ""
             showingFolderEditor = false
             searchText = ""
@@ -917,7 +916,7 @@ struct VaultGalleryView: View {
             searchText = ""
             folderBeingRenamed = nil
             folderPendingDeletion = nil
-            folderPendingMove = nil
+            moveRequest = nil
             folderNameDraft = ""
             showingFolderEditor = false
             cancelMediaNavigationForLifecycle()
@@ -1377,25 +1376,8 @@ struct VaultGalleryView: View {
     }
 
     private var selectionMoveAction: some View {
-        Menu {
-            if activeFolderID != nil {
-                Button {
-                    moveSelectedItems(to: nil)
-                } label: {
-                    Label("Vault Root", systemImage: "rectangle.grid.3x2")
-                }
-            }
-
-            ForEach(allFolderDestinations) { destination in
-                if let folderID = destination.folderID,
-                   folderID != activeFolderID {
-                    Button {
-                        moveSelectedItems(to: folderID)
-                    } label: {
-                        Label(destination.title, systemImage: "folder")
-                    }
-                }
-            }
+        Button {
+            requestSelectionMove()
         } label: {
             Label("Move", systemImage: "folder")
         }
@@ -1537,49 +1519,14 @@ struct VaultGalleryView: View {
         return segments
     }
 
-    private var folderParentDestinations: [VaultFolderDestination] {
-        guard let folder = folderPendingMove,
-              let hierarchy = nestedFolderHierarchy,
-              let destinations = try? hierarchy.validParentDestinations(for: folder.id) else {
-            return []
-        }
-        return destinations.map { destinationID in
-            VaultFolderDestination(
-                folderID: destinationID,
-                title: destinationID.map {
-                    folderPathTitle($0, using: hierarchy)
-                } ?? "Vault Root"
+    private var moveDestinationFolders: [VaultMoveDestinationFolder] {
+        folderManifest.folders.map {
+            VaultMoveDestinationFolder(
+                id: $0.id,
+                parentID: $0.parentID,
+                name: $0.name
             )
         }
-    }
-
-    private var allFolderDestinations: [VaultFolderDestination] {
-        guard let hierarchy = nestedFolderHierarchy else {
-            return sortedFolders.map {
-                VaultFolderDestination(
-                    folderID: $0.id,
-                    title: VaultFolderPathPresentation.destinationTitle(path: [$0.name])
-                )
-            }
-        }
-        return sortedFolders.map {
-            VaultFolderDestination(
-                folderID: $0.id,
-                title: folderPathTitle($0.id, using: hierarchy)
-            )
-        }
-    }
-
-    private func folderPathTitle(
-        _ folderID: UUID,
-        using hierarchy: VaultNestedFolderHierarchy
-    ) -> String {
-        guard let path = try? hierarchy.breadcrumb(to: folderID) else {
-            let fallback = folderManifest.folders.first(where: { $0.id == folderID })?.name
-                ?? "Folder"
-            return VaultFolderPathPresentation.destinationTitle(path: [fallback])
-        }
-        return VaultFolderPathPresentation.destinationTitle(path: path.map(\.name))
     }
 
     private var galleryTitle: String {
@@ -1635,7 +1582,7 @@ struct VaultGalleryView: View {
     }
 
     @ViewBuilder
-    private func moveDestinationMenu(
+    private func moveDestinationAction(
         for item: VaultPresentedContentReference
     ) -> some View {
         let currentFolderID = assignedFolderID(for: item)
@@ -1643,25 +1590,8 @@ struct VaultGalleryView: View {
             || sortedFolders.contains { $0.id != currentFolderID }
 
         if hasDestination {
-            Menu {
-                if currentFolderID != nil {
-                    Button {
-                        move(item, to: nil)
-                    } label: {
-                        Label("Vault Root", systemImage: "rectangle.grid.3x2")
-                    }
-                }
-
-                ForEach(allFolderDestinations) { destination in
-                    if let folderID = destination.folderID,
-                       folderID != currentFolderID {
-                        Button {
-                            move(item, to: folderID)
-                        } label: {
-                            Label(destination.title, systemImage: "folder")
-                        }
-                    }
-                }
+            Button {
+                requestItemMove(item)
             } label: {
                 Label("Move", systemImage: "folder")
             }
@@ -1714,7 +1644,7 @@ struct VaultGalleryView: View {
                 Label("Select", systemImage: "checkmark.circle")
             }
 
-            moveDestinationMenu(for: presentedReference(for: item))
+            moveDestinationAction(for: presentedReference(for: item))
 
             Button("Delete from Vault", role: .destructive) {
                 delete(record)
@@ -1734,7 +1664,7 @@ struct VaultGalleryView: View {
                 Label("Select", systemImage: "checkmark.circle")
             }
 
-            moveDestinationMenu(for: presentedReference(for: item))
+            moveDestinationAction(for: presentedReference(for: item))
 
             Button {
                 showingVaultFiles = true
@@ -1923,8 +1853,74 @@ struct VaultGalleryView: View {
         folderPendingDeletion = folderManifest.folders.first { $0.id == id }
     }
 
+    private func requestItemMove(_ item: VaultPresentedContentReference) {
+        let catalog = moveCatalog(for: Set([item]))
+        guard catalog.rootIsValid || !catalog.validFolderIDs.isEmpty else { return }
+        moveRequest = VaultMoveRequest(
+            target: .item(item),
+            prompt: "Choose a destination for this item.",
+            catalog: catalog
+        )
+    }
+
+    private func requestSelectionMove() {
+        let items = selectedPresentedReferences
+        guard !items.isEmpty else { return }
+        let catalog = moveCatalog(for: items)
+        guard catalog.rootIsValid || !catalog.validFolderIDs.isEmpty else { return }
+        let noun = items.count == 1 ? "item" : "items"
+        moveRequest = VaultMoveRequest(
+            target: .selection(items),
+            prompt: "Choose a destination for \(items.count) selected \(noun).",
+            catalog: catalog
+        )
+    }
+
+    private func moveCatalog(
+        for items: Set<VaultPresentedContentReference>
+    ) -> VaultMoveDestinationCatalog {
+        return VaultMoveDestinationCatalog(
+            folders: moveDestinationFolders,
+            currentFolderIDs: items.map { assignedFolderID(for: $0) }
+        )
+    }
+
     private func requestFolderMove(id: UUID) {
-        folderPendingMove = folderManifest.folders.first { $0.id == id }
+        guard let folder = folderManifest.folders.first(where: { $0.id == id }) else {
+            return
+        }
+        guard let hierarchy = nestedFolderHierarchy,
+              let destinations = try? hierarchy.validParentDestinations(for: id) else {
+            message = "Folder destinations are temporarily unavailable. Protected vault contents were not changed."
+            return
+        }
+        let validFolderIDs = Set(destinations.compactMap { $0 })
+        let rootIsValid = destinations.contains { $0 == nil }
+        guard rootIsValid || !validFolderIDs.isEmpty else {
+            message = "There is no other valid location for this folder."
+            return
+        }
+
+        moveRequest = VaultMoveRequest(
+            target: .folder(folder),
+            prompt: "Choose a new parent for “\(folder.name)”.",
+            catalog: VaultMoveDestinationCatalog(
+                folders: moveDestinationFolders,
+                rootIsValid: rootIsValid,
+                validFolderIDs: validFolderIDs
+            )
+        )
+    }
+
+    private func performMove(_ target: VaultMoveTarget, to folderID: UUID?) {
+        switch target {
+        case .item(let item):
+            move(item, to: folderID)
+        case .selection(let items):
+            moveSelectedItems(items, to: folderID)
+        case .folder(let folder):
+            moveFolder(folder, to: folderID)
+        }
     }
 
     private func saveFolderName() {
@@ -2031,8 +2027,10 @@ struct VaultGalleryView: View {
         if taskID == nil { isWorking = false }
     }
 
-    private func moveSelectedItems(to folderID: UUID?) {
-        let items = selectedPresentedReferences
+    private func moveSelectedItems(
+        _ items: Set<VaultPresentedContentReference>,
+        to folderID: UUID?
+    ) {
         guard let presentationStore, !items.isEmpty, !isWorking else { return }
         let destinationName = folderID.flatMap { destinationID in
             folderManifest.folders.first { $0.id == destinationID }?.name
