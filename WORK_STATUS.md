@@ -7,6 +7,17 @@ evidence remains in `docs/PROJECT_CHECKPOINT.md`.
 
 ## Provenance
 
+- PR [#80](https://github.com/Frankbell84/KeyHollow/pull/80) merged the exact
+  reviewed portrait-fullscreen correction head
+  `00453af239719bd6b91006ab5ccbb34300edfdfd` through regular merge commit
+  `99471fd64dd75fc13d0d14e9501f205a1aeba24f`; both trees are identical.
+- Exact merged-main CI run
+  [#35237468942](https://github.com/Frankbell84/KeyHollow/actions/runs/35237468942)
+  passed the complete build-and-test lane and Swift CodeQL. Security-test
+  artifact `10503947057` has SHA-256
+  `816176222203a8ea9a2b2382b528d87f4b8a2617f95bdc74062c14d609bfa23c`;
+  simulator artifact `10504571558` has SHA-256
+  `9522fdb59ee15c9ddc4f9b03d295fffe1824dd5373df39dde538542fe076dd51`.
 - PR [#79](https://github.com/Frankbell84/KeyHollow/pull/79) merged the exact
   reviewed Build 50 packaging head
   `45cb539c8193e6f172486a16758e76de5a0237b0` through regular merge commit
@@ -219,19 +230,19 @@ and assigned only to `KeyHollow Internal`. Its Files-style nested move picker
 passed physical-device testing, but the portrait-video fullscreen playback
 failure above blocks acceptance and wider distribution.
 
-The current task is an isolated encrypted-video presentation correction on
-`fix/build50-portrait-fullscreen-playback`, created directly from exact Build 50
-`main`. Apple documents that AVPlayerViewController's fullscreen delegate entry
-callback is not delivered when the player is embedded as a child of an already-
-presented controller. Build 50 incorrectly relied on that callback to prevent
-representable dismantle from detaching the live player. The correction removes
-that impossible callback dependency and leaves transition-time attachment to
-AVKit while preserving the established owner-controlled pause, current-item
-release, lease acknowledgement, and protected-plaintext cleanup boundary.
+The portrait-fullscreen correction is now merged to exact protected `main`
+commit `99471fd64dd75fc13d0d14e9501f205a1aeba24f`, and its exact-main build,
+security tests, and Swift CodeQL are green. The current task is the isolated
+Build 51 release candidate on `release/build51-portrait-fullscreen-playback`,
+created directly from that commit. Its packaging changes only both product build
+numbers from 50 to 51, refreshes the canonical `project.yml` security pin, and
+records exact release evidence.
 
 Protected records, cryptography, archive formats, media payloads, hierarchy
 metadata, ciphertext, external playback, and Picture in Picture remain
-unchanged. Build 50 remains Internal-only and must not be promoted.
+unchanged. Build 50 remains Internal-only and must not be promoted; Build 48
+remains the accepted rollback and comparison baseline until Build 51 passes the
+focused physical-device plan.
 
 ## Unified Media Navigation candidate
 
@@ -680,14 +691,16 @@ only boundary.
 1. Preserve exact Build 50 source
    `a0d10a6b0d2a4847f233286b4eed4836f54223fa` as the failed-candidate rollback
    point and preserve Build 48 as the accepted comparison baseline.
-2. Publish only the narrow portrait-fullscreen correction through a draft pull
+2. Publish the exact reviewed Build 51 packaging head through a draft pull
    request and require the complete macOS build, test, security, and Swift
    CodeQL gates.
-3. Merge only the exact reviewed correction through protected `main`, then
-   require complete exact-main CI before preparing Build 51 packaging.
-4. Require Build 51 release-branch CI, protected merge, exact-main CI, and a
-   no-upload signing preflight before any separately controlled Internal upload.
-5. Execute the focused portrait-video checks in `docs/DEVICE_TEST_PLAN.md`,
+3. Merge only that exact packaging head through protected `main`, then require
+   complete exact-main CI.
+4. Run the Build 51 no-upload signing preflight from the exact resulting
+   protected-main commit.
+5. Only after that preflight passes, authorize the signed Build 51 upload by
+   exact main commit and assign it to `KeyHollow Internal` only.
+6. Execute the focused portrait-video checks in `docs/DEVICE_TEST_PLAN.md`,
    including paused and playing fullscreen entry, Play-button recovery,
    rotation, seeking, exit/re-entry, background/lock, and secure cleanup. Do
    not expand to Family or external testers without a separate decision.
