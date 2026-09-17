@@ -331,6 +331,49 @@ that state occurs even once.
   temporary playback files are removed only through the established owner-
   release boundary.
 
+## Build 52 stable portrait playback session
+
+Run these checks only after the stable-session repair passes automated review
+and is packaged under the next unused Internal build number. Build 51 is a
+failed candidate: retaining the player during representable dismantle was not
+enough because playback ownership still followed a transient SwiftUI task and
+an embedded child controller still initiated fullscreen. Reject this candidate
+if a blank player, inert Play control, duplicate modal, automatic reopen loop,
+or protected-file cleanup race occurs even once.
+
+- Open portrait `.mov` and `.mp4` fixtures from the gallery. Confirm KeyHollow
+  presents one native full-screen AVKit player after the viewer-root transition
+  settles. Pause before pressing Play, wait several seconds, then press Play;
+  picture, audio, controls, and playback time must all respond normally.
+- Use AVKit **Done**. Confirm it returns to the same selected video page and a
+  clear `Play Full Screen` control, without dismissing the outer image/video
+  pager and without automatically reopening AVKit. Press the explicit control
+  and require the same playback session to reopen normally.
+- Repeat the open, pause, Done, and explicit-reopen cycle at least ten times on
+  each portrait fixture. Include rapid but valid taps after each completed
+  transition. Require one modal at a time, no skipped response, no black or
+  blank surface, no inert control, and no duplicated audio.
+- While playing, seek forward and backward, rotate portrait to landscape and
+  back, pause, resume, use Done, and reopen. Repeat with square and landscape
+  fixtures to protect the accepted paths.
+- After Done, swipe video to image to video in both directions and use image
+  zoom. Confirm the outer pager preserves the selected item, thumbnails and
+  adjacent media remain stable, and returning to a video gives one explicit
+  playback route rather than a stale AVKit surface.
+- Dismiss the outer viewer while AVKit is open and while its presentation or
+  dismissal animation is settling. Repeat while locking, backgrounding,
+  changing vaults, and triggering session replacement. Confirm new presentation
+  is rejected immediately, audio pauses, and the UI never resurrects the player.
+- After each terminal path, confirm privacy shielding and reauthentication are
+  unchanged. Exercise a disposable video through repeated open/dismiss cycles
+  and confirm the protected temporary export is retained while replay remains
+  available, then removed only after AVKit and its player item are fully
+  detached. Confirm external playback and Picture in Picture remain unavailable.
+- During playback and while paused, check Control Center and the lock screen;
+  KeyHollow's protected media must not publish a Now Playing card or remote
+  controls. Long-press a paused frame and confirm iOS does not expose visual
+  lookup, subject lifting, or copy/analyze affordances.
+
 ## Backup Verification Center
 
 Run these checks with a TestFlight-delivered candidate and disposable test

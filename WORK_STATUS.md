@@ -7,6 +7,22 @@ evidence remains in `docs/PROJECT_CHECKPOINT.md`.
 
 ## Provenance
 
+- PR [#81](https://github.com/Frankbell84/KeyHollow/pull/81) merged the exact
+  reviewed Build 51 packaging head
+  `cb70f3c77d121b80b154faa24e58d38c3892d064` through protected `main` commit
+  `9578136b74cbda7c5221c71cf7d357fa087b8a98`.
+- Physical-device testing of the Internal Build 51 candidate reproduced the
+  release blocker: a portrait video can still enter a blank AVKit surface with
+  an inert Play control unless the user times actions around the transition.
+  Build 51 is therefore failed and unaccepted; Build 48 remains the accepted
+  rollback and comparison baseline.
+- The remaining failure is isolated to presentation ownership, not encryption
+  or storage. Build 51 retained the player during representable dismantle, but
+  the player item, player, and controller were still created under a transient
+  SwiftUI page/task and fullscreen was still initiated from an embedded child
+  controller. The current repair moves that graph into a stable module-owned
+  session and presents the owned AVPlayerViewController directly from one
+  viewer-root UIKit anchor.
 - PR [#80](https://github.com/Frankbell84/KeyHollow/pull/80) merged the exact
   reviewed portrait-fullscreen correction head
   `00453af239719bd6b91006ab5ccbb34300edfdfd` through regular merge commit
@@ -224,25 +240,27 @@ evidence remains in `docs/PROJECT_CHECKPOINT.md`.
 
 Build 48 remains the physically accepted rollback and comparison baseline at
 exact protected `main` commit
-`fd2f39f079f3dca853f09e2d67caa8a5cd2eab5c`. Build 50 is safely uploaded from
-exact protected `main` commit `a0d10a6b0d2a4847f233286b4eed4836f54223fa`
-and assigned only to `KeyHollow Internal`. Its Files-style nested move picker
-passed physical-device testing, but the portrait-video fullscreen playback
-failure above blocks acceptance and wider distribution.
+`fd2f39f079f3dca853f09e2d67caa8a5cd2eab5c`. Build 50's Files-style nested
+move picker passed physical-device testing, but Build 50 and the attempted
+Build 51 portrait correction both remain Internal-only and unaccepted because
+the portrait fullscreen failure above is reproducible.
 
-The portrait-fullscreen correction is now merged to exact protected `main`
-commit `99471fd64dd75fc13d0d14e9501f205a1aeba24f`, and its exact-main build,
-security tests, and Swift CodeQL are green. The current task is the isolated
-Build 51 release candidate on `release/build51-portrait-fullscreen-playback`,
-created directly from that commit. Its packaging changes only both product build
-numbers from 50 to 51, refreshes the canonical `project.yml` security pin, and
-records exact release evidence.
+The current task is an isolated repair on
+`fix/build51-portrait-fullscreen-session`, based directly on exact Build 51
+`main` commit `9578136b74cbda7c5221c71cf7d357fa087b8a98`. The correction replaces the
+transient embedded-player lifecycle with one stable module-owned playback
+session, one viewer-root UIKit presentation anchor, direct modal full-screen
+AVKit presentation, explicit replay after Done, and ordered terminal release.
+It does not bump either product build number; packaging begins only after local
+guards, pull-request CI, and review of the implementation are green.
 
 Protected records, cryptography, archive formats, media payloads, hierarchy
-metadata, ciphertext, external playback, and Picture in Picture remain
-unchanged. Build 50 remains Internal-only and must not be promoted; Build 48
-remains the accepted rollback and comparison baseline until Build 51 passes the
-focused physical-device plan.
+metadata, and ciphertext remain unchanged. External playback, Picture in
+Picture, system Now Playing publication, and paused-frame visual analysis
+remain disabled. The application coordinator still owns protected plaintext
+and cannot discard it until the module-owned session has cancelled its monitor,
+dismissed AVKit, detached controller/player/item, and released its one-shot
+lease.
 
 ## Unified Media Navigation candidate
 
@@ -688,22 +706,24 @@ only boundary.
 
 ## Next action
 
-1. Preserve exact Build 50 source
-   `a0d10a6b0d2a4847f233286b4eed4836f54223fa` as the failed-candidate rollback
-   point and preserve Build 48 as the accepted comparison baseline.
-2. Publish the exact reviewed Build 51 packaging head through a draft pull
-   request and require the complete macOS build, test, security, and Swift
-   CodeQL gates.
-3. Merge only that exact packaging head through protected `main`, then require
-   complete exact-main CI.
-4. Run the Build 51 no-upload signing preflight from the exact resulting
-   protected-main commit.
-5. Only after that preflight passes, authorize the signed Build 51 upload by
-   exact main commit and assign it to `KeyHollow Internal` only.
-6. Execute the focused portrait-video checks in `docs/DEVICE_TEST_PLAN.md`,
-   including paused and playing fullscreen entry, Play-button recovery,
-   rotation, seeking, exit/re-entry, background/lock, and secure cleanup. Do
-   not expand to Family or external testers without a separate decision.
+1. Preserve exact Build 51 source
+   `9578136b74cbda7c5221c71cf7d357fa087b8a98` as the failed-candidate evidence
+   point and preserve Build 48 as the accepted rollback/comparison baseline.
+2. Complete the stable playback-session repair without changing build numbers,
+   then run architecture, privacy, release-hygiene, and focused lifecycle tests.
+3. Publish only the reviewed repair head through a draft pull request and
+   require the complete macOS build, unit/integration, security, and Swift
+   CodeQL gates before protected merge.
+4. After exact merged-main CI passes, prepare the next unused Internal build
+   number in a separate release-only change and run a no-upload signing
+   preflight from the exact resulting protected-main commit.
+5. Only after that preflight passes, authorize an exact-commit signed upload to
+   `KeyHollow Internal` only.
+6. Execute the stable-session checks in `docs/DEVICE_TEST_PLAN.md`. A native
+   Done must return to the selected video poster without an automatic reopen;
+   explicit replay must work, and the blank/inert Play state is a rejection if
+   it occurs even once. Do not expand to Family or external testers without a
+   separate decision.
 
 ## Frank's decisions required
 
