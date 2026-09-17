@@ -7,22 +7,57 @@ evidence remains in `docs/PROJECT_CHECKPOINT.md`.
 
 ## Provenance
 
+- PR [#82](https://github.com/Frankbell84/KeyHollow/pull/82) merged the exact
+  reviewed stable playback-session repair head
+  `fa9976e13ab15bac48edea37133a8ceed5d45f83` through protected `main` commit
+  `837874744fcd31834fd9dba925212e4edf215b30`; both resolve to exact tree
+  `6eaf8c95f8d65b0dd0975d8ded369b39f7656d59`.
+- PR CI run
+  [#35271954895](https://github.com/Frankbell84/KeyHollow/actions/runs/35271954895)
+  passed the complete build-and-test lane and Swift CodeQL. Security-test
+  artifact `10519203674` has SHA-256
+  `722c543e6c86c57eb18c43c84e916361e4bc83cd1daae25300de5331fd98f0ce`;
+  simulator artifact `10519588211` has SHA-256
+  `253097fe5c684eef1ffa5f6eb5743fff42d5883f5141302ab1f4c1f3af7bdbea`.
+- Exact merged-main CI run
+  [#35274451814](https://github.com/Frankbell84/KeyHollow/actions/runs/35274451814)
+  passed the complete build-and-test lane and Swift CodeQL. Security-test
+  artifact `10520775506` has SHA-256
+  `db96022b218ba6a6e74dd72f0eba1bcdb8d1fd878b19a8808400866c2dd5e0e4`;
+  simulator artifact `10520540741` has SHA-256
+  `1e3457f40908faa033f0b7a3a1461d421d42d400c1c5d25fd723fc72e0975731`.
 - PR [#81](https://github.com/Frankbell84/KeyHollow/pull/81) merged the exact
   reviewed Build 51 packaging head
   `cb70f3c77d121b80b154faa24e58d38c3892d064` through protected `main` commit
   `9578136b74cbda7c5221c71cf7d357fa087b8a98`.
+- Exact Build 51 merged-main CI run
+  [#35244161231](https://github.com/Frankbell84/KeyHollow/actions/runs/35244161231)
+  passed the complete build-and-test lane and Swift CodeQL. Security-test
+  artifact `10507260985` has SHA-256
+  `47e059b19ceb81dc52df29ca369540b231f50ba783faabcf2f254fac914c1899`;
+  simulator artifact `10507550603` has SHA-256
+  `52541bd7fccbad67246484867524cb788c58214573cb4bb835526cb3c479eab8`.
+- Protected Build 51 signing-only preflight run
+  [#35247024776](https://github.com/Frankbell84/KeyHollow/actions/runs/35247024776)
+  passed for exact protected `main` commit
+  `9578136b74cbda7c5221c71cf7d357fa087b8a98` without uploading or publishing.
+  Separately authorized upload run
+  [#35247583942](https://github.com/Frankbell84/KeyHollow/actions/runs/35247583942)
+  then completed successfully. IPA artifact `10507434746` has SHA-256
+  `47b424728ee819e7ea0168affc9e17ae9d001c5ec0e018499f9ccdfb0c5a5b88`;
+  Apple delivery UUID is `08ef3a8e-5407-4328-b686-ed45b13c022d`.
+  App Store Connect processed Build 51 and showed only `KeyHollow Internal`.
 - Physical-device testing of the Internal Build 51 candidate reproduced the
   release blocker: a portrait video can still enter a blank AVKit surface with
   an inert Play control unless the user times actions around the transition.
   Build 51 is therefore failed and unaccepted; Build 48 remains the accepted
   rollback and comparison baseline.
-- The remaining failure is isolated to presentation ownership, not encryption
-  or storage. Build 51 retained the player during representable dismantle, but
-  the player item, player, and controller were still created under a transient
-  SwiftUI page/task and fullscreen was still initiated from an embedded child
-  controller. The current repair moves that graph into a stable module-owned
-  session and presents the owned AVPlayerViewController directly from one
-  viewer-root UIKit anchor.
+- The repair is isolated to presentation ownership, not encryption or storage.
+  It replaces the transient embedded-player lifecycle with one stable
+  module-owned playback session, one viewer-root UIKit presentation anchor,
+  direct modal full-screen AVKit presentation, explicit replay after Done, and
+  ordered terminal release. Protected records, cryptography, archive formats,
+  media payloads, hierarchy metadata, and ciphertext are unchanged.
 - PR [#80](https://github.com/Frankbell84/KeyHollow/pull/80) merged the exact
   reviewed portrait-fullscreen correction head
   `00453af239719bd6b91006ab5ccbb34300edfdfd` through regular merge commit
@@ -241,18 +276,18 @@ evidence remains in `docs/PROJECT_CHECKPOINT.md`.
 Build 48 remains the physically accepted rollback and comparison baseline at
 exact protected `main` commit
 `fd2f39f079f3dca853f09e2d67caa8a5cd2eab5c`. Build 50's Files-style nested
-move picker passed physical-device testing, but Build 50 and the attempted
-Build 51 portrait correction both remain Internal-only and unaccepted because
-the portrait fullscreen failure above is reproducible.
+move picker passed physical-device testing, but Builds 50 and 51 remain
+Internal-only and unaccepted because their portrait-fullscreen paths reproduced
+the blank AVKit surface and inert Play control.
 
-The current task is an isolated repair on
-`fix/build51-portrait-fullscreen-session`, based directly on exact Build 51
-`main` commit `9578136b74cbda7c5221c71cf7d357fa087b8a98`. The correction replaces the
-transient embedded-player lifecycle with one stable module-owned playback
-session, one viewer-root UIKit presentation anchor, direct modal full-screen
-AVKit presentation, explicit replay after Done, and ordered terminal release.
-It does not bump either product build number; packaging begins only after local
-guards, pull-request CI, and review of the implementation are green.
+The stable playback-session repair is now merged to exact protected `main`
+commit `837874744fcd31834fd9dba925212e4edf215b30`, and its exact-main build,
+security tests, and Swift CodeQL are green. The current task is the isolated
+Build 52 release candidate on
+`release/build52-stable-portrait-playback-session`, created directly from that
+commit. Its packaging changes only both product build numbers from 51 to 52,
+refreshes the canonical `project.yml` security pin, and records exact release
+evidence.
 
 Protected records, cryptography, archive formats, media payloads, hierarchy
 metadata, and ciphertext remain unchanged. External playback, Picture in
@@ -709,14 +744,13 @@ only boundary.
 1. Preserve exact Build 51 source
    `9578136b74cbda7c5221c71cf7d357fa087b8a98` as the failed-candidate evidence
    point and preserve Build 48 as the accepted rollback/comparison baseline.
-2. Complete the stable playback-session repair without changing build numbers,
-   then run architecture, privacy, release-hygiene, and focused lifecycle tests.
-3. Publish only the reviewed repair head through a draft pull request and
-   require the complete macOS build, unit/integration, security, and Swift
-   CodeQL gates before protected merge.
-4. After exact merged-main CI passes, prepare the next unused Internal build
-   number in a separate release-only change and run a no-upload signing
-   preflight from the exact resulting protected-main commit.
+2. Publish only the reviewed Build 52 packaging head through a draft pull
+   request and require the complete macOS build, unit/integration, security,
+   and Swift CodeQL gates.
+3. Merge only that exact packaging head through protected `main`, verify tree
+   equality, and require complete exact-main CI.
+4. Run the Build 52 no-upload signing preflight from the exact resulting
+   protected-main commit.
 5. Only after that preflight passes, authorize an exact-commit signed upload to
    `KeyHollow Internal` only.
 6. Execute the stable-session checks in `docs/DEVICE_TEST_PLAN.md`. A native
