@@ -1,12 +1,29 @@
 # KeyHollow Work Status
 
-Updated: 2026-09-16
+Updated: 2026-09-17
 
 This is the authoritative operational resume point. Historical Build 38
 evidence remains in `docs/PROJECT_CHECKPOINT.md`.
 
 ## Provenance
 
+- PR [#77](https://github.com/Frankbell84/KeyHollow/pull/77) merged the exact
+  reviewed Build 49 packaging head
+  `77884e807178f59a7361e7625d99df58252909e9` through regular merge commit
+  `df015ceab9d56ca1102b0e98d16aa1538b93f5b3`.
+- Protected signing-only preflight run
+  [#35205835726](https://github.com/Frankbell84/KeyHollow/actions/runs/35205835726)
+  passed for exact Build 49 source without uploading or publishing. Separately
+  authorized upload run
+  [#35206603181](https://github.com/Frankbell84/KeyHollow/actions/runs/35206603181)
+  then completed successfully, Apple processed Build 49, and App Store Connect
+  shows only `KeyHollow Internal`.
+- Physical-device testing confirmed that nested creation, navigation, and
+  hierarchy persistence work, but found two release-blocking presentation
+  defects: portrait videos can glitch during AVKit fullscreen transitions, and
+  move destinations are flattened into a long-path menu that becomes ambiguous
+  as soon as nested folders exist. Build 49 therefore remains an Internal test
+  candidate rather than the accepted comparison baseline.
 - Current accepted production source: exact `main` commit
   `fd2f39f079f3dca853f09e2d67caa8a5cd2eab5c`.
 - Build 48 completed exact-main CI in run
@@ -155,28 +172,33 @@ evidence remains in `docs/PROJECT_CHECKPOINT.md`.
 
 ## Current task
 
-Build 48 is the physically accepted production baseline at exact protected
-`main` commit `fd2f39f079f3dca853f09e2d67caa8a5cd2eab5c`. Catalog search,
-sorting, selection, mixed-media navigation, encrypted-video playback, backup
-verification, imports, exports, and folder moves remain accepted on-device.
+Build 48 remains the physically accepted rollback and comparison baseline at
+exact protected `main` commit
+`fd2f39f079f3dca853f09e2d67caa8a5cd2eab5c`. Build 49 is safely uploaded from
+exact protected `main` commit `df015ceab9d56ca1102b0e98d16aa1538b93f5b3`
+and assigned only to `KeyHollow Internal`, but the two physical-device findings
+above block acceptance and wider distribution.
 
-Nested Folder Hierarchy is now merged to protected `main` at exact commit
-`32951baf7685672f05410641801a5c80980a74ac`. Exact-main build, test, security,
-and CodeQL gates passed in run `35160039341`; signing-only preflight run
-`35161736010` also passed without uploading or publishing a build.
+The current task is a focused Build 50 refinement on
+`feature/build50-move-picker-portrait-video`, based directly on exact Build 49
+source. It replaces all flat move-destination menus with one source-neutral,
+one-level-at-a-time folder picker and stabilizes the module-owned native video
+controller across portrait fullscreen entry and exit. Existing stores remain
+the final move-policy authority, and the player task remains the final secure
+cleanup boundary.
 
-The current task is the isolated Build 49 release candidate on
-`release/build49-nested-folder-hierarchy`, created directly from that reviewed
-merged-main commit. Build 49 changes only the application and thumbnail-
-extension build number from 48 to 49, refreshes the required `project.yml`
-security hash, and records completed merge evidence. It must pass release-
-branch review, protected merge, exact-main CI and CodeQL, and a no-upload
-signing preflight before any separately authorized TestFlight upload.
+This refinement must not change protected records, cryptography, ciphertext,
+vault storage, archive formats, media payload formats, or backup behavior. It
+must pass focused policy tests, the complete architecture/release/privacy gates,
+macOS build and regression tests, Swift CodeQL, and the Build 50 physical-device
+checks before it can supersede either accepted behavior or the Build 49
+hierarchy candidate.
 
-Physical-device acceptance must then complete the Nested Folder Hierarchy
-checks in `docs/DEVICE_TEST_PLAN.md`. The add-on remains metadata-only and
-separately compiled; protected records, cryptography, archive formats, media
-payloads, and ciphertext remain unchanged.
+The focused implementation and independent local review are complete. Workflow
+security, release hygiene, architecture-boundary, privacy-manifest, and diff
+checks pass on the branch. Apple-platform compilation, the complete XCTest
+suite, and Swift CodeQL remain pending on protected macOS CI; no Build 50 binary
+has been signed or uploaded.
 
 ## Unified Media Navigation candidate
 
@@ -622,16 +644,18 @@ only boundary.
 
 ## Next action
 
-1. Preserve exact accepted Build 48 source
-   `fd2f39f079f3dca853f09e2d67caa8a5cd2eab5c` as the rollback and comparison
-   baseline.
-2. Publish only the reviewed Build 49 packaging head through a draft pull
-   request and require the complete macOS build, test, security, and CodeQL
-   gates.
-3. Merge only that exact reviewed head through protected `main`, then require
+1. Preserve exact Build 49 source
+   `df015ceab9d56ca1102b0e98d16aa1538b93f5b3` as the rollback point for this
+   refinement and preserve Build 48 as the accepted comparison baseline.
+2. Complete and review only the Files-style move picker and portrait-video
+   fullscreen lifecycle changes, including focused state-policy tests and the
+   complete local static gates.
+3. Publish only the exact reviewed feature head through a draft pull request and
+   require the complete macOS build, test, security, and Swift CodeQL gates.
+4. Merge only that exact reviewed head through protected `main`, then require
    complete exact-main CI and a no-upload signing preflight.
-4. Produce a separately authorized Internal TestFlight build for the physical-
-   device hierarchy plan. Do not expand to Family or external testers without
+5. Produce a separately authorized Build 50 for `KeyHollow Internal` and execute
+   the focused device plan. Do not expand to Family or external testers without
    a separate decision.
 
 ## Frank's decisions required

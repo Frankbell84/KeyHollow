@@ -19,6 +19,54 @@ enum VaultEncryptedVideoPlayerFailurePolicy {
     }
 }
 
+/// Separates AVKit's temporary native-fullscreen reparenting from a real
+/// SwiftUI teardown. The player controller must remain attached while AVKit
+/// owns a fullscreen transition, but a teardown requested during that window
+/// is remembered and completed as soon as the inline surface is restored.
+struct VaultEncryptedVideoNativeFullscreenLifecycle: Equatable {
+    enum Phase: Equatable {
+        case inline
+        case entering
+        case presented
+        case exiting
+    }
+
+    private(set) var phase: Phase = .inline
+    private(set) var hasDeferredControllerDetach = false
+
+    mutating func willBeginPresentation() {
+        phase = .entering
+    }
+
+    mutating func didBeginPresentation(completed: Bool) -> Bool {
+        phase = completed ? .presented : .inline
+        return detachIfInlineAndRequested()
+    }
+
+    mutating func willEndPresentation() {
+        phase = .exiting
+    }
+
+    mutating func didEndPresentation(completed: Bool) -> Bool {
+        phase = completed ? .inline : .presented
+        return detachIfInlineAndRequested()
+    }
+
+    mutating func requestControllerDetach() -> Bool {
+        guard phase != .inline else { return true }
+        hasDeferredControllerDetach = true
+        return false
+    }
+
+    private mutating func detachIfInlineAndRequested() -> Bool {
+        guard phase == .inline, hasDeferredControllerDetach else {
+            return false
+        }
+        hasDeferredControllerDetach = false
+        return true
+    }
+}
+
 /// Keeps protected playback on the device and inside KeyHollow's lifecycle.
 /// The settings live in one testable policy instead of depending on AVKit's
 /// permissive defaults.
@@ -35,31 +83,121 @@ enum VaultEncryptedVideoPlayerSecurityPolicy {
     }
 }
 
+/// AVPlayerViewController does not support subclassing. A stable parent keeps
+/// its weak delegate alive and its inline controller hierarchy intact while
+/// AVKit temporarily reparents the playback surface for native fullscreen.
+@MainActor
+private final class VaultRestrictedVideoPlayerContainerViewController:
+    UIViewController,
+    AVPlayerViewControllerDelegate
+{
+    private let playerController = AVPlayerViewController()
+    private var fullscreenLifecycle = VaultEncryptedVideoNativeFullscreenLifecycle()
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+
+        view.backgroundColor = .black
+        playerController.view.backgroundColor = .black
+        playerController.videoGravity = .resizeAspect
+        playerController.delegate = self
+        VaultEncryptedVideoPlayerSecurityPolicy.configure(playerController)
+
+        addChild(playerController)
+        playerController.view.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(playerController.view)
+        NSLayoutConstraint.activate([
+            playerController.view.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            playerController.view.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            playerController.view.topAnchor.constraint(equalTo: view.topAnchor),
+            playerController.view.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+        ])
+        playerController.didMove(toParent: self)
+    }
+
+    func install(_ player: AVPlayer) {
+        loadViewIfNeeded()
+        VaultEncryptedVideoPlayerSecurityPolicy.configure(playerController)
+        guard playerController.player !== player else { return }
+        playerController.player = player
+    }
+
+    func requestDismantle() {
+        guard fullscreenLifecycle.requestControllerDetach() else { return }
+        detachControllerPlayer()
+    }
+
+    func playerViewController(
+        _ playerViewController: AVPlayerViewController,
+        willBeginFullScreenPresentationWithAnimationCoordinator coordinator:
+            any UIViewControllerTransitionCoordinator
+    ) {
+        fullscreenLifecycle.willBeginPresentation()
+        coordinator.animate(alongsideTransition: nil) { [weak self] context in
+            guard let self else { return }
+            if self.fullscreenLifecycle.didBeginPresentation(
+                completed: !context.isCancelled
+            ) {
+                self.detachControllerPlayer()
+            }
+        }
+    }
+
+    func playerViewController(
+        _ playerViewController: AVPlayerViewController,
+        willEndFullScreenPresentationWithAnimationCoordinator coordinator:
+            any UIViewControllerTransitionCoordinator
+    ) {
+        fullscreenLifecycle.willEndPresentation()
+        coordinator.animate(alongsideTransition: nil) { [weak self] context in
+            guard let self else { return }
+            if self.fullscreenLifecycle.didEndPresentation(
+                completed: !context.isCancelled
+            ) {
+                self.detachControllerPlayer()
+            }
+        }
+    }
+
+    func playerViewController(
+        _ playerViewController: AVPlayerViewController,
+        restoreUserInterfaceForFullScreenExitWithCompletionHandler completionHandler:
+            @escaping @Sendable (Bool) -> Void
+    ) {
+        // This stable parent remains the valid inline destination throughout
+        // fullscreen playback, including portrait-video orientation changes.
+        completionHandler(true)
+    }
+
+    private func detachControllerPlayer() {
+        playerController.player = nil
+        playerController.delegate = nil
+    }
+}
+
 private struct VaultRestrictedVideoPlayerView: UIViewControllerRepresentable {
     let player: AVPlayer
 
-    func makeUIViewController(context: Context) -> AVPlayerViewController {
-        let controller = AVPlayerViewController()
-        VaultEncryptedVideoPlayerSecurityPolicy.configure(controller)
-        controller.player = player
+    func makeUIViewController(
+        context: Context
+    ) -> VaultRestrictedVideoPlayerContainerViewController {
+        let controller = VaultRestrictedVideoPlayerContainerViewController()
+        controller.install(player)
         return controller
     }
 
     func updateUIViewController(
-        _ controller: AVPlayerViewController,
+        _ controller: VaultRestrictedVideoPlayerContainerViewController,
         context: Context
     ) {
-        VaultEncryptedVideoPlayerSecurityPolicy.configure(controller)
-        if controller.player !== player {
-            controller.player = player
-        }
+        controller.install(player)
     }
 
     static func dismantleUIViewController(
-        _ controller: AVPlayerViewController,
+        _ controller: VaultRestrictedVideoPlayerContainerViewController,
         coordinator: Void
     ) {
-        controller.player = nil
+        controller.requestDismantle()
     }
 }
 

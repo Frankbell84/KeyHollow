@@ -43,6 +43,67 @@ final class VaultEncryptedVideoHardeningTests: XCTestCase {
         XCTAssertTrue(didFail)
     }
 
+    func testNativeFullscreenLifecycleDetachesImmediatelyWhileInline() {
+        var lifecycle = VaultEncryptedVideoNativeFullscreenLifecycle()
+
+        XCTAssertTrue(lifecycle.requestControllerDetach())
+        XCTAssertEqual(lifecycle.phase, .inline)
+        XCTAssertFalse(lifecycle.hasDeferredControllerDetach)
+    }
+
+    func testNativeFullscreenLifecycleDefersDetachUntilSuccessfulExit() {
+        var lifecycle = VaultEncryptedVideoNativeFullscreenLifecycle()
+
+        lifecycle.willBeginPresentation()
+        XCTAssertFalse(lifecycle.requestControllerDetach())
+        XCTAssertTrue(lifecycle.hasDeferredControllerDetach)
+        XCTAssertFalse(lifecycle.didBeginPresentation(completed: true))
+        XCTAssertEqual(lifecycle.phase, .presented)
+
+        lifecycle.willEndPresentation()
+        XCTAssertTrue(lifecycle.didEndPresentation(completed: true))
+        XCTAssertEqual(lifecycle.phase, .inline)
+        XCTAssertFalse(lifecycle.hasDeferredControllerDetach)
+    }
+
+    func testCancelledFullscreenEntryCompletesDeferredDetach() {
+        var lifecycle = VaultEncryptedVideoNativeFullscreenLifecycle()
+
+        lifecycle.willBeginPresentation()
+        XCTAssertFalse(lifecycle.requestControllerDetach())
+        XCTAssertTrue(lifecycle.didBeginPresentation(completed: false))
+        XCTAssertEqual(lifecycle.phase, .inline)
+        XCTAssertFalse(lifecycle.hasDeferredControllerDetach)
+    }
+
+    func testCancelledFullscreenExitKeepsDeferredDetachPending() {
+        var lifecycle = VaultEncryptedVideoNativeFullscreenLifecycle()
+
+        lifecycle.willBeginPresentation()
+        XCTAssertFalse(lifecycle.didBeginPresentation(completed: true))
+        lifecycle.willEndPresentation()
+        XCTAssertFalse(lifecycle.requestControllerDetach())
+        XCTAssertFalse(lifecycle.didEndPresentation(completed: false))
+        XCTAssertEqual(lifecycle.phase, .presented)
+        XCTAssertTrue(lifecycle.hasDeferredControllerDetach)
+
+        lifecycle.willEndPresentation()
+        XCTAssertTrue(lifecycle.didEndPresentation(completed: true))
+        XCTAssertEqual(lifecycle.phase, .inline)
+        XCTAssertFalse(lifecycle.hasDeferredControllerDetach)
+    }
+
+    func testNativeFullscreenRoundTripWithoutTeardownNeverDetaches() {
+        var lifecycle = VaultEncryptedVideoNativeFullscreenLifecycle()
+
+        lifecycle.willBeginPresentation()
+        XCTAssertFalse(lifecycle.didBeginPresentation(completed: true))
+        lifecycle.willEndPresentation()
+        XCTAssertFalse(lifecycle.didEndPresentation(completed: true))
+        XCTAssertEqual(lifecycle.phase, .inline)
+        XCTAssertFalse(lifecycle.hasDeferredControllerDetach)
+    }
+
     func testSourceDimensionPolicyAdmitsEightKAndRejectsExtremeFrames() {
         XCTAssertTrue(
             VaultEncryptedVideoPolicy.allowsSourceDimensions(

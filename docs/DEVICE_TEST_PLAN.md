@@ -259,6 +259,54 @@ must not move when folders or items are reorganized.
   locations. Reject the candidate for new scroll lag, thumbnail churn, delayed
   folder opening, input lag, a crash, runaway memory growth, or data loss.
 
+## Build 50 move picker and portrait-video fullscreen refinement
+
+Run these checks only after the focused refinement has passed automated review
+gates and a separately authorized Internal TestFlight build is available. This
+phase changes presentation and player-controller lifecycle only; it must not
+change hierarchy metadata, encrypted payloads, archive formats, or secure
+cleanup behavior.
+
+- At vault root, select one item and then several mixed image/file items. Tap
+  `Move` and confirm a dedicated destination screen opens instead of a long
+  pop-up menu. Require only immediate child-folder names at each level, with no
+  repeated full paths or indistinguishable truncated rows.
+- Drill through a branch at least three levels deep, use Back to return one
+  level, and use `Cancel`. Confirm Cancel changes no membership. Repeat and use
+  the explicit `Move Here` button; confirm exactly the selected items move once
+  and the destination opens with the expected thumbnails, titles, and counts.
+- From an item already inside a folder, confirm `Move Here` is unavailable for
+  its current location but that location remains browsable when it contains a
+  valid deeper destination. Confirm vault root is available when moving out of
+  a folder and unavailable when the item is already at root.
+- Create identical folder names under two different parents and an eight-level
+  hierarchy. Navigate by local folder names and confirm every branch remains
+  unambiguous. Move an item to the deepest valid location and confirm a ninth
+  level remains prohibited by the established hierarchy policy.
+- Use `Move Folder` on a disposable branch. Confirm the moving folder and all
+  descendants are unavailable, while an otherwise unavailable intermediate
+  folder remains browsable when it contains a valid destination. Move the
+  branch to root, into another branch, and back; confirm no duplicate, missing
+  child, cycle, depth overflow, or protected-content change.
+- Play portrait `.mov` and `.mp4` fixtures. Enter and exit native fullscreen at
+  least five times while paused and while playing. Reject any flash, black
+  surface, unexpected dismissal, restart, zoom/crop error, duplicated audio, or
+  need to reopen the video.
+- While a portrait video is fullscreen, rotate portrait to landscape and back,
+  seek, pause, and resume. Confirm the same player and playback time survive the
+  transition and the inline surface returns correctly. Repeat with square and
+  landscape videos to protect the accepted path.
+- Exit fullscreen, swipe video to image to video, and dismiss normally. Repeat
+  while locking, backgrounding, and force-quitting inline and fullscreen.
+  Confirm audio stops, the privacy shield remains opaque, re-entry requires the
+  expected authentication, and temporary protected playback files are cleaned
+  only by the established terminal release boundary.
+- Complete a core smoke pass covering search, every sort order, selection,
+  image zoom/swipe, video swipe/fullscreen, Photos and Files imports, general-
+  file export, folder deletion/reparenting, and Backup Verification. Reject any
+  new thumbnail churn, scroll lag, incorrect folder mutation, crash, or
+  plaintext-residue symptom.
+
 ## Backup Verification Center
 
 Run these checks with a TestFlight-delivered candidate and disposable test
