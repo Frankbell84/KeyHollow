@@ -2837,8 +2837,9 @@ def main() -> int:
                     "VaultEncryptedVideoPresentationAnchorView",
                     "public func requestStop()",
                     "public func stopAndWait() async",
-                    "playerViewControllerWillBeginDismissalTransition",
-                    "playerViewControllerDidEndDismissalTransition",
+                    "willEndFullScreenPresentationWithAnimationCoordinator",
+                    "presentationControllerWillDismiss",
+                    "presentationControllerDidDismiss",
                     "isAnchorReadyForPresentation",
                 ):
                     if required not in source:
@@ -2868,6 +2869,15 @@ def main() -> int:
                         f"{path}: the player controller must be presented "
                         "directly instead of nested in an embedded child surface"
                     )
+                for unavailable_callback in (
+                    "playerViewControllerWillBeginDismissalTransition",
+                    "playerViewControllerDidEndDismissalTransition",
+                ):
+                    if unavailable_callback in player_executable:
+                        violations.append(
+                            f"{path}: SDK-unavailable dismissal callback must "
+                            f"not return: {unavailable_callback}"
+                        )
                 stop_body = swift_block_body(source, "public func requestStop()")
                 release_body = swift_block_body(source, "private func releaseLeaseOnce()")
                 failure_monitor_body = swift_block_body(

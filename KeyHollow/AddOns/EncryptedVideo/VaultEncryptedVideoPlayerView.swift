@@ -462,21 +462,6 @@ public final class VaultEncryptedVideoPlaybackSession:
         completionHandler(true)
     }
 
-    public func playerViewControllerWillBeginDismissalTransition(
-        _ playerViewController: AVPlayerViewController
-    ) {
-        beginModalDismissal()
-    }
-
-    public func playerViewControllerDidEndDismissalTransition(
-        _ playerViewController: AVPlayerViewController
-    ) {
-        if playerController.presentingViewController == nil {
-            finishModalDismissal()
-        }
-        finishPresentationTransition()
-    }
-
     public func presentationControllerWillDismiss(
         _ presentationController: UIPresentationController
     ) {

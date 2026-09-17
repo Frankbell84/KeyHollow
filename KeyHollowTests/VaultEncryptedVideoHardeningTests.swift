@@ -141,10 +141,14 @@ final class VaultEncryptedVideoHardeningTests: XCTestCase {
 
         // Exercise AVKit's actual direct-presentation dismissal callbacks.
         // A replay request during the transition must be rejected, not queued.
-        session.playerViewControllerWillBeginDismissalTransition(controller)
+        let presentationController = UIPresentationController(
+            presentedViewController: controller,
+            presenting: UIViewController()
+        )
+        session.presentationControllerWillDismiss(presentationController)
         session.requestPresentation()
         XCTAssertFalse(session.presentationIsPending)
-        session.playerViewControllerDidEndDismissalTransition(controller)
+        session.presentationControllerDidDismiss(presentationController)
 
         XCTAssertEqual(releaseCount, 0)
         XCTAssertEqual(session.activePlaybackID, fixture.playback.id)
