@@ -43,65 +43,32 @@ final class VaultEncryptedVideoHardeningTests: XCTestCase {
         XCTAssertTrue(didFail)
     }
 
-    func testNativeFullscreenLifecycleDetachesImmediatelyWhileInline() {
-        var lifecycle = VaultEncryptedVideoNativeFullscreenLifecycle()
+    @MainActor
+    func testRepresentableDismantlePreservesPlayerUntilOwnerRelease() throws {
+        let fileURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("Fullscreen-\(UUID().uuidString)")
+            .appendingPathExtension("mov")
+        try Data([0x00]).write(to: fileURL, options: .atomic)
+        defer { try? FileManager.default.removeItem(at: fileURL) }
 
-        XCTAssertTrue(lifecycle.requestControllerDetach())
-        XCTAssertEqual(lifecycle.phase, .inline)
-        XCTAssertFalse(lifecycle.hasDeferredControllerDetach)
-    }
+        let item = AVPlayerItem(url: fileURL)
+        let player = AVPlayer(playerItem: item)
+        let controller = VaultRestrictedVideoPlayerContainerViewController()
+        controller.install(player)
 
-    func testNativeFullscreenLifecycleDefersDetachUntilSuccessfulExit() {
-        var lifecycle = VaultEncryptedVideoNativeFullscreenLifecycle()
+        XCTAssertTrue(controller.isHosting(player))
+        XCTAssertTrue(player.currentItem === item)
 
-        lifecycle.willBeginPresentation()
-        XCTAssertFalse(lifecycle.requestControllerDetach())
-        XCTAssertTrue(lifecycle.hasDeferredControllerDetach)
-        XCTAssertFalse(lifecycle.didBeginPresentation(completed: true))
-        XCTAssertEqual(lifecycle.phase, .presented)
+        // Native fullscreen can trigger representable teardown without ending
+        // the playback owner's task. That transition must not sever AVKit.
+        controller.prepareForRepresentableDismantle()
 
-        lifecycle.willEndPresentation()
-        XCTAssertTrue(lifecycle.didEndPresentation(completed: true))
-        XCTAssertEqual(lifecycle.phase, .inline)
-        XCTAssertFalse(lifecycle.hasDeferredControllerDetach)
-    }
+        XCTAssertTrue(controller.isHosting(player))
+        XCTAssertTrue(player.currentItem === item)
 
-    func testCancelledFullscreenEntryCompletesDeferredDetach() {
-        var lifecycle = VaultEncryptedVideoNativeFullscreenLifecycle()
-
-        lifecycle.willBeginPresentation()
-        XCTAssertFalse(lifecycle.requestControllerDetach())
-        XCTAssertTrue(lifecycle.didBeginPresentation(completed: false))
-        XCTAssertEqual(lifecycle.phase, .inline)
-        XCTAssertFalse(lifecycle.hasDeferredControllerDetach)
-    }
-
-    func testCancelledFullscreenExitKeepsDeferredDetachPending() {
-        var lifecycle = VaultEncryptedVideoNativeFullscreenLifecycle()
-
-        lifecycle.willBeginPresentation()
-        XCTAssertFalse(lifecycle.didBeginPresentation(completed: true))
-        lifecycle.willEndPresentation()
-        XCTAssertFalse(lifecycle.requestControllerDetach())
-        XCTAssertFalse(lifecycle.didEndPresentation(completed: false))
-        XCTAssertEqual(lifecycle.phase, .presented)
-        XCTAssertTrue(lifecycle.hasDeferredControllerDetach)
-
-        lifecycle.willEndPresentation()
-        XCTAssertTrue(lifecycle.didEndPresentation(completed: true))
-        XCTAssertEqual(lifecycle.phase, .inline)
-        XCTAssertFalse(lifecycle.hasDeferredControllerDetach)
-    }
-
-    func testNativeFullscreenRoundTripWithoutTeardownNeverDetaches() {
-        var lifecycle = VaultEncryptedVideoNativeFullscreenLifecycle()
-
-        lifecycle.willBeginPresentation()
-        XCTAssertFalse(lifecycle.didBeginPresentation(completed: true))
-        lifecycle.willEndPresentation()
-        XCTAssertFalse(lifecycle.didEndPresentation(completed: true))
-        XCTAssertEqual(lifecycle.phase, .inline)
-        XCTAssertFalse(lifecycle.hasDeferredControllerDetach)
+        // The owner-controlled terminal path remains the secure cleanup gate.
+        VaultEncryptedVideoPlayerLifecycle.release(player)
+        XCTAssertNil(player.currentItem)
     }
 
     func testSourceDimensionPolicyAdmitsEightKAndRejectsExtremeFrames() {

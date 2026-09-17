@@ -307,6 +307,30 @@ cleanup behavior.
   new thumbnail churn, scroll lag, incorrect folder mutation, crash, or
   plaintext-residue symptom.
 
+## Build 51 portrait-video playback correction
+
+Run these checks on the Build 51 Internal candidate. Build 50 demonstrated that
+native fullscreen could retain AVKit's controls while losing its attached
+player, producing a black surface and an inert Play button. Reject Build 51 if
+that state occurs even once.
+
+- Open both portrait `.mov` and `.mp4` fixtures. While paused, enter native
+  fullscreen, wait for the transition to settle, press Play, and confirm video
+  appears and playback time advances. Repeat while the video is already
+  playing and require uninterrupted picture, sound, and time continuity.
+- Perform at least five enter/exit cycles per fixture. In fullscreen, pause,
+  resume, seek forward and backward, rotate portrait to landscape and back,
+  and use the native controls after every transition. Confirm the same player
+  remains responsive and the inline surface restores at the same playback time.
+- Repeat with square and landscape fixtures, then swipe video to image to video.
+  Confirm the accepted media-navigation behavior, zoom, chrome, and native
+  playback controls do not regress.
+- Lock and unlock, background and foreground, dismiss normally, and force-quit
+  from both inline and fullscreen playback. Confirm privacy shielding and
+  authentication remain intact, audio stops when expected, and protected
+  temporary playback files are removed only through the established owner-
+  release boundary.
+
 ## Backup Verification Center
 
 Run these checks with a TestFlight-delivered candidate and disposable test

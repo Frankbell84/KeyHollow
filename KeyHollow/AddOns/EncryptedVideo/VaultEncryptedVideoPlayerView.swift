@@ -19,54 +19,6 @@ enum VaultEncryptedVideoPlayerFailurePolicy {
     }
 }
 
-/// Separates AVKit's temporary native-fullscreen reparenting from a real
-/// SwiftUI teardown. The player controller must remain attached while AVKit
-/// owns a fullscreen transition, but a teardown requested during that window
-/// is remembered and completed as soon as the inline surface is restored.
-struct VaultEncryptedVideoNativeFullscreenLifecycle: Equatable {
-    enum Phase: Equatable {
-        case inline
-        case entering
-        case presented
-        case exiting
-    }
-
-    private(set) var phase: Phase = .inline
-    private(set) var hasDeferredControllerDetach = false
-
-    mutating func willBeginPresentation() {
-        phase = .entering
-    }
-
-    mutating func didBeginPresentation(completed: Bool) -> Bool {
-        phase = completed ? .presented : .inline
-        return detachIfInlineAndRequested()
-    }
-
-    mutating func willEndPresentation() {
-        phase = .exiting
-    }
-
-    mutating func didEndPresentation(completed: Bool) -> Bool {
-        phase = completed ? .inline : .presented
-        return detachIfInlineAndRequested()
-    }
-
-    mutating func requestControllerDetach() -> Bool {
-        guard phase != .inline else { return true }
-        hasDeferredControllerDetach = true
-        return false
-    }
-
-    private mutating func detachIfInlineAndRequested() -> Bool {
-        guard phase == .inline, hasDeferredControllerDetach else {
-            return false
-        }
-        hasDeferredControllerDetach = false
-        return true
-    }
-}
-
 /// Keeps protected playback on the device and inside KeyHollow's lifecycle.
 /// The settings live in one testable policy instead of depending on AVKit's
 /// permissive defaults.
@@ -84,15 +36,16 @@ enum VaultEncryptedVideoPlayerSecurityPolicy {
 }
 
 /// AVPlayerViewController does not support subclassing. A stable parent keeps
-/// its weak delegate alive and its inline controller hierarchy intact while
-/// AVKit temporarily reparents the playback surface for native fullscreen.
+/// its inline controller hierarchy intact while AVKit temporarily reparents
+/// the playback surface for native fullscreen.
+///
+/// This container deliberately does not depend on AVPlayerViewController's
+/// fullscreen-entry delegate callback. AVKit does not send that callback when
+/// the player is embedded as a child of an already-presented controller, which
+/// is exactly how the gallery's full-screen media viewer is hosted.
 @MainActor
-private final class VaultRestrictedVideoPlayerContainerViewController:
-    UIViewController,
-    @MainActor AVPlayerViewControllerDelegate
-{
+final class VaultRestrictedVideoPlayerContainerViewController: UIViewController {
     private let playerController = AVPlayerViewController()
-    private var fullscreenLifecycle = VaultEncryptedVideoNativeFullscreenLifecycle()
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -100,7 +53,6 @@ private final class VaultRestrictedVideoPlayerContainerViewController:
         view.backgroundColor = .black
         playerController.view.backgroundColor = .black
         playerController.videoGravity = .resizeAspect
-        playerController.delegate = self
         VaultEncryptedVideoPlayerSecurityPolicy.configure(playerController)
 
         addChild(playerController)
@@ -122,56 +74,17 @@ private final class VaultRestrictedVideoPlayerContainerViewController:
         playerController.player = player
     }
 
-    func requestDismantle() {
-        guard fullscreenLifecycle.requestControllerDetach() else { return }
-        detachControllerPlayer()
+    /// SwiftUI can dismantle the representable while AVKit reparents its view
+    /// for native fullscreen. The playback owner, not representable teardown,
+    /// is the sole authority that pauses the player and clears its current item.
+    func prepareForRepresentableDismantle() {
+        // Intentionally preserve playerController.player. The outer task calls
+        // VaultEncryptedVideoPlayerLifecycle.release before protected plaintext
+        // cleanup, including real dismissal and session-revocation paths.
     }
 
-    func playerViewController(
-        _ playerViewController: AVPlayerViewController,
-        willBeginFullScreenPresentationWithAnimationCoordinator coordinator:
-            any UIViewControllerTransitionCoordinator
-    ) {
-        fullscreenLifecycle.willBeginPresentation()
-        coordinator.animate(alongsideTransition: nil) { [weak self] context in
-            guard let self else { return }
-            if self.fullscreenLifecycle.didBeginPresentation(
-                completed: !context.isCancelled
-            ) {
-                self.detachControllerPlayer()
-            }
-        }
-    }
-
-    func playerViewController(
-        _ playerViewController: AVPlayerViewController,
-        willEndFullScreenPresentationWithAnimationCoordinator coordinator:
-            any UIViewControllerTransitionCoordinator
-    ) {
-        fullscreenLifecycle.willEndPresentation()
-        coordinator.animate(alongsideTransition: nil) { [weak self] context in
-            guard let self else { return }
-            if self.fullscreenLifecycle.didEndPresentation(
-                completed: !context.isCancelled
-            ) {
-                self.detachControllerPlayer()
-            }
-        }
-    }
-
-    func playerViewController(
-        _ playerViewController: AVPlayerViewController,
-        restoreUserInterfaceForFullScreenExitWithCompletionHandler completionHandler:
-            @escaping @Sendable (Bool) -> Void
-    ) {
-        // This stable parent remains the valid inline destination throughout
-        // fullscreen playback, including portrait-video orientation changes.
-        completionHandler(true)
-    }
-
-    private func detachControllerPlayer() {
-        playerController.player = nil
-        playerController.delegate = nil
+    func isHosting(_ player: AVPlayer) -> Bool {
+        playerController.player === player
     }
 }
 
@@ -197,7 +110,7 @@ private struct VaultRestrictedVideoPlayerView: UIViewControllerRepresentable {
         _ controller: VaultRestrictedVideoPlayerContainerViewController,
         coordinator: Void
     ) {
-        controller.requestDismantle()
+        controller.prepareForRepresentableDismantle()
     }
 }
 

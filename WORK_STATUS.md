@@ -7,6 +7,29 @@ evidence remains in `docs/PROJECT_CHECKPOINT.md`.
 
 ## Provenance
 
+- PR [#79](https://github.com/Frankbell84/KeyHollow/pull/79) merged the exact
+  reviewed Build 50 packaging head
+  `45cb539c8193e6f172486a16758e76de5a0237b0` through regular merge commit
+  `a0d10a6b0d2a4847f233286b4eed4836f54223fa`; both trees are identical.
+- Exact Build 50 merged-main CI run
+  [#35228643296](https://github.com/Frankbell84/KeyHollow/actions/runs/35228643296)
+  passed the complete build-and-test lane and Swift CodeQL. Security-test
+  artifact `10500103855` has SHA-256
+  `5bd33079d4a58ca225f1a92934bb436eac4c4b1001ee90dfbccb4232ec19b1d9`;
+  simulator artifact `10499779178` has SHA-256
+  `3c33639c89738bf964a48c355fe707bd9f673ec2ec318a5c1f6de9e09b375c57`.
+- Protected Build 50 signing-only preflight run
+  [#35231273238](https://github.com/Frankbell84/KeyHollow/actions/runs/35231273238)
+  passed for exact merged source without uploading or publishing. Separately
+  authorized upload run
+  [#35231747870](https://github.com/Frankbell84/KeyHollow/actions/runs/35231747870)
+  then completed successfully. IPA artifact `10501691558` has SHA-256
+  `1eceed16f385de2242080e569555adfa60574772c37db67efb338a4b5e86048c`.
+  App Store Connect processed Build 50 and shows only `KeyHollow Internal`.
+- Physical-device testing confirms the Files-style move picker and its nested
+  navigation work. One release-blocking video defect remains: entering native
+  fullscreen for a portrait video can leave AVKit's black player shell with an
+  inert Play control. Build 50 therefore remains Internal-only and unaccepted.
 - PR [#78](https://github.com/Frankbell84/KeyHollow/pull/78) merged the exact
   reviewed Build 50 refinement head
   `b84152cdd9d5888bfa39e82522e41e07f1b4f54c` through regular merge commit
@@ -190,29 +213,25 @@ evidence remains in `docs/PROJECT_CHECKPOINT.md`.
 
 Build 48 remains the physically accepted rollback and comparison baseline at
 exact protected `main` commit
-`fd2f39f079f3dca853f09e2d67caa8a5cd2eab5c`. Build 49 is safely uploaded from
-exact protected `main` commit `df015ceab9d56ca1102b0e98d16aa1538b93f5b3`
-and assigned only to `KeyHollow Internal`, but the two physical-device findings
-above block acceptance and wider distribution.
+`fd2f39f079f3dca853f09e2d67caa8a5cd2eab5c`. Build 50 is safely uploaded from
+exact protected `main` commit `a0d10a6b0d2a4847f233286b4eed4836f54223fa`
+and assigned only to `KeyHollow Internal`. Its Files-style nested move picker
+passed physical-device testing, but the portrait-video fullscreen playback
+failure above blocks acceptance and wider distribution.
 
-The focused move-picker and portrait-video refinement is now merged to protected
-`main` at exact commit `1879ee1e8c517d320341a21c5e9b2c7bf92df4e5`.
-Exact-main build, test, security, and CodeQL gates passed in run `35222489038`;
-signing-only preflight run `35224624668` also passed without uploading or
-publishing a build.
+The current task is an isolated encrypted-video presentation correction on
+`fix/build50-portrait-fullscreen-playback`, created directly from exact Build 50
+`main`. Apple documents that AVPlayerViewController's fullscreen delegate entry
+callback is not delivered when the player is embedded as a child of an already-
+presented controller. Build 50 incorrectly relied on that callback to prevent
+representable dismantle from detaching the live player. The correction removes
+that impossible callback dependency and leaves transition-time attachment to
+AVKit while preserving the established owner-controlled pause, current-item
+release, lease acknowledgement, and protected-plaintext cleanup boundary.
 
-The current task is the isolated Build 50 release candidate on
-`release/build50-move-picker-portrait-video`, created directly from that
-reviewed merged-main commit. Build 50 changes only the application and
-thumbnail-extension build number from 49 to 50, refreshes the required
-`project.yml` security hash, and records completed merge evidence. It must pass
-release-branch review, protected merge, exact-main CI and CodeQL, and a Build-50
-no-upload signing preflight before any separately authorized TestFlight upload.
-
-Physical-device acceptance must then complete the Build 50 checks already in
-`docs/DEVICE_TEST_PLAN.md`. Protected records, cryptography, archive formats,
-media payloads, hierarchy metadata, and ciphertext remain unchanged. No Build
-50 binary has been signed or uploaded.
+Protected records, cryptography, archive formats, media payloads, hierarchy
+metadata, ciphertext, external playback, and Picture in Picture remain
+unchanged. Build 50 remains Internal-only and must not be promoted.
 
 ## Unified Media Navigation candidate
 
@@ -658,18 +677,20 @@ only boundary.
 
 ## Next action
 
-1. Preserve exact Build 49 source
-   `df015ceab9d56ca1102b0e98d16aa1538b93f5b3` as the rollback point for this
-   refinement and preserve Build 48 as the accepted comparison baseline.
-2. Publish only the reviewed Build 50 packaging head through a draft pull
+1. Preserve exact Build 50 source
+   `a0d10a6b0d2a4847f233286b4eed4836f54223fa` as the failed-candidate rollback
+   point and preserve Build 48 as the accepted comparison baseline.
+2. Publish only the narrow portrait-fullscreen correction through a draft pull
    request and require the complete macOS build, test, security, and Swift
    CodeQL gates.
-3. Merge only that exact reviewed head through protected `main`, then require
-   complete exact-main CI and a Build-50 no-upload signing preflight.
-4. Use a separate authorization naming the exact merged-main commit, unused
-   Build 50 number, and `KeyHollow Internal` before any signed upload.
-5. Execute the existing focused Build 50 device plan. Do not expand to Family
-   or external testers without a separate decision.
+3. Merge only the exact reviewed correction through protected `main`, then
+   require complete exact-main CI before preparing Build 51 packaging.
+4. Require Build 51 release-branch CI, protected merge, exact-main CI, and a
+   no-upload signing preflight before any separately controlled Internal upload.
+5. Execute the focused portrait-video checks in `docs/DEVICE_TEST_PLAN.md`,
+   including paused and playing fullscreen entry, Play-button recovery,
+   rotation, seeking, exit/re-entry, background/lock, and secure cleanup. Do
+   not expand to Family or external testers without a separate decision.
 
 ## Frank's decisions required
 
