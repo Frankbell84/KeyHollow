@@ -7,6 +7,22 @@ evidence remains in `docs/PROJECT_CHECKPOINT.md`.
 
 ## Provenance
 
+- PR [#78](https://github.com/Frankbell84/KeyHollow/pull/78) merged the exact
+  reviewed Build 50 refinement head
+  `b84152cdd9d5888bfa39e82522e41e07f1b4f54c` through regular merge commit
+  `1879ee1e8c517d320341a21c5e9b2c7bf92df4e5`.
+- Exact merged-main CI run
+  [#35222489038](https://github.com/Frankbell84/KeyHollow/actions/runs/35222489038)
+  passed the complete build-and-test lane and Swift CodeQL. Security-test
+  artifact `10498490395` has SHA-256
+  `36855ae933c01d79824ce223362652233d0397852e007de19f30edad056f7e50`;
+  simulator artifact `10498500477` has SHA-256
+  `ba3f4e21e004da49cddc9d42a0aef3c7a591a68aa3a44b45ae2fab5d5f194e6a`.
+- Protected signing-only preflight run
+  [#35224624668](https://github.com/Frankbell84/KeyHollow/actions/runs/35224624668)
+  verified that exact merged source, production signing material, the packaged
+  privacy manifest, and both app signatures without uploading or publishing a
+  build. Temporary signing material was removed by the workflow.
 - PR [#77](https://github.com/Frankbell84/KeyHollow/pull/77) merged the exact
   reviewed Build 49 packaging head
   `77884e807178f59a7361e7625d99df58252909e9` through regular merge commit
@@ -179,26 +195,24 @@ exact protected `main` commit `df015ceab9d56ca1102b0e98d16aa1538b93f5b3`
 and assigned only to `KeyHollow Internal`, but the two physical-device findings
 above block acceptance and wider distribution.
 
-The current task is a focused Build 50 refinement on
-`feature/build50-move-picker-portrait-video`, based directly on exact Build 49
-source. It replaces all flat move-destination menus with one source-neutral,
-one-level-at-a-time folder picker and stabilizes the module-owned native video
-controller across portrait fullscreen entry and exit. Existing stores remain
-the final move-policy authority, and the player task remains the final secure
-cleanup boundary.
+The focused move-picker and portrait-video refinement is now merged to protected
+`main` at exact commit `1879ee1e8c517d320341a21c5e9b2c7bf92df4e5`.
+Exact-main build, test, security, and CodeQL gates passed in run `35222489038`;
+signing-only preflight run `35224624668` also passed without uploading or
+publishing a build.
 
-This refinement must not change protected records, cryptography, ciphertext,
-vault storage, archive formats, media payload formats, or backup behavior. It
-must pass focused policy tests, the complete architecture/release/privacy gates,
-macOS build and regression tests, Swift CodeQL, and the Build 50 physical-device
-checks before it can supersede either accepted behavior or the Build 49
-hierarchy candidate.
+The current task is the isolated Build 50 release candidate on
+`release/build50-move-picker-portrait-video`, created directly from that
+reviewed merged-main commit. Build 50 changes only the application and
+thumbnail-extension build number from 49 to 50, refreshes the required
+`project.yml` security hash, and records completed merge evidence. It must pass
+release-branch review, protected merge, exact-main CI and CodeQL, and a Build-50
+no-upload signing preflight before any separately authorized TestFlight upload.
 
-The focused implementation and independent local review are complete. Workflow
-security, release hygiene, architecture-boundary, privacy-manifest, and diff
-checks pass on the branch. Apple-platform compilation, the complete XCTest
-suite, and Swift CodeQL remain pending on protected macOS CI; no Build 50 binary
-has been signed or uploaded.
+Physical-device acceptance must then complete the Build 50 checks already in
+`docs/DEVICE_TEST_PLAN.md`. Protected records, cryptography, archive formats,
+media payloads, hierarchy metadata, and ciphertext remain unchanged. No Build
+50 binary has been signed or uploaded.
 
 ## Unified Media Navigation candidate
 
@@ -647,16 +661,15 @@ only boundary.
 1. Preserve exact Build 49 source
    `df015ceab9d56ca1102b0e98d16aa1538b93f5b3` as the rollback point for this
    refinement and preserve Build 48 as the accepted comparison baseline.
-2. Complete and review only the Files-style move picker and portrait-video
-   fullscreen lifecycle changes, including focused state-policy tests and the
-   complete local static gates.
-3. Publish only the exact reviewed feature head through a draft pull request and
-   require the complete macOS build, test, security, and Swift CodeQL gates.
-4. Merge only that exact reviewed head through protected `main`, then require
-   complete exact-main CI and a no-upload signing preflight.
-5. Produce a separately authorized Build 50 for `KeyHollow Internal` and execute
-   the focused device plan. Do not expand to Family or external testers without
-   a separate decision.
+2. Publish only the reviewed Build 50 packaging head through a draft pull
+   request and require the complete macOS build, test, security, and Swift
+   CodeQL gates.
+3. Merge only that exact reviewed head through protected `main`, then require
+   complete exact-main CI and a Build-50 no-upload signing preflight.
+4. Use a separate authorization naming the exact merged-main commit, unused
+   Build 50 number, and `KeyHollow Internal` before any signed upload.
+5. Execute the existing focused Build 50 device plan. Do not expand to Family
+   or external testers without a separate decision.
 
 ## Frank's decisions required
 
