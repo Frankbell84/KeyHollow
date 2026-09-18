@@ -3,8 +3,14 @@
 Nested Folder Hierarchy is the next file-management refinement after the
 physically accepted Build 48 catalog search and sorting baseline. The mapping
 and compatibility contract below were completed before implementation began.
-Implementation remains isolated on its feature branch and does not authorize a
-build-number change, upload, merge, or tester expansion.
+The hierarchy and Files-style nested move picker are present in later Internal
+candidates, and their focused device checks passed. Those results do not change
+the accepted baseline: Builds 49 through 52 remain unaccepted because of later
+release-blocking presentation or lifecycle defects. Build 52 specifically
+fails re-entry after backgrounding encrypted-video playback until app relaunch.
+Build 48 therefore remains the accepted rollback/comparison source. No Family,
+external TestFlight, App Store expansion, or portable-archive format change is
+authorized by the hierarchy work.
 
 ## Product boundary
 

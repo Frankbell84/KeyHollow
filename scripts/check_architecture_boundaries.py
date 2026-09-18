@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import re
 import sys
+from collections.abc import Callable
 from pathlib import Path
 
 
@@ -333,6 +334,602 @@ def swift_block_body(source: str, anchor: str) -> str | None:
     return None
 
 
+def swift_declaration_body(
+    source: str,
+    anchor: str,
+    *,
+    preserve_string_literals: bool = False,
+) -> str | None:
+    """Returns a declaration/catch body without mistaking default closures for it.
+
+    `swift_block_body` is intentionally useful for trailing closures, but a Swift
+    function can contain a default closure argument (`= {}`) before its actual
+    body. This scanner ignores braces while it is inside the declaration's
+    parentheses or brackets. Anchors are always resolved against executable
+    text, so comments and string literals cannot manufacture a declaration.
+    """
+
+    executable = swift_executable_text(source)
+    anchor_position = executable.find(anchor)
+    if anchor_position < 0:
+        return None
+
+    parentheses = 0
+    brackets = 0
+    opening_brace = -1
+    # Start at the anchor itself so an anchor ending in `(` still contributes
+    # that open delimiter to the nesting depth.
+    for index in range(anchor_position, len(executable)):
+        character = executable[index]
+        if character == "(":
+            parentheses += 1
+        elif character == ")":
+            parentheses = max(0, parentheses - 1)
+        elif character == "[":
+            brackets += 1
+        elif character == "]":
+            brackets = max(0, brackets - 1)
+        elif character == "{" and parentheses == 0 and brackets == 0:
+            opening_brace = index
+            break
+    if opening_brace < 0:
+        return None
+
+    depth = 0
+    for index in range(opening_brace, len(executable)):
+        character = executable[index]
+        if character == "{":
+            depth += 1
+        elif character == "}":
+            depth -= 1
+            if depth == 0:
+                view = (
+                    swift_without_comments(source)
+                    if preserve_string_literals
+                    else executable
+                )
+                return view[opening_brace + 1:index]
+    return None
+
+
+def session_revocation_boundary_violations(source: str) -> list[str]:
+    executable = swift_executable_text(source)
+    failures: list[str] = []
+
+    if executable.count(
+        "private typealias SessionRevocationHandler = @MainActor () -> Void"
+    ) != 1 or executable.count(
+        "private var sessionRevocationHandlers: [UUID: SessionRevocationHandler] = [:]"
+    ) != 1:
+        failures.append("session revocation registry declarations drifted")
+
+    callback_signature = re.compile(
+        r"func\s+(?:start|perform)SensitiveTask\s*\(\s*"
+        r"onSessionRevocation\s*:\s*@escaping\s+@MainActor\s+"
+        r"\(\s*\)\s*->\s*Void\s*=\s*\{\s*\}\s*,"
+    )
+    if len(callback_signature.findall(executable)) != 2:
+        failures.append(
+            "both sensitive-task entry points must accept the synchronous revocation hook"
+        )
+
+    start_body = swift_declaration_body(source, "func startSensitiveTask(")
+    perform_body = swift_declaration_body(source, "func performSensitiveTask(")
+    for label, body, cleanup_form in (
+        ("started", start_body, "self?.sessionRevocationHandlers[id] = nil"),
+        ("awaited", perform_body, "self?.sessionRevocationHandlers[id] = nil"),
+    ):
+        if body is None:
+            failures.append(f"{label} sensitive-task body is missing")
+            continue
+        task_registration = body.find("sensitiveTasks[id] = task")
+        handler_registration = body.find(
+            "sessionRevocationHandlers[id] = onSessionRevocation"
+        )
+        terminal_position = (
+            body.find("return id")
+            if label == "started"
+            else body.find("await withTaskCancellationHandler")
+        )
+        if not (
+            body.count("sensitiveTasks[id] = task") == 1
+            and body.count(
+                "sessionRevocationHandlers[id] = onSessionRevocation"
+            ) == 1
+            and body.count(cleanup_form) == 1
+            and 0 <= task_registration < terminal_position
+            and 0 <= handler_registration < terminal_position
+        ):
+            failures.append(
+                f"{label} sensitive task must register and remove one same-ID revocation hook"
+            )
+
+    if perform_body is not None and not contains_in_order(
+        perform_body,
+        (
+            "defer",
+            "self?.sensitiveTasks[id] = nil",
+            "self?.sessionRevocationHandlers[id] = nil",
+            "sensitiveTasks[id] = task",
+            "sessionRevocationHandlers[id] = onSessionRevocation",
+            "await withTaskCancellationHandler",
+            "await task.value",
+            "task.cancel()",
+        ),
+    ):
+        failures.append(
+            "awaited sensitive task must unregister, register, await, and propagate cancellation"
+        )
+
+    retirement_body = swift_declaration_body(source, "private func retireActiveAccess(")
+    retirement_markers = (
+        "let capability = activeCapability",
+        "let tasks = Array(sensitiveTasks.values)",
+        "let revocationHandlers = Array(sessionRevocationHandlers.values)",
+        "sensitiveTasks.removeAll()",
+        "sessionRevocationHandlers.removeAll()",
+        "isUnlocked = false",
+        "activeVaultID = nil",
+        "activeCapability = nil",
+        "capability?.revoke()",
+        "revocationHandlers.forEach { $0() }",
+        "tasks.forEach { $0.cancel() }",
+        "return VaultSessionLockBarrier(tasks: tasks)",
+    )
+    if not (
+        retirement_body is not None
+        and contains_in_order(retirement_body, retirement_markers)
+        and retirement_body.count("revocationHandlers.forEach { $0() }") == 1
+        and retirement_body.count("tasks.forEach { $0.cancel() }") == 1
+        and retirement_body.count("sessionRevocationHandlers.removeAll()") == 1
+    ):
+        failures.append(
+            "retirement must clear live registries before state publication, revoke, "
+            "signal once, cancel once, and retain the captured cleanup barrier"
+        )
+
+    return failures
+
+
+def gallery_video_revocation_boundary_violations(source: str) -> list[str]:
+    failures: list[str] = []
+    prepare_body = swift_declaration_body(source, "private func prepareMediaVideo(")
+    revocation_body = (
+        swift_block_body(prepare_body, "onSessionRevocation:")
+        if prepare_body is not None
+        else None
+    )
+    if not (
+        prepare_body is not None
+        and prepare_body.count("await session.performSensitiveTask(") == 1
+        and revocation_body is not None
+        and revocation_body.count("videoPlaybackSession.requestStop()") == 1
+        and revocation_body.count("videoPlayback.dismiss()") == 1
+        and "Task" not in revocation_body
+        and "await" not in revocation_body
+        and contains_in_order(
+            revocation_body,
+            (
+                "videoPlaybackSession.requestStop()",
+                "videoPlayback.dismiss()",
+            ),
+        )
+    ):
+        failures.append(
+            "video preparation must install one synchronous session-owned playback stop"
+        )
+
+    lifecycle_body = swift_declaration_body(
+        source, "private var galleryLifecycleView: some View"
+    )
+    disappear_body = (
+        swift_block_body(lifecycle_body, ".onDisappear")
+        if lifecycle_body is not None
+        else None
+    )
+    if not (
+        disappear_body is not None
+        and re.search(
+            r"guard\s+!session\.hasActiveAccess\s*\|\|\s*"
+            r"mediaNavigationQueue\s*==\s*nil\s+else\s*\{\s*return\s*\}",
+            disappear_body,
+        )
+        and disappear_body.count("cancelMediaNavigationForLifecycle()") == 1
+        and contains_in_order(
+            disappear_body,
+            (
+                "guard !session.hasActiveAccess || mediaNavigationQueue == nil else",
+                "return",
+                "cancelMediaNavigationForLifecycle()",
+            ),
+        )
+    ):
+        failures.append(
+            "gallery disappearance may defer cleanup only while active access owns media"
+        )
+
+    return failures
+
+
+def lock_submit_error_boundary_violations(source: str) -> list[str]:
+    failures: list[str] = []
+    submit_body = swift_declaration_body(
+        source,
+        "private func submit()",
+        preserve_string_literals=True,
+    )
+    if submit_body is None:
+        return ["lock submit body is missing"]
+
+    cancellation_body = swift_declaration_body(
+        submit_body,
+        "catch is CancellationError",
+        preserve_string_literals=True,
+    )
+    invalid_body = swift_declaration_body(
+        submit_body,
+        "catch VaultUnlockError.invalidCredentials",
+        preserve_string_literals=True,
+    )
+    invalid_position = submit_body.find("catch VaultUnlockError.invalidCredentials")
+    generic_source = submit_body[invalid_position:] if invalid_position >= 0 else ""
+    generic_body = swift_declaration_body(
+        generic_source,
+        "catch {",
+        preserve_string_literals=True,
+    )
+    expected = (
+        (
+            cancellation_body,
+            'message = "Unlock was interrupted. Try again."',
+            "cancellation",
+        ),
+        (
+            invalid_body,
+            'message = "Passcode not recognized."',
+            "invalid credential",
+        ),
+        (
+            generic_body,
+            'message = "Secure local storage could not be opened. Try again."',
+            "generic storage",
+        ),
+    )
+    for body, message, label in expected:
+        if not (
+            body is not None
+            and body.count(message) == 1
+            and "guard session.securityEpoch == requestSecurityEpoch else { return }"
+            in body
+            and "isWorking = false" in body
+        ):
+            failures.append(f"{label} unlock failure branch drifted")
+
+    for message in (
+        'message = "Unlock was interrupted. Try again."',
+        'message = "Passcode not recognized."',
+        'message = "Secure local storage could not be opened. Try again."',
+    ):
+        if submit_body.count(message) != 1:
+            failures.append("lock submit messages must remain unique to their catch scopes")
+            break
+
+    return failures
+
+
+def encrypted_video_terminal_boundary_violations(source: str) -> list[str]:
+    executable = swift_executable_text(source)
+    failures: list[str] = []
+
+    for pattern, label in (
+        (
+            r"private\s+static\s+let\s+terminalTransitionWaitLimit\s*:\s*"
+            r"Duration\s*=\s*\.milliseconds\(250\)",
+            "terminal transition deadline",
+        ),
+        (
+            r"private\s+static\s+let\s+terminalTransitionPollInterval\s*:\s*"
+            r"Duration\s*=\s*\.milliseconds\(10\)",
+            "terminal transition poll interval",
+        ),
+        (r"private\s+var\s+playbackGeneration\s*:\s*UInt64", "playback generation"),
+        (r"private\s+var\s+presentationEpoch\s*:\s*UInt64", "presentation epoch"),
+        (
+            r"private\s+var\s+presentationControllerEpochs\s*:\s*"
+            r"\[\s*ObjectIdentifier\s*:\s*\(\s*controller\s*:\s*"
+            r"UIPresentationController\s*,\s*epoch\s*:\s*UInt64\s*\)\s*\]",
+            "presentation-controller epoch/identity registry",
+        ),
+        (
+            r"private\s+weak\s+var\s+activePresentationController\s*:\s*"
+            r"UIPresentationController\?",
+            "active presentation identity",
+        ),
+    ):
+        if re.search(pattern, executable) is None:
+            failures.append(f"missing {label}")
+
+    wait_body = swift_declaration_body(
+        source, "private func waitForPresentationTransition()"
+    )
+    if not (
+        wait_body is not None
+        and contains_in_order(
+            wait_body,
+            (
+                "guard isPresentationTransitionActive else { return }",
+                "let clock = ContinuousClock()",
+                "let deadline = clock.now.advanced(by: Self.terminalTransitionWaitLimit)",
+                "while isPresentationTransitionActive, clock.now < deadline",
+                "try await Task.sleep(for: Self.terminalTransitionPollInterval)",
+                "break",
+                "finishPresentationTransition()",
+            ),
+        )
+        and wait_body.count("clock.now < deadline") == 1
+        and "withCheckedContinuation" not in wait_body
+        and "withUnsafeContinuation" not in wait_body
+    ):
+        failures.append(
+            "terminal presentation wait must poll against a monotonic deadline and force-open"
+        )
+
+    activate_body = swift_declaration_body(source, "public func activate(")
+    if not (
+        activate_body is not None
+        and activate_body.count("let controller = AVPlayerViewController()") == 1
+        and contains_in_order(
+            activate_body,
+            (
+                "playbackGeneration &+= 1",
+                "presentationEpoch &+= 1",
+                "presentationControllerEpochs.removeAll()",
+                "activePresentationController = nil",
+                "isPresentationTransitionActive = false",
+                "isPlayerPresented = false",
+                "let controller = AVPlayerViewController()",
+                "configurePlayerController(controller)",
+                "playerController = controller",
+                "controller.player = player",
+                "phase = .ready",
+            ),
+        )
+    ):
+        failures.append(
+            "each playback activation must reset transition identity and install a fresh controller"
+        )
+
+    replay_request_body = swift_declaration_body(
+        source, "public func requestPresentation()"
+    )
+    replay_replacement_body = swift_declaration_body(
+        source, "private func replacePlayerControllerForReplay()"
+    )
+    if not (
+        replay_request_body is not None
+        and contains_in_order(
+            replay_request_body,
+            (
+                "guard phase == .ready",
+                "!isPlayerPresented",
+                "!isPresentationTransitionActive",
+                "if hasPendingPresentation",
+                "attemptPendingPresentation()",
+                "return",
+                "replacePlayerControllerForReplay()",
+                "hasPendingPresentation = true",
+                "attemptPendingPresentation()",
+            ),
+        )
+        and replay_replacement_body is not None
+        and replay_replacement_body.count(
+            "let replacementController = AVPlayerViewController()"
+        ) == 1
+        and contains_in_order(
+            replay_replacement_body,
+            (
+                "let retiredController = playerController",
+                "retiredController.delegate = nil",
+                "retiredController.presentationController?.delegate = nil",
+                "retiredController.player = nil",
+                "presentationEpoch &+= 1",
+                "presentationControllerEpochs.removeAll()",
+                "activePresentationController = nil",
+                "let replacementController = AVPlayerViewController()",
+                "configurePlayerController(replacementController)",
+                "replacementController.player = player",
+                "playerController = replacementController",
+            ),
+        )
+    ):
+        failures.append(
+            "explicit replay must detach the retired AVKit delegate graph and use a fresh controller"
+        )
+
+    stop_body = swift_declaration_body(source, "public func requestStop()")
+    if not (
+        stop_body is not None
+        and contains_in_order(
+            stop_body,
+            (
+                "playbackGeneration &+= 1",
+                "let teardownGeneration = playbackGeneration",
+                "let retiringPlayerController = playerController",
+                "phase = .stopping",
+                "await waitForPresentationTransition()",
+                "await dismissPlayerControllerIfNeeded(",
+                "retiringPlayerController",
+                "generation: teardownGeneration",
+                "retiringPlayerController.player = nil",
+                "releaseLeaseOnce()",
+                "phase = .idle",
+            ),
+        )
+    ):
+        failures.append(
+            "terminal stop must retire one captured generation/controller before releasing its lease"
+        )
+
+    attempt_body = swift_declaration_body(
+        source, "private func attemptPendingPresentation()"
+    )
+    if not (
+        attempt_body is not None
+        and attempt_body.count(
+            "registerPresentationController("
+        ) == 2
+        and contains_in_order(
+            attempt_body,
+            (
+                "let presentingPlayerController = playerController",
+                "let presentationGeneration = playbackGeneration",
+                "presentationEpoch &+= 1",
+                "let attemptedPresentationEpoch = presentationEpoch",
+                "activePresentationController = nil",
+                "beginPresentationTransition()",
+                "self.phase == .ready",
+                "self.playbackGeneration == presentationGeneration",
+                "self.presentationEpoch == attemptedPresentationEpoch",
+                "self.playerController === presentingPlayerController",
+                "if self.playbackGeneration != presentationGeneration",
+                "self.playerController !== presentingPlayerController",
+                "presentingPlayerController.dismiss(animated: false)",
+                "self.registerPresentationController(",
+                "epoch: attemptedPresentationEpoch",
+                "self.finishPresentationTransition()",
+                "registerPresentationController(",
+                "epoch: attemptedPresentationEpoch",
+            ),
+        )
+    ):
+        failures.append(
+            "presentation completion must be fenced by playback generation, epoch, and controller identity"
+        )
+
+    register_body = swift_declaration_body(
+        source, "private func registerPresentationController("
+    )
+    if not (
+        register_body is not None
+        and contains_in_order(
+            register_body,
+            (
+                "epoch == presentationEpoch",
+                "controller.presentedViewController === playerController",
+                "presentationControllerEpochs[ObjectIdentifier(controller)] = (",
+                "controller: controller",
+                "epoch: epoch",
+                "activePresentationController = controller",
+                "controller.delegate = self",
+            ),
+        )
+    ):
+        failures.append(
+            "presentation-controller registration must bind current epoch and exact identity"
+        )
+
+    finish_body = swift_declaration_body(source, "func finishModalDismissal()")
+    if not (
+        finish_body is not None
+        and contains_in_order(
+            finish_body,
+            (
+                "presentationEpoch &+= 1",
+                "presentationControllerEpochs.removeAll()",
+                "activePresentationController = nil",
+                "hasPendingPresentation = false",
+                "player?.pause()",
+                "isPlayerPresented = false",
+            ),
+        )
+    ):
+        failures.append("modal completion must retire its presentation epoch before mutation")
+
+    fullscreen_begin_body = swift_declaration_body(
+        source, "func beginFullScreenDismissal("
+    )
+    fullscreen_body = swift_declaration_body(
+        source, "willEndFullScreenPresentationWithAnimationCoordinator coordinator:"
+    )
+    if not (
+        fullscreen_begin_body is not None
+        and contains_in_order(
+            fullscreen_begin_body,
+            (
+                "guard phase == .ready",
+                "playerViewController === self.playerController",
+                "beginModalDismissal()",
+                "return (playbackGeneration, presentationEpoch)",
+            ),
+        )
+        and fullscreen_body is not None
+        and contains_in_order(
+            fullscreen_body,
+            (
+                "guard let transition = beginFullScreenDismissal(",
+                "for: playerViewController",
+                "self.playbackGeneration == transition.playbackGeneration",
+                "self.presentationEpoch == transition.presentationEpoch",
+                "self.playerController === playerViewController",
+                "self.finishModalDismissal()",
+                "self.finishPresentationTransition()",
+            ),
+        )
+    ):
+        failures.append(
+            "fullscreen exit callbacks must reject retired playback and presentation generations"
+        )
+
+    will_dismiss_body = swift_declaration_body(
+        source, "public func presentationControllerWillDismiss("
+    )
+    if not (
+        will_dismiss_body is not None
+        and "registerPresentationController(" not in will_dismiss_body
+        and contains_in_order(
+            will_dismiss_body,
+            (
+                "guard phase == .ready",
+                "presentationController.presentedViewController === playerController",
+                "let identifier = ObjectIdentifier(presentationController)",
+                "guard let registration = presentationControllerEpochs[identifier]",
+                "registration.controller === presentationController",
+                "registration.epoch == presentationEpoch",
+                "activePresentationController === presentationController",
+                "beginModalDismissal()",
+            ),
+        )
+    ):
+        failures.append(
+            "interactive dismissal entry must claim only the current presentation identity"
+        )
+
+    did_dismiss_body = swift_declaration_body(
+        source, "public func presentationControllerDidDismiss("
+    )
+    if not (
+        did_dismiss_body is not None
+        and contains_in_order(
+            did_dismiss_body,
+            (
+                "presentationController.presentedViewController === playerController",
+                "let identifier = ObjectIdentifier(presentationController)",
+                "guard let registration = presentationControllerEpochs[identifier]",
+                "registration.controller === presentationController",
+                "registration.epoch == presentationEpoch",
+                "activePresentationController === presentationController",
+                "finishModalDismissal()",
+                "finishPresentationTransition()",
+            ),
+        )
+    ):
+        failures.append(
+            "dismissal completion must match current epoch and exact presentation identity"
+        )
+
+    return failures
+
+
 def yaml_key_present(body: str, key: str) -> bool:
     return re.search(
         rf"(?m)^[ \t]+(?:{re.escape(key)}|['\"]{re.escape(key)}['\"])\s*:",
@@ -448,6 +1045,162 @@ def checker_probe_violations() -> list[str]:
         failures.append(
             "checker self-test: code outside secure-image surface entered its scope"
         )
+
+    def require_detected_mutation(
+        label: str,
+        source: str,
+        old: str,
+        new: str,
+        audit: Callable[[str], list[str]],
+    ) -> None:
+        if old not in source:
+            failures.append(
+                f"checker self-test: {label} mutation anchor is missing"
+            )
+            return
+        mutated = source.replace(old, new, 1)
+        if not audit(mutated):
+            failures.append(
+                f"checker self-test: {label} mutation escaped detection"
+            )
+
+    session_fixture = (
+        SOURCE_ROOT / "Session" / "VaultSession.swift"
+    ).read_text(encoding="utf-8")
+    session_baseline = session_revocation_boundary_violations(session_fixture)
+    if session_baseline:
+        failures.append(
+            "checker self-test: current session-revocation fixture is invalid: "
+            + "; ".join(session_baseline)
+        )
+    else:
+        require_detected_mutation(
+            "session handler registration",
+            session_fixture,
+            "sessionRevocationHandlers[id] = onSessionRevocation",
+            "sessionRevocationHandlers[id] = {}",
+            session_revocation_boundary_violations,
+        )
+        require_detected_mutation(
+            "session registry clearing order",
+            session_fixture,
+            "sessionRevocationHandlers.removeAll()\n\n        isUnlocked = false",
+            "isUnlocked = false\n        sessionRevocationHandlers.removeAll()",
+            session_revocation_boundary_violations,
+        )
+
+    gallery_fixture = (
+        SOURCE_ROOT / "Photos" / "VaultGalleryView.swift"
+    ).read_text(encoding="utf-8")
+    gallery_baseline = gallery_video_revocation_boundary_violations(gallery_fixture)
+    if gallery_baseline:
+        failures.append(
+            "checker self-test: current gallery-revocation fixture is invalid: "
+            + "; ".join(gallery_baseline)
+        )
+    else:
+        require_detected_mutation(
+            "gallery synchronous video stop",
+            gallery_fixture,
+            "videoPlaybackSession.requestStop()",
+            "videoPlaybackSession.requestPresentation()",
+            gallery_video_revocation_boundary_violations,
+        )
+        require_detected_mutation(
+            "gallery active-access disappearance guard",
+            gallery_fixture,
+            "guard !session.hasActiveAccess || mediaNavigationQueue == nil else",
+            "guard session.hasActiveAccess || mediaNavigationQueue == nil else",
+            gallery_video_revocation_boundary_violations,
+        )
+
+    root_view_fixture = (
+        SOURCE_ROOT / "UI" / "RootView.swift"
+    ).read_text(encoding="utf-8")
+    root_view_baseline = lock_submit_error_boundary_violations(root_view_fixture)
+    if root_view_baseline:
+        failures.append(
+            "checker self-test: current unlock-error fixture is invalid: "
+            + "; ".join(root_view_baseline)
+        )
+    else:
+        require_detected_mutation(
+            "unlock cancellation error distinction",
+            root_view_fixture,
+            'message = "Unlock was interrupted. Try again."',
+            'message = "Passcode not recognized."',
+            lock_submit_error_boundary_violations,
+        )
+
+    player_fixture = (
+        ENCRYPTED_VIDEO_ROOT / "VaultEncryptedVideoPlayerView.swift"
+    ).read_text(encoding="utf-8")
+    player_baseline = encrypted_video_terminal_boundary_violations(player_fixture)
+    if player_baseline:
+        failures.append(
+            "checker self-test: current encrypted-video terminal fixture is invalid: "
+            + "; ".join(player_baseline)
+        )
+    else:
+        for label, old, new in (
+            (
+                "bounded transition deadline",
+                "while isPresentationTransitionActive, clock.now < deadline",
+                "while isPresentationTransitionActive",
+            ),
+            (
+                "late playback-generation completion",
+                "self.playbackGeneration == presentationGeneration",
+                "self.playbackGeneration >= presentationGeneration",
+            ),
+            (
+                "late presentation-epoch completion",
+                "self.presentationEpoch == attemptedPresentationEpoch",
+                "self.presentationEpoch >= attemptedPresentationEpoch",
+            ),
+            (
+                "adaptive presentation identity",
+                "activePresentationController === presentationController",
+                "activePresentationController !== presentationController",
+            ),
+            (
+                "unregistered adaptive presentation fallback",
+                "let identifier = ObjectIdentifier(presentationController)\n        guard let registration",
+                "let identifier = ObjectIdentifier(presentationController)\n        registerPresentationController(presentationController, epoch: presentationEpoch)\n        guard let registration",
+            ),
+            (
+                "strong presentation-controller registration identity",
+                "registration.controller === presentationController",
+                "registration.controller !== presentationController",
+            ),
+            (
+                "fresh explicit replay controller",
+                "let replacementController = AVPlayerViewController()",
+                "let replacementController = playerController",
+            ),
+            (
+                "retired replay-controller registry release",
+                "retiredController.player = nil\n\n        presentationEpoch &+= 1\n        presentationControllerEpochs.removeAll()",
+                "retiredController.player = nil\n\n        presentationEpoch &+= 1",
+            ),
+            (
+                "completed presentation registry release",
+                "func finishModalDismissal() {\n        presentationEpoch &+= 1\n        presentationControllerEpochs.removeAll()",
+                "func finishModalDismissal() {\n        presentationEpoch &+= 1",
+            ),
+            (
+                "fullscreen exact-controller entry gate",
+                "playerViewController === self.playerController else { return nil }",
+                "playerViewController !== self.playerController else { return nil }",
+            ),
+        ):
+            require_detected_mutation(
+                label,
+                player_fixture,
+                old,
+                new,
+                encrypted_video_terminal_boundary_violations,
+            )
 
     return failures
 
@@ -1432,6 +2185,10 @@ def main() -> int:
     session_source = (
         SOURCE_ROOT / "Session" / "VaultSession.swift"
     ).read_text(encoding="utf-8")
+    violations.extend(
+        "KeyHollow/Session/VaultSession.swift: " + detail
+        for detail in session_revocation_boundary_violations(session_source)
+    )
 
     if "consuming consumer: (Data) throws -> Void" not in general_file_models_source:
         violations.append(
@@ -1515,6 +2272,9 @@ def main() -> int:
     sensitive_register_position = awaited_sensitive_source.find(
         "sensitiveTasks[id] = task"
     )
+    revocation_handler_register_position = awaited_sensitive_source.find(
+        "sessionRevocationHandlers[id] = onSessionRevocation"
+    )
     sensitive_await_position = awaited_sensitive_source.find(
         "await task.value"
     )
@@ -1522,12 +2282,47 @@ def main() -> int:
         awaited_sensitive_start >= 0
         and awaited_sensitive_end > awaited_sensitive_start
         and 0 <= sensitive_register_position < sensitive_await_position
+        and 0 <= revocation_handler_register_position < sensitive_await_position
         and "await withTaskCancellationHandler" in awaited_sensitive_source
         and "task.cancel()" in awaited_sensitive_source
     ):
         violations.append(
             "KeyHollow/Session/VaultSession.swift: awaited sensitive work "
             "must register before execution, propagate cancellation, and await cleanup"
+        )
+
+    session_retirement_start = session_source.find(
+        "private func retireActiveAccess("
+    )
+    session_retirement_end = session_source.find(
+        "func lockAndWait()", session_retirement_start
+    )
+    session_retirement_source = session_source[
+        session_retirement_start:session_retirement_end
+    ]
+    if not (
+        "private typealias SessionRevocationHandler = @MainActor () -> Void"
+        in session_source
+        and "private var sessionRevocationHandlers: [UUID: SessionRevocationHandler] = [:]"
+        in session_source
+        and contains_in_order(
+            session_retirement_source,
+            (
+                "let tasks = Array(sensitiveTasks.values)",
+                "let revocationHandlers = Array(sessionRevocationHandlers.values)",
+                "sensitiveTasks.removeAll()",
+                "sessionRevocationHandlers.removeAll()",
+                "isUnlocked = false",
+                "capability?.revoke()",
+                "revocationHandlers.forEach { $0() }",
+                "tasks.forEach { $0.cancel() }",
+            ),
+        )
+    ):
+        violations.append(
+            "KeyHollow/Session/VaultSession.swift: session retirement must "
+            "revoke access, synchronously signal registered resource teardown, "
+            "then cancel and retain the task cleanup barrier"
         )
 
     cancel_and_wait_start = session_source.find(
@@ -2815,6 +3610,10 @@ def main() -> int:
                         )
 
             if path.endswith("VaultEncryptedVideoPlayerView.swift"):
+                violations.extend(
+                    f"{path}: {detail}"
+                    for detail in encrypted_video_terminal_boundary_violations(source)
+                )
                 for required in (
                     "AVPlayerItem(asset: playback.makeRestrictedAsset())",
                     "item.status",
@@ -2829,11 +3628,12 @@ def main() -> int:
                     "controller.updatesNowPlayingInfoCenter = false",
                     "controller.allowsVideoFrameAnalysis = false",
                     "VaultEncryptedVideoPlaybackSession",
-                    "private let playerController: AVPlayerViewController",
+                    "private var playerController: AVPlayerViewController",
                     "private var item: AVPlayerItem?",
                     "private var player: AVPlayer?",
-                    "playerController.videoGravity = .resizeAspect",
-                    "playerController.modalPresentationStyle = .fullScreen",
+                    "private var playbackGeneration: UInt64",
+                    "controller.videoGravity = .resizeAspect",
+                    "controller.modalPresentationStyle = .fullScreen",
                     "VaultEncryptedVideoPresentationAnchorView",
                     "public func requestStop()",
                     "public func stopAndWait() async",
@@ -2841,6 +3641,8 @@ def main() -> int:
                     "presentationControllerWillDismiss",
                     "presentationControllerDidDismiss",
                     "isAnchorReadyForPresentation",
+                    "private static let terminalTransitionWaitLimit",
+                    "private static let terminalTransitionPollInterval",
                 ):
                     if required not in source:
                         violations.append(
@@ -2895,6 +3697,12 @@ def main() -> int:
                 dismissal_body = swift_block_body(
                     source, "private func beginModalDismissal()"
                 )
+                transition_wait_body = swift_block_body(
+                    source, "private func waitForPresentationTransition()"
+                )
+                presentation_attempt_body = swift_block_body(
+                    source, "private func attemptPendingPresentation()"
+                )
                 if not (
                     stop_body is not None
                     and contains_in_order(
@@ -2905,8 +3713,8 @@ def main() -> int:
                             "player?.pause()",
                             "endingMonitor?.cancel()",
                             "await endingMonitor.value",
-                            "await dismissPlayerControllerIfNeeded()",
-                            "playerController.player = nil",
+                            "await dismissPlayerControllerIfNeeded(",
+                            "retiringPlayerController.player = nil",
                             "VaultEncryptedVideoPlayerLifecycle.release(player)",
                             "item = nil",
                             "player = nil",
@@ -2918,6 +3726,36 @@ def main() -> int:
                         f"{path}: terminal teardown must reject presentation, "
                         "pause, await monitor cancellation and modal dismissal, "
                         "detach AVKit, then release the plaintext lease"
+                    )
+                if not (
+                    transition_wait_body is not None
+                    and "ContinuousClock()" in transition_wait_body
+                    and "Self.terminalTransitionWaitLimit" in transition_wait_body
+                    and "Self.terminalTransitionPollInterval" in transition_wait_body
+                    and "finishPresentationTransition()" in transition_wait_body
+                    and "withCheckedContinuation" not in transition_wait_body
+                    and presentation_attempt_body is not None
+                    and contains_in_order(
+                        presentation_attempt_body,
+                        (
+                            "let presentingPlayerController = playerController",
+                            "let presentationGeneration = playbackGeneration",
+                            "guard self.phase == .ready",
+                            "self.playbackGeneration == presentationGeneration",
+                            "self.playerController === presentingPlayerController",
+                            "presentingPlayerController.dismiss(animated: false)",
+                        ),
+                    )
+                    and source.count("let controller = AVPlayerViewController()") == 1
+                    and "playerController = controller" in source
+                    and source.count(
+                        "presentationController.presentedViewController === playerController"
+                    ) == 2
+                ):
+                    violations.append(
+                        f"{path}: terminal playback teardown must bound UIKit "
+                        "transition waits, isolate player generations, and reject "
+                        "late presentation callbacks"
                     )
                 if not (
                     release_body is not None
@@ -3019,6 +3857,10 @@ def main() -> int:
 
     gallery_file = SOURCE_ROOT / "Photos" / "VaultGalleryView.swift"
     gallery_source = gallery_file.read_text(encoding="utf-8")
+    violations.extend(
+        "KeyHollow/Photos/VaultGalleryView.swift: " + detail
+        for detail in gallery_video_revocation_boundary_violations(gallery_source)
+    )
     gallery_executable = swift_executable_text(gallery_source)
     image_preview_coordinator_file = (
         SOURCE_ROOT / "Photos" / "VaultImagePreviewCoordinator.swift"
@@ -3402,6 +4244,10 @@ def main() -> int:
     root_view_source = (
         SOURCE_ROOT / "UI" / "RootView.swift"
     ).read_text(encoding="utf-8")
+    violations.extend(
+        "KeyHollow/UI/RootView.swift: " + detail
+        for detail in lock_submit_error_boundary_violations(root_view_source)
+    )
     additional_vault_setup_source = (
         SOURCE_ROOT / "UI" / "AdditionalVaultSetupView.swift"
     ).read_text(encoding="utf-8")
@@ -3544,6 +4390,36 @@ def main() -> int:
                 f"{label}: passcode/KDF/key-bearing credential work must remain "
                 "registered with the vault-session protected-task barrier"
             )
+
+    lock_submit_start = root_view_source.find("private func submit()")
+    lock_submit_end = root_view_source.find(
+        "private struct KeyHollowLockMark", lock_submit_start
+    )
+    lock_submit_source = root_view_source[lock_submit_start:lock_submit_end]
+    if not (
+        lock_submit_start >= 0
+        and lock_submit_end > lock_submit_start
+        and contains_in_order(
+            lock_submit_source,
+            (
+                "catch is CancellationError",
+                "catch VaultUnlockError.invalidCredentials",
+            ),
+        )
+        and lock_submit_source.count(
+            'message = "Unlock was interrupted. Try again."'
+        ) == 1
+        and lock_submit_source.count(
+            'message = "Passcode not recognized."'
+        ) == 1
+        and lock_submit_source.count(
+            'message = "Secure local storage could not be opened. Try again."'
+        ) == 1
+    ):
+        violations.append(
+            "KeyHollow/UI/RootView.swift LockView: lifecycle cancellation and "
+            "storage failure must not be reported as an incorrect passcode"
+        )
 
     credential_service_cancellation_boundaries = (
         (
@@ -4101,13 +4977,25 @@ def main() -> int:
 
     media_video_sensitive_body = swift_block_body(
         media_video_source,
-        "await session.performSensitiveTask",
+        ") { _ in",
+    )
+    media_video_revocation_body = swift_block_body(
+        media_video_source,
+        "onSessionRevocation:",
     )
     if not (
         media_video_start >= 0
         and media_current_start > media_video_start
-        and media_video_source.count("await session.performSensitiveTask { _ in") == 1
+        and media_video_source.count("await session.performSensitiveTask(") == 1
         and media_video_sensitive_body is not None
+        and media_video_revocation_body is not None
+        and contains_in_order(
+            media_video_revocation_body,
+            (
+                "videoPlaybackSession.requestStop()",
+                "videoPlayback.dismiss()",
+            ),
+        )
         and media_video_source.count(
             "try await videoPlayback.prepare(record, using: generalFileStore)"
         ) == 1
@@ -4121,7 +5009,11 @@ def main() -> int:
                 "guard case .generalFile(let record) = source",
                 "if isCurrentMediaSelection(descriptor.id, generation: generation)",
                 "failedMediaID = descriptor.id",
-                "await session.performSensitiveTask { _ in",
+                "await session.performSensitiveTask(",
+                "onSessionRevocation:",
+                "videoPlaybackSession.requestStop()",
+                "videoPlayback.dismiss()",
+                ") { _ in",
                 "try await videoPlayback.prepare(record, using: generalFileStore)",
                 "catch",
                 "guard isCurrentMediaSelection(",
@@ -4132,7 +5024,7 @@ def main() -> int:
         violations.append(
             "KeyHollow/Photos/VaultGalleryView.swift: video payloads must enter "
             "through the app-owned playback coordinator inside a session "
-            "sensitive task"
+            "sensitive task with an authoritative session-revocation stop"
         )
 
     if not (
@@ -4608,6 +5500,23 @@ def main() -> int:
                     "KeyHollow/Photos/VaultGalleryView.swift: "
                     f"{lifecycle_name} must enter the unified media cleanup path"
                 )
+
+        gallery_disappear_match = re.search(r"\.onDisappear\b", gallery_executable)
+        gallery_disappear_window = (
+            gallery_executable[
+                gallery_disappear_match.start():gallery_disappear_match.start() + 900
+            ]
+            if gallery_disappear_match
+            else ""
+        )
+        if (
+            "guard !session.hasActiveAccess || mediaNavigationQueue == nil else"
+            not in gallery_disappear_window
+        ):
+            violations.append(
+                "KeyHollow/Photos/VaultGalleryView.swift: gallery disappearance "
+                "may defer media cleanup only while the vault still has active access"
+            )
 
         media_dismiss_start = gallery_executable.find(
             "private func beginMediaNavigationDismissal()"

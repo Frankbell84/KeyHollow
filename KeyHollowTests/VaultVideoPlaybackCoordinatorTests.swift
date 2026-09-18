@@ -303,6 +303,115 @@ final class VaultVideoPlaybackCoordinatorTests: XCTestCase {
         XCTAssertTrue(fixture.preparedPlaintextFiles().isEmpty)
     }
 
+    func testLockDuringAttachedVideoPublishesImmediateUnlockAfterBoundedCleanup() async throws {
+        let fixture = try VideoPlaybackFixture()
+        defer { fixture.cleanup() }
+        let record = try await fixture.importFile(named: "Backgrounded.mov")
+        let intendedVaultID = fixture.vaultID
+        let cleanupReachedPlayerBarrier = VideoPlaybackEventCounter()
+        let coordinator = VaultVideoPlaybackCoordinator(
+            validatePlayable: { _ in },
+            playerReleaseWaitObserver: {
+                await cleanupReachedPlayerBarrier.record()
+            }
+        )
+        let vaultSession = VaultSession()
+        vaultSession.unlock(
+            vaultID: intendedVaultID,
+            key: SymmetricKey(size: .bits256)
+        )
+
+        let playbackMonitorCleanupGate = VideoPlaybackTestBarrier()
+        let playbackMonitorCleanupStarted = VideoPlaybackEventCounter()
+        let playbackSession = VaultEncryptedVideoPlaybackSession(
+            waitForFailure: { _ in
+                while !Task.isCancelled {
+                    await Task.yield()
+                }
+                await playbackMonitorCleanupStarted.record()
+                await playbackMonitorCleanupGate.enterAndWait()
+                return false
+            }
+        )
+        let playbackOperation = Task { @MainActor in
+            await vaultSession.performSensitiveTask(
+                onSessionRevocation: {
+                    playbackSession.requestStop()
+                    coordinator.dismiss()
+                }
+            ) { _ in
+                do {
+                    try await coordinator.prepare(record, using: fixture.store)
+                } catch is CancellationError {
+                    // Locking is the expected playback lifetime boundary.
+                } catch {
+                    XCTFail("Unexpected playback failure: \(error)")
+                }
+            }
+        }
+
+        let active = try await waitForActive(record.id, in: coordinator)
+        let playbackURL = active.playback.fileURL
+        XCTAssertTrue(
+            playbackSession.activate(
+                playback: active.playback,
+                onPlayerWillAttach: {
+                    coordinator.playerWillAttach(active.playback.id)
+                },
+                onPlayerReleased: {
+                    coordinator.playerDidRelease(active.playback.id)
+                }
+            )
+        )
+        let player = try XCTUnwrap(playbackSession.activePlayer)
+        let item = try XCTUnwrap(player.currentItem)
+        XCTAssertTrue(player.currentItem === item)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: playbackURL.path))
+
+        // Model background locking followed immediately by a correct passcode.
+        // The unlock is accepted now, but cannot publish until the old player,
+        // lease, and plaintext export have reached terminal cleanup.
+        let lockBarrier = vaultSession.lock()
+        XCTAssertFalse(lockBarrier.isEmpty)
+        let unlockAuthorization = vaultSession.authorizeUnlockCompletion()
+        XCTAssertTrue(
+            vaultSession.completeUnlock(
+                vaultID: intendedVaultID,
+                key: SymmetricKey(size: .bits256),
+                authorization: unlockAuthorization
+            )
+        )
+        XCTAssertFalse(vaultSession.isUnlocked)
+        XCTAssertNil(vaultSession.activeVaultID)
+
+        try await playbackMonitorCleanupStarted.waitForCount(1)
+        try await cleanupReachedPlayerBarrier.waitForCount(1)
+        XCTAssertFalse(vaultSession.isUnlocked)
+        XCTAssertTrue(player.currentItem === item)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: playbackURL.path))
+
+        let lockBarrierDrained = VideoPlaybackEventCounter()
+        let lockBarrierWaiter = Task { @MainActor in
+            await lockBarrier.wait()
+            await lockBarrierDrained.record()
+        }
+        await playbackMonitorCleanupGate.release()
+        try await lockBarrierDrained.waitForCount(1)
+        await lockBarrierWaiter.value
+        await playbackOperation.value
+        try await waitForActiveVault(intendedVaultID, in: vaultSession)
+
+        XCTAssertTrue(vaultSession.isUnlocked)
+        XCTAssertEqual(vaultSession.activeVaultID, intendedVaultID)
+        XCTAssertNil(player.currentItem)
+        XCTAssertNil(playbackSession.retainedPlayerController.player)
+        XCTAssertNil(playbackSession.activePlayer)
+        XCTAssertNil(playbackSession.activePlaybackID)
+        XCTAssertNil(coordinator.active)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: playbackURL.path))
+        XCTAssertTrue(fixture.preparedPlaintextFiles().isEmpty)
+    }
+
     func testValidationFailureRemovesPreparedPlaintext() async throws {
         let fixture = try VideoPlaybackFixture()
         defer { fixture.cleanup() }
@@ -342,6 +451,22 @@ private func waitForActive(
         await Task.yield()
     }
     throw VideoPlaybackTestError.activePlaybackTimedOut
+}
+
+@MainActor
+private func waitForActiveVault(
+    _ vaultID: UUID,
+    in session: VaultSession,
+    timeout: Duration = .seconds(2)
+) async throws {
+    let clock = ContinuousClock()
+    let deadline = clock.now.advanced(by: timeout)
+    while !session.isUnlocked || session.activeVaultID != vaultID {
+        guard clock.now < deadline else {
+            throw VideoPlaybackTestError.activePlaybackTimedOut
+        }
+        await Task.yield()
+    }
 }
 
 @MainActor

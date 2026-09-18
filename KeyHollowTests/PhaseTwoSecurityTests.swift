@@ -118,6 +118,106 @@ final class PhaseTwoSecurityTests: XCTestCase {
     }
 
     @MainActor
+    func testSessionRevocationHandlerRunsSynchronouslyOnceAndUnlockWaitsForCleanup() async throws {
+        let session = VaultSession()
+        session.unlock(vaultID: UUID(), key: SymmetricKey(size: .bits256))
+        let capability = try XCTUnwrap(session.activeVaultContext()?.access)
+        let cleanupGate = PhaseTwoAsyncGate()
+        let started = expectation(description: "sensitive work started")
+        var revocationCount = 0
+        var callbackSawRevokedCapability = false
+        var taskObservedCancellation = false
+        var cleanupFinished = false
+
+        let operation = Task { @MainActor in
+            await session.performSensitiveTask(
+                onSessionRevocation: {
+                    revocationCount += 1
+                    callbackSawRevokedCapability = capability.isRevoked
+                }
+            ) { _ in
+                started.fulfill()
+                while !Task.isCancelled {
+                    await Task.yield()
+                }
+                taskObservedCancellation = true
+                await cleanupGate.wait()
+                cleanupFinished = true
+            }
+        }
+        await fulfillment(of: [started])
+
+        let firstBarrier = session.lock()
+
+        XCTAssertEqual(revocationCount, 1)
+        XCTAssertTrue(callbackSawRevokedCapability)
+        XCTAssertFalse(taskObservedCancellation)
+        XCTAssertFalse(cleanupFinished)
+        XCTAssertFalse(firstBarrier.isEmpty)
+
+        // The inactive-to-background lifecycle can request locking more than
+        // once. The original task remains in the retained barrier, but its
+        // terminal signal must stay one-shot.
+        let secondBarrier = session.lock()
+        XCTAssertEqual(revocationCount, 1)
+        XCTAssertFalse(secondBarrier.isEmpty)
+
+        let finalVaultID = UUID()
+        let authorization = session.authorizeUnlockCompletion()
+        XCTAssertTrue(
+            session.completeUnlock(
+                vaultID: finalVaultID,
+                key: SymmetricKey(size: .bits256),
+                authorization: authorization
+            )
+        )
+        XCTAssertFalse(session.isUnlocked)
+        XCTAssertNil(session.activeVaultID)
+
+        for _ in 0..<10 { await Task.yield() }
+        XCTAssertTrue(taskObservedCancellation)
+        XCTAssertFalse(cleanupFinished)
+        XCTAssertFalse(session.isUnlocked)
+
+        await cleanupGate.open()
+        await firstBarrier.wait()
+        await secondBarrier.wait()
+        await operation.value
+        await waitForActiveVault(finalVaultID, in: session)
+
+        XCTAssertTrue(cleanupFinished)
+        XCTAssertEqual(revocationCount, 1)
+        XCTAssertTrue(session.isUnlocked)
+        XCTAssertEqual(session.activeVaultID, finalVaultID)
+    }
+
+    @MainActor
+    func testManualTaskCancellationDoesNotLeaveAStaleSessionRevocationHandler() async throws {
+        let session = VaultSession()
+        session.unlock(vaultID: UUID(), key: SymmetricKey(size: .bits256))
+        let started = expectation(description: "sensitive work started")
+        var revocationCount = 0
+
+        let taskID = try XCTUnwrap(
+            session.startSensitiveTask(
+                onSessionRevocation: { revocationCount += 1 }
+            ) { _ in
+                started.fulfill()
+                do {
+                    try await Task.sleep(for: .seconds(30))
+                } catch {}
+            }
+        )
+        await fulfillment(of: [started])
+
+        await session.cancelSensitiveTaskAndWait(taskID)
+        XCTAssertEqual(revocationCount, 0)
+
+        _ = session.lock()
+        XCTAssertEqual(revocationCount, 0)
+    }
+
+    @MainActor
     func testOneSensitiveTaskCanBeCancelledWithoutLockingVault() async throws {
         let session = VaultSession()
         session.unlock(vaultID: UUID(), key: SymmetricKey(size: .bits256))

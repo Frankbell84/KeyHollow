@@ -179,6 +179,8 @@ final class VaultSession: ObservableObject {
         let key: SymmetricKey
     }
 
+    private typealias SessionRevocationHandler = @MainActor () -> Void
+
     @Published private(set) var isUnlocked = false
     @Published private(set) var activeVaultID: UUID?
     @Published private(set) var isSystemInteractionActive = false
@@ -187,6 +189,7 @@ final class VaultSession: ObservableObject {
     private var activeCapability: VaultAccessCapability?
     private var systemInteractionCount = 0
     private var sensitiveTasks: [UUID: Task<Void, Never>] = [:]
+    private var sessionRevocationHandlers: [UUID: SessionRevocationHandler] = [:]
     private var accessTransitionEpoch: UInt64 = 0
     private var pendingAccessRetirement: VaultSessionLockBarrier?
     private var pendingAccess: PendingVaultAccess?
@@ -285,9 +288,13 @@ final class VaultSession: ObservableObject {
     }
 
     /// Starts work that must not outlive the unlocked vault session. Locking
-    /// revokes the capability first, then cancels every registered task.
+    /// revokes the capability, synchronously invokes `onSessionRevocation`, and
+    /// then cancels the registered task. The handler must only issue a bounded
+    /// terminal signal; asynchronous cleanup remains owned by the task and its
+    /// lock barrier.
     @discardableResult
     func startSensitiveTask(
+        onSessionRevocation: @escaping @MainActor () -> Void = {},
         _ operation: @escaping @MainActor (VaultAccessCapability) async -> Void
     ) -> UUID? {
         guard isUnlocked,
@@ -300,16 +307,20 @@ final class VaultSession: ObservableObject {
                 await operation(capability)
             }
             self?.sensitiveTasks[id] = nil
+            self?.sessionRevocationHandlers[id] = nil
         }
         sensitiveTasks[id] = task
+        sessionRevocationHandlers[id] = onSessionRevocation
         return id
     }
 
     /// Runs and awaits one lifecycle-owned sensitive operation. The internal
     /// task is registered before work begins so `lockAndWait()` can revoke,
-    /// cancel, and observe terminal cleanup. Cancellation of the awaiting
-    /// caller is propagated to the registered task and awaited as well.
+    /// synchronously signal session revocation, cancel, and observe terminal
+    /// cleanup. Cancellation of the awaiting caller is propagated to the
+    /// registered task and awaited as well.
     func performSensitiveTask(
+        onSessionRevocation: @escaping @MainActor () -> Void = {},
         _ operation: @escaping @MainActor (VaultAccessCapability) async -> Void
     ) async {
         guard !Task.isCancelled,
@@ -319,11 +330,15 @@ final class VaultSession: ObservableObject {
 
         let id = UUID()
         let task = Task { @MainActor [weak self] in
-            defer { self?.sensitiveTasks[id] = nil }
+            defer {
+                self?.sensitiveTasks[id] = nil
+                self?.sessionRevocationHandlers[id] = nil
+            }
             guard !Task.isCancelled else { return }
             await operation(capability)
         }
         sensitiveTasks[id] = task
+        sessionRevocationHandlers[id] = onSessionRevocation
 
         await withTaskCancellationHandler {
             await task.value
@@ -361,6 +376,7 @@ final class VaultSession: ObservableObject {
                 await operation()
             }
             self?.sensitiveTasks[id] = nil
+            self?.sessionRevocationHandlers[id] = nil
         }
         sensitiveTasks[id] = task
         return id
@@ -443,6 +459,14 @@ final class VaultSession: ObservableObject {
     ) -> VaultSessionLockBarrier {
         let capability = activeCapability
         let tasks = Array(sensitiveTasks.values)
+        let revocationHandlers = Array(sessionRevocationHandlers.values)
+
+        // Clear the live registries before publishing any state transition or
+        // invoking client code. Published-state observers and terminal
+        // handlers can synchronously request another lock; captured tasks stay
+        // retained locally for the barrier, while each handler remains one-shot.
+        sensitiveTasks.removeAll()
+        sessionRevocationHandlers.removeAll()
 
         isUnlocked = false
         activeVaultID = nil
@@ -457,8 +481,12 @@ final class VaultSession: ObservableObject {
         // the same lock, this returns only after an in-flight atomic key use has
         // ended; no later store operation can acquire the key.
         capability?.revoke()
+        // Some sensitive resources need a synchronous terminal signal before
+        // task cancellation can finish their asynchronous cleanup. Keep this
+        // hook session-owned so teardown does not depend on a disappearing view
+        // receiving a later lifecycle notification.
+        revocationHandlers.forEach { $0() }
         tasks.forEach { $0.cancel() }
-        sensitiveTasks.removeAll()
         return VaultSessionLockBarrier(tasks: tasks)
     }
 
