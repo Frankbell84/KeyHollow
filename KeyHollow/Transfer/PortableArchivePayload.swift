@@ -519,7 +519,6 @@ struct PortableArchivePayloadSource: Sendable {
         for (storageName, role, source) in requestedEntries {
             try PortableArchivePayloadCatalog.validateStorageName(storageName, role: role)
             let byteCount: UInt64
-            let digest: Data
             switch source {
             case .file(let fileURL):
                 let properties = try fileURL.resourceValues(
@@ -532,17 +531,11 @@ struct PortableArchivePayloadSource: Sendable {
                     throw PortableArchivePayloadError.missingEntry(storageName)
                 }
                 byteCount = UInt64(fileSize)
-                digest = try Self.hashFile(
-                    fileURL,
-                    expectedByteCount: byteCount,
-                    storageName: storageName
-                )
             case .data(let data):
                 guard data.count >= 28 else {
                     throw PortableArchivePayloadError.missingEntry(storageName)
                 }
                 byteCount = UInt64(data.count)
-                digest = Data(SHA256.hash(data: data))
             }
             guard byteCount <= PortableArchivePayloadFormat.legacyMaximumEntryByteCount else {
                 throw PortableArchivePayloadError.invalidEntry(storageName)
@@ -555,6 +548,17 @@ struct PortableArchivePayloadSource: Sendable {
                 to: totalByteCount,
                 maximum: PortableArchivePayloadFormat.legacyMaximumTotalByteCount
             )
+            let digest: Data
+            switch source {
+            case .file(let fileURL):
+                digest = try Self.hashFile(
+                    fileURL,
+                    expectedByteCount: byteCount,
+                    storageName: storageName
+                )
+            case .data(let data):
+                digest = Data(SHA256.hash(data: data))
+            }
             entries.append(
                 PortableArchivePayloadEntry(
                     storageName: storageName,
