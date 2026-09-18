@@ -373,8 +373,26 @@ and adds authenticated inner catalog v4 folder metadata. It preserves nested
 folder structure, memberships, timestamps, empty folders, and typed
 photo/general-file references while intentionally excluding disposable
 thumbnail caches. Legacy catalog v1-v3 archives remain root-level readable.
-The change is local and pending its final source audit and protected CI; it is
-not yet an accepted baseline or TestFlight build.
+The implementation is published in draft PR
+[#87](https://github.com/Frankbell84/KeyHollow/pull/87). The N150 handoff records
+the completed source audit with no actionable blockers. Exact implementation
+commit `e81fee3091bea346775c3cda83a1494c483595c8` passed macOS build-and-test
+and Swift CodeQL in CI run
+[#392 / 35354240786](https://github.com/Frankbell84/KeyHollow/actions/runs/35354240786).
+It is not yet device-accepted, merged, or a TestFlight build.
+
+The Ryzen checkpoint continuation independently verified the expected source,
+clean checkout, branch/upstream, repository-local identity, and all four local
+workflow-security, release-hygiene, architecture, and source-privacy checkers.
+The approved shell path outside the restricted sandbox passed an exact-commit
+push dry run as the normal Windows user; restricted-sandbox credential-store
+access remains unproven. The original N150 task and checkout remain intact;
+task history and host were not transferred.
+
+This documentation reconciliation creates a new PR head. The implementation
+run above does not establish CI success for that new head: require fresh
+macOS build-and-test and Swift CodeQL evidence, recorded against the exact
+head in PR #87, before requesting readiness or merge approval.
 
 ## Unified Media Navigation candidate
 
@@ -827,14 +845,21 @@ only boundary.
    and retain exact Build 48 source
    `fd2f39f079f3dca853f09e2d67caa8a5cd2eab5c` as the prior rollback/comparison
    reference.
-2. Finish the folder-aware portable-backup v2 source audit, rerun all local
-   static safety gates, and freeze one exact local commit for review.
-3. Publish only that exact feature commit through a draft pull request, then use
-   protected CI as the first Swift compile/test gate. Repair failures on the
-   feature branch rather than weakening a gate.
-4. After protected CI is fully green, review the exact diff and obtain a
-   separate exact-commit merge decision. A later signed Internal-only build
-   still requires the normal no-upload signing preflight and upload gate.
+2. Complete the documentation reconciliation on the existing feature branch
+   and keep PR #87 draft. Run local static gates and require fresh macOS CI
+   for the resulting exact head; retain the N150 until the Ryzen development
+   verification cycle is complete.
+3. Review the exact final diff and CI evidence, then obtain explicit
+   authorization before marking PR #87 ready or merging its exact head.
+   After merge, require build-and-test and Swift CodeQL on the exact protected
+   main merge SHA.
+4. Prepare Build 54 only as a separately authorized release candidate after
+   confirming the number is unused. Both app and thumbnail-extension build
+   numbers must advance together through the normal review and exact-main
+   gates. Run the no-upload signing preflight, then obtain separate exact-SHA,
+   build-number, and Internal tester-group approval before upload. Folder-aware
+   backup v2 still requires the physical-device acceptance matrix supplied in
+   the handoff; Build 53 remains the accepted rollback until acceptance.
 5. Do not expand the accepted build to Family, external TestFlight, or App Store
    review without a separate explicit decision and the corresponding release
    gates.
