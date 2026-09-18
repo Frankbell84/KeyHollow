@@ -7,6 +7,43 @@ evidence remains in `docs/PROJECT_CHECKPOINT.md`.
 
 ## Provenance
 
+- PR [#83](https://github.com/Frankbell84/KeyHollow/pull/83) merged the exact
+  reviewed Build 52 release head
+  `d2d2caa7cb5c0a89c899038f72983da7404a4d1f` through protected `main` commit
+  `0dfc5a1faa5fd0664ead1df1d7ed5b5a43f1498e`; both resolve to exact tree
+  `a60d448d81dded58e7cc6c366c8f9c7e7fdb2d1e`.
+- PR CI run
+  [#35277285149](https://github.com/Frankbell84/KeyHollow/actions/runs/35277285149)
+  passed the complete build-and-test lane and Swift CodeQL. Security-test
+  artifact `10521197338` has SHA-256
+  `fbf9ef17aec9d15446986f19ad9cb3e499d74fd517127a7ddc565d1db4346081`;
+  simulator artifact `10521656629` has SHA-256
+  `ccfa546b7ac9269cf39d7ca884988dcfbcf69e6555b08b69878c621e743f2e20`.
+- Exact merged-main CI run
+  [#35279640351](https://github.com/Frankbell84/KeyHollow/actions/runs/35279640351)
+  passed the complete build-and-test lane and Swift CodeQL. Security-test
+  artifact `10522352068` has SHA-256
+  `b5b342d88481129ce216956362d233ed8fd93709d053e80d5f3481f774edd1a0`;
+  simulator artifact `10522691529` has SHA-256
+  `e690fe2e944d36172205f3a18a3f762b718d90fbafd5ac039392254e9f2f53b0`.
+- Protected Build 52 signing-only preflight run
+  [#35282133029](https://github.com/Frankbell84/KeyHollow/actions/runs/35282133029)
+  passed for the exact protected-main source without uploading or publishing.
+  Separately authorized upload run
+  [#35284768545](https://github.com/Frankbell84/KeyHollow/actions/runs/35284768545)
+  then completed successfully. IPA artifact `10523584655` is 2,413,044 bytes
+  and has SHA-256
+  `4e62152e5a6f3c00fe4031c9f25c01fea9f5d228080c7f1279bfa13208c27f04`;
+  Apple delivery UUID is `c1d1cc03-f011-41d9-8102-d7def57637d1`.
+- App Store Connect completed processing Build 52, reports `Ready to Submit`,
+  and assigns it only to `KeyHollow Internal`. Frank installed and tested the
+  Internal binary on a physical iPhone and confirmed that the previously
+  reproducible portrait-video fullscreen failure is resolved. Build 52 is the
+  current accepted Internal baseline. No Family, external TestFlight, or App
+  Store release assignment was made.
+- Build 48 remains retained as rollback/comparison evidence. Build 51 remains
+  failed and unaccepted evidence for the blank AVKit surface and inert Play
+  control defect.
 - PR [#82](https://github.com/Frankbell84/KeyHollow/pull/82) merged the exact
   reviewed stable playback-session repair head
   `fa9976e13ab15bac48edea37133a8ceed5d45f83` through protected `main` commit
@@ -50,8 +87,9 @@ evidence remains in `docs/PROJECT_CHECKPOINT.md`.
 - Physical-device testing of the Internal Build 51 candidate reproduced the
   release blocker: a portrait video can still enter a blank AVKit surface with
   an inert Play control unless the user times actions around the transition.
-  Build 51 is therefore failed and unaccepted; Build 48 remains the accepted
-  rollback and comparison baseline.
+  Build 51 is therefore failed and unaccepted. Build 48 remains retained as
+  rollback and comparison evidence; Build 52 is the current accepted Internal
+  baseline.
 - The repair is isolated to presentation ownership, not encryption or storage.
   It replaces the transient embedded-player lifecycle with one stable
   module-owned playback session, one viewer-root UIKit presentation anchor,
@@ -125,7 +163,7 @@ evidence remains in `docs/PROJECT_CHECKPOINT.md`.
   move destinations are flattened into a long-path menu that becomes ambiguous
   as soon as nested folders exist. Build 49 therefore remains an Internal test
   candidate rather than the accepted comparison baseline.
-- Current accepted production source: exact `main` commit
+- Retained Build 48 rollback/comparison source: exact `main` commit
   `fd2f39f079f3dca853f09e2d67caa8a5cd2eab5c`.
 - Build 48 completed exact-main CI in run
   [#35142349830](https://github.com/Frankbell84/KeyHollow/actions/runs/35142349830),
@@ -135,7 +173,7 @@ evidence remains in `docs/PROJECT_CHECKPOINT.md`.
   [#35146713445](https://github.com/Frankbell84/KeyHollow/actions/runs/35146713445).
   App Store Connect completed processing and shows only `KeyHollow Internal`.
   Frank physically tested Vault Catalog Sorting and confirmed that it works as
-  intended. Build 48 is the accepted rollback and comparison baseline.
+  intended. Build 48 is retained as the rollback and comparison baseline.
 - PR [#76](https://github.com/Frankbell84/KeyHollow/pull/76) merged the exact
   reviewed Nested Folder Hierarchy head
   `9bf85319f7cf3fe7c141908889723569db55eb54` through regular merge commit
@@ -255,12 +293,15 @@ evidence remains in `docs/PROJECT_CHECKPOINT.md`.
 - Retained Build 39 IPA artifact: `10132108885`
 - IPA SHA-256:
   `99a3ed152df2c5bb267e5950aab27db82e51e3d22e91981f1d3d15812ced72e1`
-- The latest accepted product is version 1.0, Build 48, built from exact
-  `main` commit `fd2f39f079f3dca853f09e2d67caa8a5cd2eab5c`.
-- Protected signed-upload workflow
+- The latest accepted product is version 1.0, Build 52, built from exact
+  protected `main` commit
+  `0dfc5a1faa5fd0664ead1df1d7ed5b5a43f1498e`, processed by App Store Connect,
+  assigned only to `KeyHollow Internal`, and accepted after physical-device
+  confirmation of the previously failing portrait-video fullscreen path.
+- Prior Build 40 protected signed-upload workflow
   [#34602241254](https://github.com/Frankbell84/KeyHollow/actions/runs/34602241254)
-  completed successfully. App Store Connect reports the binary as validated,
-  and it is assigned only to `KeyHollow Internal`.
+  completed successfully. App Store Connect reported the Build 40 binary as
+  validated and assigned only to `KeyHollow Internal`.
 - Frank installed and exercised Build 40 on a physical iPhone and confirmed
   that the tested Backup Verification behavior works.
 - Encrypted Video Support, post-Build-39 hardening, and Backup Verification
@@ -273,21 +314,21 @@ evidence remains in `docs/PROJECT_CHECKPOINT.md`.
 
 ## Current task
 
-Build 48 remains the physically accepted rollback and comparison baseline at
-exact protected `main` commit
-`fd2f39f079f3dca853f09e2d67caa8a5cd2eab5c`. Build 50's Files-style nested
-move picker passed physical-device testing, but Builds 50 and 51 remain
-Internal-only and unaccepted because their portrait-fullscreen paths reproduced
-the blank AVKit surface and inert Play control.
+Build 52 is the current physically accepted Internal baseline at exact
+protected `main` commit
+`0dfc5a1faa5fd0664ead1df1d7ed5b5a43f1498e`. Its reviewed source, pull-request
+CI, exact-main CI, no-upload signing preflight, signed upload, App Store Connect
+processing, Internal-only assignment, and physical-device acceptance are all
+complete. This acceptance also promotes the already tested Files-style nested
+move picker and Nested Folder Hierarchy with the stable portrait-video playback
+session. Build 48 remains rollback/comparison evidence, and Build 51 remains
+the preserved failed-candidate evidence point.
 
-The stable playback-session repair is now merged to exact protected `main`
-commit `837874744fcd31834fd9dba925212e4edf215b30`, and its exact-main build,
-security tests, and Swift CodeQL are green. The current task is the isolated
-Build 52 release candidate on
-`release/build52-stable-portrait-playback-session`, created directly from that
-commit. Its packaging changes only both product build numbers from 51 to 52,
-refreshes the canonical `project.yml` security pin, and records exact release
-evidence.
+The current task is a documentation-only acceptance closeout. It changes no
+runtime, cryptography, archive, storage, hierarchy, media, or UI behavior. Once
+this closeout passes protected review, the next task is to review the verified
+roadmap and select one bounded add-on or the wider release-readiness track from
+the accepted Build 52 baseline.
 
 Protected records, cryptography, archive formats, media payloads, hierarchy
 metadata, and ciphertext remain unchanged. External playback, Picture in
@@ -741,29 +782,29 @@ only boundary.
 
 ## Next action
 
-1. Preserve exact Build 51 source
-   `9578136b74cbda7c5221c71cf7d357fa087b8a98` as the failed-candidate evidence
-   point and preserve Build 48 as the accepted rollback/comparison baseline.
-2. Publish only the reviewed Build 52 packaging head through a draft pull
-   request and require the complete macOS build, unit/integration, security,
-   and Swift CodeQL gates.
-3. Merge only that exact packaging head through protected `main`, verify tree
-   equality, and require complete exact-main CI.
-4. Run the Build 52 no-upload signing preflight from the exact resulting
-   protected-main commit.
-5. Only after that preflight passes, authorize an exact-commit signed upload to
-   `KeyHollow Internal` only.
-6. Execute the stable-session checks in `docs/DEVICE_TEST_PLAN.md`. A native
-   Done must return to the selected video poster without an automatic reopen;
-   explicit replay must work, and the blank/inert Play state is a rejection if
-   it occurs even once. Do not expand to Family or external testers without a
-   separate decision.
+1. Publish and merge only this documentation-only Build 52 acceptance record
+   through the normal protected pull-request and CI path.
+2. Preserve exact Build 52 source
+   `0dfc5a1faa5fd0664ead1df1d7ed5b5a43f1498e` as the accepted Internal
+   baseline, exact Build 48 source
+   `fd2f39f079f3dca853f09e2d67caa8a5cd2eab5c` as rollback/comparison evidence,
+   and exact Build 51 source
+   `9578136b74cbda7c5221c71cf7d357fa087b8a98` as failed-candidate evidence.
+3. Review the verified roadmap and choose either one isolated add-on or the
+   wider release-readiness track. Do not begin a broad rewrite or combine
+   unrelated modules.
+4. If an add-on is selected, restart the bounded gates in
+   `docs/ADDON_RELEASE_POLICY.md` from the accepted Build 52 baseline.
+5. Do not expand Build 52 to Family, external testers, or App Store review
+   without a separate explicit decision.
 
 ## Frank's decisions required
 
 Frank's action-time decision is required for:
 
-- Publishing or merging any revision that would supersede the accepted Build 48
+- Selecting the next isolated add-on or choosing the wider release-readiness
+  track after the Build 52 acceptance closeout.
+- Publishing or merging any revision that would supersede the accepted Build 52
   source baseline.
 - Creating or changing GitHub environments, branch protection, reviewers, or
   secrets.

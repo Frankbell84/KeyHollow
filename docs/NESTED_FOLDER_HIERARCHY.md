@@ -1,10 +1,13 @@
 # Nested Folder Hierarchy
 
-Nested Folder Hierarchy is the next file-management refinement after the
-physically accepted Build 48 catalog search and sorting baseline. The mapping
-and compatibility contract below were completed before implementation began.
-Implementation remains isolated on its feature branch and does not authorize a
-build-number change, upload, merge, or tester expansion.
+Nested Folder Hierarchy was designed as the next file-management refinement
+after the physically accepted Build 48 catalog search and sorting baseline.
+The mapping and compatibility contract below were completed before
+implementation began. The hierarchy and Files-style nested move picker are now
+accepted as part of the Internal Build 52 baseline at exact protected `main`
+commit `0dfc5a1faa5fd0664ead1df1d7ed5b5a43f1498e`. This Internal acceptance does
+not authorize Family, external TestFlight, or App Store expansion and does not
+change the deliberate exclusions below.
 
 ## Product boundary
 

@@ -32,10 +32,11 @@ KeyHollow is a security product first. Cryptographic design, key derivation, sec
 
 ## Status
 
-Native iOS implementation is in active development. Build 48 from exact
-`main` commit `fd2f39f079f3dca853f09e2d67caa8a5cd2eab5c` is the accepted
-device-tested baseline. Vault Catalog Search and Vault Catalog Sorting are
-accepted presentation-only add-ons. Nested Folder Hierarchy is in a bounded
-isolated implementation phase. It has not changed the accepted Build 48
-baseline, completed pull-request CI, changed the build number, or entered a
-signed TestFlight release.
+Native iOS implementation is in active development. Build 52 from exact
+protected `main` commit `0dfc5a1faa5fd0664ead1df1d7ed5b5a43f1498e` is the
+accepted device-tested Internal baseline. It includes the accepted Vault
+Catalog Search, Vault Catalog Sorting, Nested Folder Hierarchy, Files-style
+nested move picker, and stable portrait-video playback session. Build 48 is
+retained as rollback/comparison evidence, and Build 51 remains preserved as a
+failed portrait-playback candidate. No Family, external TestFlight, or App
+Store release is implied by this Internal acceptance.
