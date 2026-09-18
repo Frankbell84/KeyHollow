@@ -541,6 +541,7 @@ final class PortableVaultVerificationReportTests: XCTestCase {
             credential: credential,
             destinationURL: roots.archive,
             sourceRootOverride: roots.photoSource,
+            folderContent: PortableVaultNoFolderContent(),
             workingRootOverride: roots.working,
             keyDeriver: VerificationTestKeyDeriver()
         )
@@ -582,6 +583,7 @@ final class PortableVaultVerificationReportTests: XCTestCase {
             sourceRootOverride: roots.photoSource,
             supplementalSourceRootOverride: roots.generalFileSource,
             supplementalContent: GeneralFilePortableTransferBridge(access: generalAccess),
+            folderContent: PortableVaultNoFolderContent(),
             workingRootOverride: roots.working,
             keyDeriver: VerificationTestKeyDeriver()
         )
@@ -794,6 +796,7 @@ final class PortableVaultVerificationReportTests: XCTestCase {
             sourceRootOverride: roots.photoSource,
             supplementalSourceRootOverride: roots.generalFileSource,
             supplementalContent: GeneralFilePortableTransferBridge(access: generalAccess),
+            folderContent: PortableVaultNoFolderContent(),
             workingRootOverride: roots.working,
             keyDeriver: VerificationTestKeyDeriver()
         )

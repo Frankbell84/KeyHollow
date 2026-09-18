@@ -255,10 +255,12 @@ must not move when folders or items are reorganized.
   levels and during folder creation, move, and deletion. Confirm the privacy
   shield and relock behavior are unchanged, no prior-vault path flashes, and a
   committed hierarchy reopens intact.
-- Verify and restore a disposable `.khvault` backup. Confirm verification still
-  states that the current archive format does not preserve folders, restore
-  continues to place recovered content at root, and a `.khvault` file cannot be
-  imported as ordinary content or treated as an active vault inside a vault.
+- As the historical Build 53 check, verify and restore a maintained catalog
+  v1-v3 `.khvault` backup. Confirm verification states that this legacy archive
+  does not preserve folders, restore places recovered content at root, and a
+  `.khvault` file cannot be imported as ordinary content or treated as an active
+  vault inside a vault. Test the separately authorized catalog-v4 follow-on
+  under **Folder-aware portable backup v2** below.
 - Repeat the accepted mixed 26-item performance case across several nested
   locations. Reject the candidate for new scroll lag, thumbnail churn, delayed
   folder opening, input lag, a crash, runaway memory growth, or data loss.
@@ -409,6 +411,64 @@ passcode attempt, a delay beyond normal unlock work, force-quit, or relaunch.
   then enter the correct passcode once. The genuine failure must not poison or
   mislabel the following successful unlock.
 
+## Folder-aware portable backup v2
+
+Run these checks only after the feature branch's automated archive, bridge,
+module-boundary, and rollback tests pass. Use disposable vaults and maintained
+fixtures. Complete the primary round trip between two physical iPhones.
+
+- On device A, create root-level photos and general files plus an eight-level
+  folder branch, empty folders, the same folder name under two different
+  parents, and mixed photo/general-file memberships at several levels. Record
+  exact hierarchy, membership, root placement, item readability, and source
+  archive-independent SHA-256 values where available.
+- Export the vault and require catalog v4, exactly one authenticated
+  `folderManifest`, the expected folder and membership counts, and no source
+  folder, membership, item, LowKey, or session change. Confirm a source with no
+  folders or memberships may instead produce catalog v3.
+- Inspect only with the approved development tooling. Confirm the public
+  `.khvault` header, container, content-chunk framing, and payload prefix remain
+  version 1; `folders/manifest.khm` is named only inside the encrypted catalog,
+  and no plaintext folder name, membership, item identifier, or Folder
+  Presentation thumbnail cache is visible.
+- Verify the v4 archive without installing it. Require exact authenticated
+  folder and membership counts, and confirm the report exposes no folder name,
+  folder/item identifier, path, vault key, recovery code, manifest plaintext,
+  staging handle, or installation capability. The source archive and all local
+  vaults must remain unchanged after repeated verification and cancellation.
+- Transfer the archive to device B through the supported Files flow, enter the
+  recovery code, choose a new noncolliding LowKey, and restore. Require a fresh
+  destination vault identifier, the exact recorded hierarchy and memberships,
+  all root items still at root, empty folders intact, and every photo/general
+  file readable. Recalculate representative content hashes where practical.
+- Confirm no archived Folder Presentation thumbnail cache was installed.
+  Browse the restored hierarchy and require thumbnails to regenerate normally
+  without missing items, changed hierarchy, plaintext residue, or persistent
+  growth proportional to a second cache copy.
+- Restore maintained catalog v1, v2, and v3 fixtures. Require their verification
+  reports to disclose the compatibility limitation and every recovered item to
+  appear at vault root. Never infer folders from filenames or other metadata.
+- Using disposable tamper copies, alter, remove, duplicate, misname, truncate,
+  or oversize the v4 folder manifest and exercise invalid hierarchy, dangling,
+  duplicate, wrong-kind, and unarchived membership fixtures. Each must fail
+  closed before a report or LowKey prompt and leave no installed or partial
+  vault. Do not create ad hoc “legacy” fixtures on device.
+- Reject a LowKey that already resolves to an existing vault and then choose a
+  valid LowKey. Confirm the first rejection does not consume the validated
+  restore and neither attempt changes the existing vault.
+- With development fault injection, force termination before and after each
+  photo-root, supplemental-root, folder-root, credential-publication, and
+  journal-removal boundary. Relaunch after every stop. Require startup recovery
+  to converge to either one complete new vault or no new vault, with no partial
+  `GeneralFileData/<vault-UUID>` or
+  `FolderPresentationData/<vault-UUID>`, no stale matching credential/journal,
+  and no deletion or mutation of any preexisting vault.
+- Repeat cancellation, background, lock, insufficient-space, and force-quit
+  cases during protected ingress, authentication, extraction, folder
+  validation, and precommit LowKey entry. Confirm protected staging is removed
+  on terminal paths, a rejected LowKey remains retryable, privacy shielding is
+  opaque, and the next clean import succeeds.
+
 ## Backup Verification Center
 
 Run these checks with a TestFlight-delivered candidate and disposable test
@@ -422,13 +482,16 @@ archives. Do not use the only copy of a real backup for tamper tests.
 - From the locked home screen, open **Verify Backup**, select a valid current
   `.khvault`, enter its recovery code, and confirm progress is visible until a
   sanitized report appears.
-- Confirm the report's photo count, general-file count, source creation date,
-  payload-catalog version, and compatibility limitations match the selected
-  archive. The selected backup filename may appear; confirm the report does not
-  display a LowKey, recovery code, vault key, archived-item filenames, folder
-  names, or item contents.
-- Confirm the report states that current backups do not preserve folder names
-  or folder membership and that a future restore places content at vault root.
+- Confirm the report's photo count, general-file count, authenticated folder
+  count, authenticated membership count, source creation date, payload-catalog
+  version, and compatibility limitations match the selected archive. The
+  selected backup filename may appear; confirm the report does not display a
+  LowKey, recovery code, vault key, archived-item filenames, folder names,
+  folder/item identifiers, paths, manifest plaintext, or item contents.
+- For catalog v4, confirm the report says authenticated hierarchy and item
+  placement are preserved. For catalog v1-v3, confirm it says folder names and
+  memberships were not archived and a restore places recovered content at
+  vault root. A folderless current export may legitimately report catalog v3.
 - Lock or dismiss the report, reopen Backup Verification, verify the same
   archive again, and confirm the report is identical and the source archive is
   unchanged.
@@ -453,10 +516,11 @@ archives. Do not use the only copy of a real backup for tamper tests.
 - Unlock an existing vault, open Backup Verification from **Vault Security**,
   verify a valid archive, and confirm the open vault's contents, folder
   membership, LowKey, and session behavior are unchanged.
-- Cover a photo-only archive, a general-file-only archive, a mixed archive, and
-  an archive containing a video imported as a general file. If maintained
-  legacy v1 and v2 fixtures are available, confirm their limitations are
-  reported accurately; do not fabricate replacement fixtures on the device.
+- Cover a photo-only archive, a general-file-only archive, a mixed archive, an
+  archive containing a video imported as a general file, and a catalog-v4
+  archive with nested and empty folders plus mixed memberships. Use maintained
+  v1, v2, and v3 fixtures to confirm their limitations are reported accurately;
+  do not fabricate replacement fixtures on the device.
 - Repeat verify/cancel at least five times. Confirm KeyHollow storage does not
   grow by approximately one archive per attempt; this is the physical-device
   proxy for checked ingress and extracted-staging cleanup.
@@ -510,6 +574,11 @@ archives. Do not use the only copy of a real backup for tamper tests.
 - Confirm KeyHollow encrypted storage directories/files carry complete file protection.
 - Confirm protected vault data is excluded from ordinary backup as designed.
 - Inspect the app container in a development environment and verify no plaintext photos, thumbnails, passcodes, keys, sensitive filenames, or manifest contents are persistently stored.
+- For a catalog-v4 fixture, confirm the installed folder manifest remains
+  authenticated ciphertext under `FolderPresentationData/<vault-UUID>`, no
+  exported Folder Presentation thumbnail cache exists, and no folder name or
+  membership appears in the public archive header, filesystem logs, previews,
+  or verification report.
 
 ## Release gate
 

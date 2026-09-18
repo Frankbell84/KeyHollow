@@ -1,8 +1,11 @@
 # KeyHollow Encrypted Vault Archive
 
 Status: archive creation, validation, rollback, export, and import are
-implemented. This document records the version 1 format that the code writes
-and reads. Physical-device release gates remain incomplete.
+implemented. This document records the version 1 outer format that the code
+writes and reads, including its separately versioned authenticated inner
+catalog. Physical-device release gates remain incomplete. Folder-aware
+portable backup v2 is a product capability name; it does not change the public
+header, container, content-chunk, or payload-prefix version.
 
 ## Product boundary
 
@@ -105,9 +108,10 @@ cross-archive transplantation.
 
 The content stream packages the already-encrypted photo manifest, photo blobs,
 thumbnails, and—when present—the already-encrypted supplemental general-file
-manifest and blobs. Outer content encryption hides catalog metadata while
-preserving the existing inner authenticated encryption. Export must stream
-bounded chunks rather than load an entire vault into memory.
+manifest and blobs and the Folder Presentation manifest. Folder thumbnail
+caches are derived data and are never packaged. Outer content encryption hides
+catalog metadata while preserving the existing inner authenticated encryption.
+Export must stream bounded chunks rather than load an entire vault into memory.
 
 Each content chunk will authenticate its archive identifier, sequence number,
 and final-chunk marker. Import must reject missing, duplicated, reordered,
@@ -133,19 +137,40 @@ separately:
 - Catalog version one is the shipped photo-only layout.
 - Catalog version two is the shipped photo-and-general-file layout.
 - Catalog version three keeps the version-two layout and applies the current
-  bounded policy to new archives: at most 10,000 photos, 10,000 supplemental
-  files, 30,002 total catalog entries, a 16 MiB catalog, 100 MiB photo or
-  supplemental blobs, 4 MiB thumbnails, 16 MiB photo manifests, 8 MiB
-  supplemental manifests, and 10 GiB total declared ciphertext. Each stated
-  entry limit excludes the fixed 28-byte inner AES-GCM overhead.
+  bounded policy to archives without folder hierarchy: at most 10,000 photos,
+  10,000 supplemental files, 30,002 total catalog entries, a 16 MiB catalog,
+  100 MiB photo or supplemental blobs, 4 MiB thumbnails, 16 MiB photo
+  manifests, 8 MiB supplemental manifests, and 10 GiB total declared
+  ciphertext. Each stated entry limit excludes the fixed 28-byte inner
+  AES-GCM overhead.
+- Catalog version four keeps those media limits and requires exactly one
+  `folderManifest` entry with canonical storage name
+  `folders/manifest.khm`. It permits at most 10,000 folders, 20,000 unique
+  memberships, an 8 MiB folder-manifest plaintext, 30,003 total catalog
+  entries, the same 16 MiB catalog, and the same 10 GiB total declared
+  ciphertext. The manifest contains folder hierarchy and membership, never
+  Folder Presentation thumbnail caches.
 
 Current readers retain the already-shipped version-one/two compatibility
 envelope—32 MiB catalog, 200,001 entries, 1 TiB per encrypted entry, and 4 TiB
-total—so authenticated Build 39 archives remain recoverable. New exports use
-catalog version three when they satisfy current limits; an authenticated local
-legacy vault that exceeds only those newer limits falls back to catalog version
-two within the shipped envelope. Version-three exports are intentionally not
-readable by older builds that recognize only versions one and two.
+total—so authenticated Build 39 archives remain recoverable. Readers also
+retain catalog-version-three compatibility. Catalog v1-v3 contain no folder
+manifest, and their recovered content is placed at vault root; no hierarchy is
+inferred from filenames or other metadata. New exports without hierarchy use
+catalog version three. New exports with a nonempty authenticated Folder
+Presentation hierarchy use version four and fail closed rather than dropping
+that hierarchy. An authenticated local legacy vault without hierarchy that
+exceeds only the newer v3 limits may still fall back to catalog version two
+within the shipped envelope. Version-three and version-four exports are not
+readable by older builds that do not recognize them.
+
+TransferCore treats the v4 folder manifest as opaque authenticated ciphertext.
+Application composition loads and validates it through Folder Presentation,
+cross-checks neutral photo/general-file UUID references against the authenticated
+content inventories, strips thumbnail caches, and reseals the result with the
+existing Folder Presentation manifest domain. TransferCore imports neither
+Folder Presentation nor Nested Folder. The complete ownership and restore
+contract is in `FOLDER_AWARE_PORTABLE_BACKUP.md`.
 
 The outer reader additionally requires canonical framing: every non-final
 plaintext frame is exactly 1 MiB, the final frame is smaller, and the sequence
@@ -173,26 +198,33 @@ The source vault remains untouched throughout this process.
 2. Validate magic, version, header sizes, and bounded KDF parameters.
 3. Authenticate the sealed secrets with the portable credential.
 4. Stream and authenticate every content chunk into a staging directory.
-5. Validate the encrypted manifest and every referenced ciphertext blob.
+5. Validate the encrypted photo and supplemental manifests and every referenced
+   ciphertext blob. For catalog v4, validate the staged Folder Presentation
+   manifest and every membership against those authenticated inventories.
 6. Ask the user to establish a new LowKey for the destination device.
 7. Derive a new device-bound V1 credential envelope and reject any LowKey that
    already resolves to a local vault.
 8. Persist a file-protected, device-authenticated rollback journal containing
    only the fresh vault identifier, opaque credential locator, and fingerprint
    of the exact new encrypted credential envelope.
-9. Move the fully verified staging directory into a fresh destination-vault
-   identifier without replacing any existing directory.
-10. Publish the new LowKey wrapper only after the ciphertext move succeeds.
+9. Move the fully verified photo root and, when present, the staged supplemental
+   and folder directories into their owner-specific roots under the same fresh
+   destination-vault identifier, without replacing any existing directory.
+10. Publish the new LowKey wrapper only after every required ciphertext move
+    succeeds.
 11. Remove the rollback journal only after both commits succeed.
-12. If credential publication reports an error, remove both the wrapper and
-    the moved ciphertext before reporting failure.
+12. If credential publication reports an error, remove the matching wrapper
+    and every photo, supplemental, and folder destination owned by the
+    transaction before reporting failure.
 
 Authentication or validation failures remove staging data. A rejected new
 LowKey leaves the validated staging directory available for another LowKey;
 commit failures roll it back. Existing vaults remain unchanged in every case.
 On launch, any remaining authenticated journal is rolled back rather than
-completed: KeyHollow removes the new wrapper and destination directory, clears
-the journal only after both are absent, and requires the user to retry import.
+completed: KeyHollow removes the new wrapper and every photo, supplemental,
+and Folder Presentation destination derived from the fresh vault identifier,
+clears the journal only after all are absent, and requires the user to retry
+import.
 A modified, forged, malformed, or unrecognized journal fails closed without
 deleting the paths it names. Recovery deletes a credential only when its
 fingerprint matches the transaction, so an unrelated wrapper at the same
@@ -210,6 +242,10 @@ isolated feature branch.
 - modified, missing, duplicated, or reordered content chunk;
 - truncated header or content stream;
 - unsupported archive version;
+- missing, duplicate, misnamed, oversized, tampered, or undecryptable catalog
+  v4 folder manifest;
+- invalid folder hierarchy or a dangling, duplicate, wrong-kind, or unarchived
+  folder membership;
 - insufficient storage before and during transfer;
 - app termination during export or import;
 - tampered, malformed, or unauthenticated rollback journal;
@@ -218,6 +254,11 @@ isolated feature branch.
 - existing vault-identifier collision;
 - large vault with bounded memory usage;
 - restoration on a different physical iPhone;
+- force termination at each photo, supplemental, and folder move and proof that
+  rollback leaves neither a partial destination nor an unrelated deletion;
+- restoration of maintained catalog v1-v3 fixtures at vault root;
+- confirmation that folder thumbnail caches are absent from the archive and
+  regenerate after restore;
 - confirmation that no plaintext media, filenames, or catalog appears in
   temporary files, logs, previews, or system backups.
 

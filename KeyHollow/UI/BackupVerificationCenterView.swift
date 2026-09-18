@@ -132,7 +132,7 @@ struct BackupVerificationCenterView: View {
             }
 
             Section {
-                Text("Current portable backups preserve photos and general files, including videos imported through Files. Folder names and folder membership are not included in this archive format.")
+                Text("Folder-aware portable backups preserve photos, general files, folder names, and item organization. Root-level catalog backups still verify and restore their content at vault root.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
@@ -359,6 +359,7 @@ struct BackupVerificationCenterView: View {
                     archiveURL: selectedArchive.url,
                     credential: credential,
                     supplementalContent: GeneralFilePortableTransferBridge(),
+                    folderContent: FolderPresentationPortableTransferBridge(),
                     progress: { progress in
                         Task { @MainActor in
                             if activeOperationID == operationID {
@@ -378,7 +379,9 @@ struct BackupVerificationCenterView: View {
                     photoCount: verified.authenticatedPhotoCount,
                     generalFileCount: verified.authenticatedFileCount,
                     authenticatedEntryCount: verified.authenticatedEntryCount,
-                    legacyOversizedPhotoCount: verified.legacyOversizedPhotoCount
+                    legacyOversizedPhotoCount: verified.legacyOversizedPhotoCount,
+                    folderCount: verified.authenticatedFolderCount,
+                    folderMembershipCount: verified.authenticatedFolderMembershipCount
                 )
                 do {
                     try selectedArchive.discardChecked()

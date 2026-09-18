@@ -24,6 +24,8 @@ final class VaultBackupVerificationAddOnTests: XCTestCase {
         XCTAssertEqual(report.generalFileCount, 2)
         XCTAssertEqual(report.authenticatedEntryCount, 18)
         XCTAssertEqual(report.legacyOversizedPhotoCount, 0)
+        XCTAssertEqual(report.folderCount, 0)
+        XCTAssertEqual(report.folderMembershipCount, 0)
         XCTAssertEqual(storedFieldNames, [
             "displayName",
             "archiveByteCount",
@@ -33,7 +35,9 @@ final class VaultBackupVerificationAddOnTests: XCTestCase {
             "photoCount",
             "generalFileCount",
             "authenticatedEntryCount",
-            "legacyOversizedPhotoCount"
+            "legacyOversizedPhotoCount",
+            "folderCount",
+            "folderMembershipCount"
         ])
     }
 
@@ -96,13 +100,30 @@ final class VaultBackupVerificationAddOnTests: XCTestCase {
         )
     }
 
-    func testFolderCompatibilityDisclosureStatesCurrentArchiveLimitation() {
+    func testFolderCompatibilityDisclosureStatesLegacyArchiveLimitation() {
         let disclosure = BackupVerificationPresentationPolicy
             .compatibilityDisclosure(for: makeReport())
 
         XCTAssertTrue(disclosure.contains("photos and general files"))
-        XCTAssertTrue(disclosure.contains("not preserved"))
+        XCTAssertTrue(disclosure.contains("root-level backup"))
+        XCTAssertTrue(disclosure.contains("does not preserve"))
         XCTAssertTrue(disclosure.contains("folder membership"))
+        XCTAssertTrue(disclosure.contains("vault root"))
+    }
+
+    func testFolderAwareDisclosureReportsAuthenticatedOrganizationCounts() {
+        let disclosure = BackupVerificationPresentationPolicy
+            .compatibilityDisclosure(
+                for: makeReport(
+                    catalogVersion: 4,
+                    folderCount: 3,
+                    folderMembershipCount: 8
+                )
+            )
+
+        XCTAssertTrue(disclosure.contains("3 authenticated folders"))
+        XCTAssertTrue(disclosure.contains("8 item placements"))
+        XCTAssertFalse(disclosure.contains("does not preserve"))
     }
 
     func testLegacyV1CompatibilityDoesNotClaimGeneralFilePreservation() {
@@ -133,6 +154,15 @@ final class VaultBackupVerificationAddOnTests: XCTestCase {
                 .authenticatedEntryCountDescription(for: report),
             "1 authenticated archive entry"
         )
+        XCTAssertEqual(
+            BackupVerificationPresentationPolicy.folderCountDescription(for: report),
+            "0 folders"
+        )
+        XCTAssertEqual(
+            BackupVerificationPresentationPolicy
+                .folderMembershipCountDescription(for: report),
+            "0 organized items"
+        )
     }
 
     func testArchiveByteFormattingDoesNotOverflowForPrimitiveValueBoundary() {
@@ -152,7 +182,9 @@ final class VaultBackupVerificationAddOnTests: XCTestCase {
         photoCount: Int = 7,
         generalFileCount: Int = 2,
         authenticatedEntryCount: Int = 18,
-        legacyOversizedPhotoCount: Int = 0
+        legacyOversizedPhotoCount: Int = 0,
+        folderCount: Int = 0,
+        folderMembershipCount: Int = 0
     ) -> BackupVerificationReport {
         BackupVerificationReport(
             displayName: "Family Backup.khvault",
@@ -163,7 +195,9 @@ final class VaultBackupVerificationAddOnTests: XCTestCase {
             photoCount: photoCount,
             generalFileCount: generalFileCount,
             authenticatedEntryCount: authenticatedEntryCount,
-            legacyOversizedPhotoCount: legacyOversizedPhotoCount
+            legacyOversizedPhotoCount: legacyOversizedPhotoCount,
+            folderCount: folderCount,
+            folderMembershipCount: folderMembershipCount
         )
     }
 }

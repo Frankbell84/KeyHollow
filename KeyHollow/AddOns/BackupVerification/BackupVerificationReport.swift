@@ -15,6 +15,8 @@ public struct BackupVerificationReport: Equatable, Sendable {
     public let generalFileCount: Int
     public let authenticatedEntryCount: Int
     public let legacyOversizedPhotoCount: Int
+    public let folderCount: Int
+    public let folderMembershipCount: Int
 
     public init(
         displayName: String,
@@ -25,7 +27,9 @@ public struct BackupVerificationReport: Equatable, Sendable {
         photoCount: Int,
         generalFileCount: Int,
         authenticatedEntryCount: Int,
-        legacyOversizedPhotoCount: Int
+        legacyOversizedPhotoCount: Int,
+        folderCount: Int = 0,
+        folderMembershipCount: Int = 0
     ) {
         self.displayName = displayName
         self.archiveByteCount = archiveByteCount
@@ -36,6 +40,8 @@ public struct BackupVerificationReport: Equatable, Sendable {
         self.generalFileCount = generalFileCount
         self.authenticatedEntryCount = authenticatedEntryCount
         self.legacyOversizedPhotoCount = legacyOversizedPhotoCount
+        self.folderCount = folderCount
+        self.folderMembershipCount = folderMembershipCount
     }
 
     public var status: BackupVerificationStatus {
@@ -70,8 +76,15 @@ public enum BackupVerificationPresentationPolicy {
         } else {
             contentSupport = "This payload catalog can preserve photos and general files."
         }
+        if report.catalogVersion >= 4 {
+            let folderNoun = report.folderCount == 1 ? "folder" : "folders"
+            return contentSupport
+                + " It also preserves \(report.folderCount) authenticated \(folderNoun)"
+                + " and \(report.folderMembershipCount) item placements."
+        }
         return contentSupport
-            + " Folder names and folder membership are not preserved."
+            + " This root-level backup does not preserve folder names or folder membership;"
+            + " restored content is placed at vault root."
     }
 
     public static func statusTitle(
@@ -90,8 +103,12 @@ public enum BackupVerificationPresentationPolicy {
     ) -> String {
         switch report.status {
         case .verified:
-            "All supported archived photos and files passed the current "
-                + "verification checks."
+            if report.catalogVersion >= 4 {
+                "All supported archived contents and organization passed the current "
+                    + "verification checks."
+            } else {
+                "All supported archived contents passed the current verification checks."
+            }
         case .verifiedWithLegacyLimitations:
             "Archive authentication passed. One or more legacy photos could "
                 + "not complete current item-level verification."
@@ -135,6 +152,22 @@ public enum BackupVerificationPresentationPolicy {
             report.authenticatedEntryCount,
             singular: "authenticated archive entry",
             plural: "authenticated archive entries"
+        )
+    }
+
+    public static func folderCountDescription(
+        for report: BackupVerificationReport
+    ) -> String {
+        countDescription(report.folderCount, singular: "folder", plural: "folders")
+    }
+
+    public static func folderMembershipCountDescription(
+        for report: BackupVerificationReport
+    ) -> String {
+        countDescription(
+            report.folderMembershipCount,
+            singular: "organized item",
+            plural: "organized items"
         )
     }
 

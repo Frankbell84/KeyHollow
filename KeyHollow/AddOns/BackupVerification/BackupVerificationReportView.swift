@@ -97,6 +97,18 @@ public struct BackupVerificationReportView: View {
                 value: BackupVerificationPresentationPolicy
                     .generalFileCountDescription(for: report)
             )
+            if report.catalogVersion >= 4 {
+                reportRow(
+                    "Folders",
+                    value: BackupVerificationPresentationPolicy
+                        .folderCountDescription(for: report)
+                )
+                reportRow(
+                    "Folder placements",
+                    value: BackupVerificationPresentationPolicy
+                        .folderMembershipCountDescription(for: report)
+                )
+            }
             reportRow(
                 "Archive entries",
                 value: BackupVerificationPresentationPolicy
@@ -120,9 +132,13 @@ public struct BackupVerificationReportView: View {
 
     private var folderCompatibilityCard: some View {
         disclosureCard(
-            title: "Folder compatibility",
-            symbolName: "folder.badge.questionmark",
-            tint: .orange,
+            title: report.catalogVersion >= 4
+                ? "Folder integrity"
+                : "Folder compatibility",
+            symbolName: report.catalogVersion >= 4
+                ? "checkmark.shield.fill"
+                : "folder.badge.questionmark",
+            tint: report.catalogVersion >= 4 ? .green : .orange,
             text: BackupVerificationPresentationPolicy.compatibilityDisclosure(
                 for: report
             )

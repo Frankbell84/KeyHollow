@@ -12,10 +12,10 @@ small local core with narrow adapters around it.
 | `Storage` | Opaque credential-envelope persistence | Decrypted media, user-interface state, transfer presentation |
 | `Session` | Active-vault capability, lock revocation, sensitive-task lifetime | Photos permission prompts, navigation, cloud services |
 | `Photos/VaultPhoto*` | Encrypted photo records, manifests, blob persistence | SwiftUI, UIKit, Photos framework calls |
-| `Transfer` | `.khvault` format, authenticated streaming, staging, rollback | Screens, Photos library calls, network clients |
+| `Transfer` | `.khvault` framing, authenticated inner catalog, opaque payload staging, multi-root restore journal, and rollback | Screens, Photos library calls, network clients, Folder Presentation or Nested Folder implementations |
 | `Photos/SecurePhotoPicker` | The narrow Apple Photos adapter | Vault keys, archive format, credential persistence |
 | `UI` and gallery view | User interaction and presentation | Cryptographic algorithms or direct persistence formats |
-| `App` | Composition and lifecycle entry | Feature implementation details |
+| `App` | Composition, lifecycle entry, and narrow bridges between protected stores/add-ons and neutral core interfaces | Ownership of archive framing or add-on persistence rules |
 | `AddOns/FileRecognition` | `.khvault` filename recognition and bounded ingress staging | Vault decryption, vault keys, protected content stores, application navigation |
 | `AddOns/BackupVerification` | Immutable archive-verification report values and read-only result presentation | Recovery credentials, vault keys, ciphertext, staging URLs, protected stores, archive parsing, installation, application navigation |
 | `AddOns/CatalogSearch` | Bounded matching and stable ordering of already-sanitized display metadata | Vault identity, record identifiers, stores, keys, URLs, payloads, folder manifests, mutation, recursive traversal, archive formats |
@@ -55,10 +55,14 @@ storage module importing session, UI, Photos, or transfer code.
 
 `KeyHollowTransferCore` owns the `.khvault` security header, authenticated
 streaming container, encrypted payload catalog, restore staging, transaction
-journal, rollback, and transfer coordinator. It receives only a narrow,
-revocable export-access interface from the app session and returns a neutral
-vault payload after installation. It does not import the app session,
-`UnlockedVault`, UI, Photos, networking, or remote services.
+journal, rollback, and transfer coordinator. The version-1 public header,
+container, content-chunk framing, and payload prefix remain stable while the
+authenticated inner catalog can evolve. Catalog v4 represents folder content
+only as opaque manifest ciphertext, sanitized counts, and neutral
+photo/general-file UUID references. TransferCore receives narrow, revocable
+interfaces from application composition and returns a neutral vault payload
+after installation. It does not import the app session, `UnlockedVault`, UI,
+Photos, Folder Presentation, Nested Folder, networking, or remote services.
 
 `KeyHollowPhotosAdapter` is the only non-presentation boundary allowed to
 import the Apple Photos and PhotosUI frameworks. It owns picker-item loading,
@@ -110,16 +114,41 @@ be the root) and cannot delete protected content. Single-item and
 mixed-selection moves update only the encrypted folder manifest; a batch is
 committed with one authenticated manifest write and never moves or rewrites
 photo or general-file ciphertext. Removing the add-on leaves the protected
-stores and existing `.khvault` format operational.
+stores and catalog v1-v3 `.khvault` behavior operational. Catalog v4 archives
+that declare folder content require the application bridge and fail closed if
+it is unavailable; TransferCore must never silently flatten or discard an
+authenticated folder manifest.
+
+`FolderPresentationPortableTransferBridge` is an application-composition
+adapter, not a new persistence owner. On export it loads the authenticated
+Folder Presentation manifest, validates every membership against the photo and
+general-file UUID inventories, removes derived thumbnail-cache records, and
+reseals the bounded manifest with the existing Folder Presentation
+cryptographic domain. It gives TransferCore only opaque ciphertext, counts, and
+neutral references. On verification or restore it opens the staged
+`folders/manifest.khm` through `VaultFolderPresentationStore`, requires an empty
+thumbnail cache, reuses the store's hierarchy validation, and rechecks every
+membership against authenticated archived content. This seam prevents
+TransferCore from depending on either folder add-on.
 
 `KeyHollowNestedFolderAddOn` owns only immutable, bounded folder-metadata
 policy used for breadcrumbs, current-location navigation, and valid parent
 destinations. It does not read, validate, encrypt, or persist a folder manifest
-and has no mutation capability. The application composition layer maps
+and has no mutation, export, verification, restore, or archive capability. The
+application composition layer maps
 FolderPresentation records into the add-on's neutral descriptors, applies its
 results to the gallery UI, and sends user-authorized mutations back through
 FolderPresentation. Neither add-on imports the other; replacing the navigation
 policy cannot weaken the persisted-manifest validation boundary.
+
+Folder-aware restore uses one authenticated transaction across the photo root,
+optional `GeneralFileData/<fresh-vault-UUID>`, optional
+`FolderPresentationData/<fresh-vault-UUID>`, and the matching new credential.
+All destination roots are preflighted before commit. The credential is
+published only after every required ciphertext move, and the journal is
+removed last. Commit failure or startup recovery removes every destination
+owned by that transaction and only the matching credential, leaving all
+existing vaults untouched.
 
 `KeyHollowCatalogSearchAddOn` owns only bounded, dependency-free display-text
 matching and stable catalog-ordering policies. The application composition

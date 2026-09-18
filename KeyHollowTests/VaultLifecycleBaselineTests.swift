@@ -904,6 +904,7 @@ private final class LifecycleFixture: @unchecked Sendable {
     let credentialRoot: URL
     let photoRoot: URL
     let generalFileRoot: URL
+    let folderPresentationRoot: URL
     let portableRestoreJournalRoot: URL
     let portableRestoreWorkingRoot: URL
     let passcodeRotationJournalRoot: URL
@@ -923,6 +924,10 @@ private final class LifecycleFixture: @unchecked Sendable {
         credentialRoot = root.appendingPathComponent("credentials", isDirectory: true)
         photoRoot = root.appendingPathComponent("photos", isDirectory: true)
         generalFileRoot = root.appendingPathComponent("general-files", isDirectory: true)
+        folderPresentationRoot = root.appendingPathComponent(
+            "folder-presentation",
+            isDirectory: true
+        )
         portableRestoreJournalRoot = root.appendingPathComponent(
             "portable-restore-journals",
             isDirectory: true
@@ -942,6 +947,10 @@ private final class LifecycleFixture: @unchecked Sendable {
         try FileManager.default.createDirectory(at: credentialRoot, withIntermediateDirectories: true)
         try FileManager.default.createDirectory(at: photoRoot, withIntermediateDirectories: true)
         try FileManager.default.createDirectory(at: generalFileRoot, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(
+            at: folderPresentationRoot,
+            withIntermediateDirectories: true
+        )
         try FileManager.default.createDirectory(
             at: portableRestoreWorkingRoot,
             withIntermediateDirectories: true
@@ -965,6 +974,7 @@ private final class LifecycleFixture: @unchecked Sendable {
             vaultStorageRootOverride: credentialRoot,
             photoStorageRootOverride: photoRoot,
             generalFileStorageRootOverride: generalFileRoot,
+            folderPresentationStorageRootOverride: folderPresentationRoot,
             portableRestoreJournalRootOverride: portableRestoreJournalRoot,
             portableRestoreWorkingRootOverride: portableRestoreWorkingRoot,
             passcodeRotationJournalRootOverride: passcodeRotationJournalRoot,
@@ -985,6 +995,7 @@ private final class LifecycleFixture: @unchecked Sendable {
             secrets: FixedDeviceSecrets(),
             photoStorageRootOverride: photoRoot,
             generalFileStorageRootOverride: generalFileRoot,
+            folderPresentationStorageRootOverride: folderPresentationRoot,
             portableRestoreJournalRootOverride: portableRestoreJournalRoot,
             portableRestoreWorkingRootOverride: portableRestoreWorkingRoot,
             passcodeRotationJournalRootOverride: passcodeRotationJournalRoot,

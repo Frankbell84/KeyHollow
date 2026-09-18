@@ -19,13 +19,17 @@ This phase is intentionally local and read-only.
   `.khvault` ingress area before verification.
 - Cancel verification and remove protected staging when the app locks,
   backgrounds, the user leaves, or an error occurs.
-- State clearly that the current portable format preserves photos and general
-  files but not Folder Presentation names or membership.
+- For catalog v4, authenticate Folder Presentation hierarchy and membership
+  through application composition and report only sanitized folder and
+  membership counts. For catalog v1-v3, state clearly that hierarchy was not
+  archived and a restore places recovered content at vault root.
 
-This phase does not add installation, restore, local vault unlock, recovery-code
-reuse, persistent verification history, sync, cloud storage, accounts, backup
-destinations, automatic scheduling, archive-format changes, or a second parser
-or cryptographic path.
+This verification phase does not add installation, restore, local vault unlock,
+recovery-code reuse, persistent verification history, sync, cloud storage,
+accounts, backup destinations, automatic scheduling, or a second parser or
+cryptographic path. It consumes the folder-aware transfer feature's catalog-v4
+contract through the same shared validator; it does not define another archive
+format.
 
 ## Module mapping
 
@@ -34,6 +38,7 @@ or cryptographic path.
 | Container authentication and payload validation | `KeyHollowTransferCore` | Add one verify-and-discard facade over the existing restore validator. |
 | Protected Files-provider ingress | `KeyHollowFileRecognitionAddOn` | Reuse the established copy boundary and add checked, reference-owned cleanup plus canonical crash-debris recovery. |
 | General-file archive authentication | App composition through `GeneralFilePortableTransferBridge` | Reuse unchanged. |
+| Folder-manifest authentication | App composition through `FolderPresentationPortableTransferBridge` | Validate the opaque v4 manifest with the existing Folder Presentation store, cross-check neutral item references, and discard staging. |
 | Sanitized report model and presentation | New `KeyHollowBackupVerificationAddOn` | Accept no vault key, ciphertext, store, staging URL, install capability, or recovery credential. |
 | File picker, recovery-code lifetime, cancellation, and lock handling | Application composition layer | Coordinate existing modules and publish only the sanitized report. |
 | Vault installation and local LowKey creation | Existing import/unlock flow | Remain separate and unchanged. |
@@ -50,9 +55,17 @@ or cryptographic path.
    a restore transaction, or expose a vault key.
 5. Wrong credentials, tampering, truncation, malformed catalogs, unsupported
    versions, symlinks, and topology changes fail closed.
-6. Legacy v1/v2 compatibility is reported honestly. Content that receives only
-   outer-container and per-entry authentication is never described as fully
-   opened or migrated.
+6. Legacy catalog v1-v3 compatibility is reported honestly: those archives do
+   not preserve folder hierarchy and restore content at root. Content that
+   receives only outer-container and per-entry authentication is never
+   described as fully opened or migrated.
+7. A catalog v4 success requires the folder manifest to open through the
+   existing Folder Presentation cryptographic domain, contain no thumbnail
+   cache, pass hierarchy validation, and reference only authenticated archived
+   photo/general-file UUIDs.
+8. Reports may contain folder and membership counts, but never folder names,
+   folder or item identifiers, paths, keys, manifest plaintext, or staging
+   handles.
 
 ## Implemented checkpoint
 
@@ -70,17 +83,29 @@ or cryptographic path.
   canonical UUID directories when a later ingress begins.
 - The locked home screen and unlocked vault menu both expose the same local,
   read-only verification flow. Existing import remains a separate operation.
-- No vault format, encryption primitive, persistent store, install transaction,
-  local LowKey, sync behavior, account behavior, or release state changed.
+- The public archive header, container, content-chunk framing, and payload
+  prefix remain version 1. Folder-aware archives extend only the authenticated
+  inner catalog to v4; verification still creates no persistent store, install
+  transaction, local LowKey, sync state, account state, or release state.
 
 ## Required validation
 
-- Valid v1, v2, and v3 payload catalogs, using authentic encrypted store-backed
-  content for the legacy-version compatibility cases.
+- Valid v1, v2, v3, and v4 payload catalogs, using authentic encrypted
+  store-backed content for every compatibility case.
 - Photo-only, file-only, mixed-content, and video-as-general-file archives.
+- V4 archives with empty folders, nested folders, duplicate names under
+  different parents, root items, and mixed photo/general-file memberships;
+  require exact authenticated folder/membership counts without exposing names.
+- Legacy v1-v3 reports must disclose root-only restore behavior. A folderless
+  new export may legitimately remain v3 because it has no hierarchy to
+  preserve.
 - Wrong recovery code, corruption, truncation, cleanup failure, and the existing
   shared validator's malformed-catalog, unsupported-version, staged-mutation,
   topology, and symlink rejection coverage.
+- Missing, duplicate, misnamed, tampered, oversized, or undecryptable folder
+  manifests; invalid hierarchies; nonempty thumbnail caches; and dangling,
+  duplicate, wrong-kind, or unarchived memberships must fail closed without a
+  report.
 - Cancellation, picker dismissal, replacement, lock/background cleanup, and
   crash-debris convergence with no success report before checked cleanup.
 - Repeated verification with identical reports, unchanged source bytes, no

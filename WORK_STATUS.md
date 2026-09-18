@@ -366,6 +366,16 @@ visual analysis remain disabled. The next implementation change must be mapped
 against this accepted modular baseline before work begins. Build 53 acceptance
 does not authorize Family, external TestFlight, or App Store expansion.
 
+Folder-aware portable backup v2 is now the active implementation task on
+`feature/folder-aware-backup-v2`, based on accepted-main commit `a6ffe1b`. The
+implementation preserves the shipped outer `.khvault` cryptographic framing
+and adds authenticated inner catalog v4 folder metadata. It preserves nested
+folder structure, memberships, timestamps, empty folders, and typed
+photo/general-file references while intentionally excluding disposable
+thumbnail caches. Legacy catalog v1-v3 archives remain root-level readable.
+The change is local and pending its final source audit and protected CI; it is
+not yet an accepted baseline or TestFlight build.
+
 ## Unified Media Navigation candidate
 
 - Preserve Photos-origin and general-file identity as separate typed namespaces
@@ -817,14 +827,17 @@ only boundary.
    and retain exact Build 48 source
    `fd2f39f079f3dca853f09e2d67caa8a5cd2eab5c` as the prior rollback/comparison
    reference.
-2. Close this documentation-only acceptance record through the normal protected
-   pull-request and exact-main CI gates. It does not warrant another signing
-   preflight, upload, or build number.
-3. Reassess the verified add-on roadmap and map the selected next capability
-   against the current modular codebase before implementation. Do not merge an
-   obsolete branch wholesale or broaden cryptographic/storage scope implicitly.
-4. Do not expand Build 53 to Family, external TestFlight, or App Store review
-   without a separate explicit decision and the corresponding release gates.
+2. Finish the folder-aware portable-backup v2 source audit, rerun all local
+   static safety gates, and freeze one exact local commit for review.
+3. Publish only that exact feature commit through a draft pull request, then use
+   protected CI as the first Swift compile/test gate. Repair failures on the
+   feature branch rather than weakening a gate.
+4. After protected CI is fully green, review the exact diff and obtain a
+   separate exact-commit merge decision. A later signed Internal-only build
+   still requires the normal no-upload signing preflight and upload gate.
+5. Do not expand the accepted build to Family, external TestFlight, or App Store
+   review without a separate explicit decision and the corresponding release
+   gates.
 
 ## Frank's decisions required
 

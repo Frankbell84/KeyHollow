@@ -24,7 +24,7 @@ struct EncryptedVaultExportView: View {
             ScrollViewReader { proxy in
                 Form {
                     Section {
-                        Text("This creates a portable .khvault copy of only the vault that is currently open. Its photos and files remain in KeyHollow. Folder names and organization are not included; restored items appear at the new vault's top level.")
+                        Text("This creates a portable .khvault copy of only the vault that is currently open. Its photos and files remain in KeyHollow. Folder names and item organization are authenticated and included; disposable thumbnail caches are rebuilt after restore.")
                             .foregroundStyle(.secondary)
                     }
 
@@ -246,6 +246,9 @@ struct EncryptedVaultExportView: View {
                     destinationURL: destination,
                     supplementalContent: GeneralFilePortableTransferBridge(
                         access: SessionGeneralFileAccess(capability: access)
+                    ),
+                    folderContent: FolderPresentationPortableTransferBridge(
+                        access: SessionFolderPresentationAccess(capability: access)
                     )
                 )
                 try Task.checkCancellation()
