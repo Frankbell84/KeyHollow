@@ -209,7 +209,7 @@ PRIVILEGED_SOURCE_SHA256 = {
         "232f0b11e50aba390d23206692ba3c3ec9e72fa83af2dd30876bc3486188ee9d"
     ),
     "project.yml": (
-        "8fb0d2d4780443fab08ae26dfd5877b26b39de45680ed6f0a45b1caf8751f043"
+        "d64fe079cb161c9e703dac10cb044799efdfbf8f1b1ee13f277f8556967e262b"
     ),
 }
 

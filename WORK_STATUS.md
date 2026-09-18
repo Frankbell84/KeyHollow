@@ -373,26 +373,43 @@ and adds authenticated inner catalog v4 folder metadata. It preserves nested
 folder structure, memberships, timestamps, empty folders, and typed
 photo/general-file references while intentionally excluding disposable
 thumbnail caches. Legacy catalog v1-v3 archives remain root-level readable.
-The implementation is published in draft PR
-[#87](https://github.com/Frankbell84/KeyHollow/pull/87). The N150 handoff records
-the completed source audit with no actionable blockers. Exact implementation
-commit `e81fee3091bea346775c3cda83a1494c483595c8` passed macOS build-and-test
-and Swift CodeQL in CI run
-[#392 / 35354240786](https://github.com/Frankbell84/KeyHollow/actions/runs/35354240786).
-It is not yet device-accepted, merged, or a TestFlight build.
+PR [#87](https://github.com/Frankbell84/KeyHollow/pull/87) merged the authorized
+head `54cf209c9dc006c46c2f316571044b3275e80dd1` as protected-main commit
+`58c42b7c552081c3f0c394ac0583e68d1a400d5e`. Their trees are identical.
+The N150 handoff records the completed source audit with no actionable blockers.
+Exact-head PR CI
+[#393](https://github.com/Frankbell84/KeyHollow/actions/runs/35371461736)
+and exact-main CI
+[#394](https://github.com/Frankbell84/KeyHollow/actions/runs/35401354968)
+passed build-and-test, XCTest, packaged-resource checks, artifact uploads, and
+Swift CodeQL. The feature is not yet device-accepted or a TestFlight build.
 
 The Ryzen checkpoint continuation independently verified the expected source,
 clean checkout, branch/upstream, repository-local identity, and all four local
 workflow-security, release-hygiene, architecture, and source-privacy checkers.
-The approved shell path outside the restricted sandbox passed an exact-commit
-push dry run as the normal Windows user; restricted-sandbox credential-store
-access remains unproven. The original N150 task and checkout remain intact;
-task history and host were not transferred.
+The approved shell path outside the restricted sandbox successfully pushed the
+documentation checkpoint as the normal Windows user; restricted-sandbox
+credential-store access remains unproven. The Ryzen cycle through exact-main
+CI is complete. The original N150 task and checkout remain intact; task history
+and host were not transferred.
 
-This documentation reconciliation creates a new PR head. The implementation
-run above does not establish CI success for that new head: require fresh
-macOS build-and-test and Swift CodeQL evidence, recorded against the exact
-head in PR #87, before requesting readiness or merge approval.
+## Build 54 candidate
+
+Build 54 preparation is authorized on `codex/build54-internal-candidate`, based
+on exact-main commit `58c42b7c552081c3f0c394ac0583e68d1a400d5e`. This candidate
+changes only the app and thumbnail-extension build numbers from 53 to 54, the
+matching reviewed project fingerprint in the workflow-security checker, and
+this operational record; it introduces no further app implementation changes.
+App Store Connect's iOS build and all-status upload lists were checked on
+2026-09-18: Build 53 was latest and Build 54 was not listed. The protected
+upload workflow must repeat its authenticated build-number check at upload time.
+
+This candidate requires its own draft PR, complete exact-head CI and review,
+explicit exact-head merge approval, exact-main CI, and no-upload signing
+preflight. No Build 54 signing, upload, tester assignment, or device acceptance
+is recorded here. Build 53 remains the accepted Internal rollback. Evidence
+for this candidate's resulting SHA belongs in its PR to avoid creating another
+source revision solely to record CI results.
 
 ## Unified Media Navigation candidate
 
@@ -845,21 +862,17 @@ only boundary.
    and retain exact Build 48 source
    `fd2f39f079f3dca853f09e2d67caa8a5cd2eab5c` as the prior rollback/comparison
    reference.
-2. Complete the documentation reconciliation on the existing feature branch
-   and keep PR #87 draft. Run local static gates and require fresh macOS CI
-   for the resulting exact head; retain the N150 until the Ryzen development
-   verification cycle is complete.
-3. Review the exact final diff and CI evidence, then obtain explicit
-   authorization before marking PR #87 ready or merging its exact head.
-   After merge, require build-and-test and Swift CodeQL on the exact protected
-   main merge SHA.
-4. Prepare Build 54 only as a separately authorized release candidate after
-   confirming the number is unused. Both app and thumbnail-extension build
-   numbers must advance together through the normal review and exact-main
-   gates. Run the no-upload signing preflight, then obtain separate exact-SHA,
-   build-number, and Internal tester-group approval before upload. Folder-aware
-   backup v2 still requires the physical-device acceptance matrix supplied in
-   the handoff; Build 53 remains the accepted rollback until acceptance.
+2. Publish the Build 54 packaging candidate through a draft PR and require
+   complete macOS build-and-test and Swift CodeQL for its exact head.
+3. Review that exact diff and CI evidence, then obtain explicit authorization
+   before marking the candidate ready or merging. Require build-and-test and
+   Swift CodeQL again on the exact protected-main merge SHA.
+4. Run the no-upload signing preflight on that exact main SHA, then obtain
+   separate exact-SHA, Build 54, and Internal tester-group approval before
+   upload. Recheck build-number availability in the protected upload workflow.
+   Folder-aware backup v2 still requires the physical-device acceptance matrix
+   in `docs/DEVICE_TEST_PLAN.md`; Build 53 remains the accepted rollback until
+   acceptance. Keep the N150 intact unless separately authorized otherwise.
 5. Do not expand the accepted build to Family, external TestFlight, or App Store
    review without a separate explicit decision and the corresponding release
    gates.
