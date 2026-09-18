@@ -5,16 +5,19 @@
 - Native iOS target: KeyHollow
 - Bundle identifier: `com.keyhollow.app`
 - Minimum iOS version: 17.0
-- Version: 1.0; latest accepted internal binary is Build 48
-- Build 48 was produced from exact protected `main` commit
-  `fd2f39f079f3dca853f09e2d67caa8a5cd2eab5c`, processed by App Store Connect,
-  assigned only to `KeyHollow Internal`, and accepted after physical-device
-  testing of Vault Catalog Search and Vault Catalog Sorting.
+- Version: 1.0; latest accepted internal binary is Build 53
+- Build 53 was produced from exact protected `main` commit
+  `1bf0907f4713b925a777240ecb5ece61b530d5bc`, processed by App Store Connect,
+  assigned only to `KeyHollow Internal` with zero individual testers, and
+  accepted after physical-iPhone testing confirmed that the previously failing
+  encrypted-video playback, background, return, and first correct-passcode
+  unlock path now works.
 - Build 52 was produced and processed for `KeyHollow Internal`, but it failed
   device acceptance after backgrounding during encrypted-video playback left a
   correct passcode unable to reopen the vault until app relaunch. Build 52 is
   not an accepted baseline and must not be expanded to other tester groups or
   App Store review.
+- Build 48 is retained as the prior accepted rollback and comparison reference.
 - Reproducible XcodeGen project generation with a pinned XcodeGen release and
   pinned Xcode 26.0.1 (`17A400`) release toolchain. The merged runner correction
   places both privileged release jobs on `macos-15` and makes them fail before
@@ -78,6 +81,33 @@ These cannot be stored or guessed in source control and must be supplied through
     credential-cutover sequence; legacy certificate `2P45VCTJVL` was revoked
     first and legacy API key `JD6P6X8C9A` was revoked last.
 
+## Build 53 acceptance evidence
+
+- PR [#85](https://github.com/Frankbell84/KeyHollow/pull/85) carried exact
+  release head `c4a1d14d07ff6cf19932c355628a41fe5aad184c` through protected `main` as
+  signed binary source `1bf0907f4713b925a777240ecb5ece61b530d5bc`.
+- PR CI run
+  [#35307566629](https://github.com/Frankbell84/KeyHollow/actions/runs/35307566629)
+  and exact-main CI run
+  [#35308810509](https://github.com/Frankbell84/KeyHollow/actions/runs/35308810509)
+  passed the complete build-and-test and Swift CodeQL gates.
+- Protected no-upload signing preflight
+  [#35310336239](https://github.com/Frankbell84/KeyHollow/actions/runs/35310336239)
+  passed for the exact protected-main source. Separately authorized upload run
+  [#35310597859](https://github.com/Frankbell84/KeyHollow/actions/runs/35310597859)
+  completed successfully. Retained IPA artifact `10532514544` has SHA-256
+  `5dea99deb68b7e493762dc63692ca4a08bc9a5766dd625c748e8eadc8173cb72`;
+  Apple delivery UUID is `c3d28e79-6bf5-472c-9813-ee8e63664d9b`.
+- App Store Connect processed Build 53, assigned it to exactly
+  `KeyHollow Internal`, and showed zero individual testers. Physical-iPhone
+  testing confirmed that the formerly failing video-playback, background,
+  return, and first correct-passcode unlock sequence now works. This acceptance
+  records that reported regression result and does not claim every extended
+  permutation in `DEVICE_TEST_PLAN.md` was exercised.
+- Build 53 is the current accepted Internal baseline. Build 52 remains rejected,
+  and Build 48 is retained as the prior accepted rollback/comparison reference.
+  No Family, external TestFlight, or App Store expansion is authorized.
+
 ## Build 52 failed-candidate evidence
 
 - PR [#83](https://github.com/Frankbell84/KeyHollow/pull/83) merged exact
@@ -99,7 +129,8 @@ These cannot be stored or guessed in source control and must be supplied through
   video blank-player defect, but later exposed a separate release blocker:
   backgrounding during encrypted-video playback can prevent a correct passcode
   from reopening the vault until KeyHollow is relaunched. Build 52 is failed and
-  unaccepted; Build 48 remains the accepted rollback/comparison baseline.
+  unaccepted; Build 48 is retained as the prior accepted rollback/comparison
+  reference, while Build 53 is the current accepted Internal baseline.
 - Documentation-only commit
   `6c4a64218008fd697203d64aae6b9c4d2175d2bd` on
   `docs/build52-acceptance-record` predates that finding and is superseded. It
