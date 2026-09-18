@@ -5,11 +5,16 @@
 - Native iOS target: KeyHollow
 - Bundle identifier: `com.keyhollow.app`
 - Minimum iOS version: 17.0
-- Version: 1.0; latest accepted internal binary is Build 40
-- Build 40 was produced from exact `main` commit
-  `54bd2d6887f3ca0e476339fce05e90dd59ba963f`, processed and validated by App
-  Store Connect, assigned only to `KeyHollow Internal`, and successfully
-  installed and device-tested by Frank.
+- Version: 1.0; latest accepted internal binary is Build 48
+- Build 48 was produced from exact protected `main` commit
+  `fd2f39f079f3dca853f09e2d67caa8a5cd2eab5c`, processed by App Store Connect,
+  assigned only to `KeyHollow Internal`, and accepted after physical-device
+  testing of Vault Catalog Search and Vault Catalog Sorting.
+- Build 52 was produced and processed for `KeyHollow Internal`, but it failed
+  device acceptance after backgrounding during encrypted-video playback left a
+  correct passcode unable to reopen the vault until app relaunch. Build 52 is
+  not an accepted baseline and must not be expanded to other tester groups or
+  App Store review.
 - Reproducible XcodeGen project generation with a pinned XcodeGen release and
   pinned Xcode 26.0.1 (`17A400`) release toolchain. The merged runner correction
   places both privileged release jobs on `macos-15` and makes them fail before
@@ -69,9 +74,36 @@ These cannot be stored or guessed in source control and must be supplied through
 9. Complete `DEVICE_TEST_PLAN.md` on the TestFlight-delivered binary. Any
    failure returns to a new pull request and a new exact-commit validation.
 10. Retain prior credentials until the replacement-signed build processes,
-    installs, launches, and passes device testing. Build 40 completed this
-    sequence; legacy certificate `2P45VCTJVL` was revoked first and legacy API
-    key `JD6P6X8C9A` was revoked last.
+    installs, launches, and passes device testing. Build 40 completed the
+    credential-cutover sequence; legacy certificate `2P45VCTJVL` was revoked
+    first and legacy API key `JD6P6X8C9A` was revoked last.
+
+## Build 52 failed-candidate evidence
+
+- PR [#83](https://github.com/Frankbell84/KeyHollow/pull/83) merged exact
+  reviewed release head `d2d2caa7cb5c0a89c899038f72983da7404a4d1f` through protected
+  `main` commit `0dfc5a1faa5fd0664ead1df1d7ed5b5a43f1498e`; both resolve to
+  exact tree `a60d448d81dded58e7cc6c366c8f9c7e7fdb2d1e`.
+- PR CI run
+  [#35277285149](https://github.com/Frankbell84/KeyHollow/actions/runs/35277285149)
+  and exact merged-main CI run
+  [#35279640351](https://github.com/Frankbell84/KeyHollow/actions/runs/35279640351)
+  passed the complete build-and-test lane and Swift CodeQL.
+- Protected no-upload signing preflight
+  [#35282133029](https://github.com/Frankbell84/KeyHollow/actions/runs/35282133029)
+  passed for the exact protected-main source. Separately authorized upload run
+  [#35284768545](https://github.com/Frankbell84/KeyHollow/actions/runs/35284768545)
+  completed successfully. App Store Connect processed Build 52 as `Ready to
+  Submit` and assigned it only to `KeyHollow Internal`.
+- Physical-device testing confirmed that Build 52 resolved the earlier portrait-
+  video blank-player defect, but later exposed a separate release blocker:
+  backgrounding during encrypted-video playback can prevent a correct passcode
+  from reopening the vault until KeyHollow is relaunched. Build 52 is failed and
+  unaccepted; Build 48 remains the accepted rollback/comparison baseline.
+- Documentation-only commit
+  `6c4a64218008fd697203d64aae6b9c4d2175d2bd` on
+  `docs/build52-acceptance-record` predates that finding and is superseded. It
+  must not be merged or cited as acceptance evidence.
 
 ## Build 40 acceptance evidence
 

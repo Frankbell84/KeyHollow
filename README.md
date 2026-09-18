@@ -35,7 +35,9 @@ KeyHollow is a security product first. Cryptographic design, key derivation, sec
 Native iOS implementation is in active development. Build 48 from exact
 `main` commit `fd2f39f079f3dca853f09e2d67caa8a5cd2eab5c` is the accepted
 device-tested baseline. Vault Catalog Search and Vault Catalog Sorting are
-accepted presentation-only add-ons. Nested Folder Hierarchy is in a bounded
-isolated implementation phase. It has not changed the accepted Build 48
-baseline, completed pull-request CI, changed the build number, or entered a
-signed TestFlight release.
+accepted presentation-only add-ons. Builds 49 through 52 were delivered only
+to `KeyHollow Internal` and remain unaccepted candidates. Build 52 fixed the
+earlier portrait-video blank-player defect, but backgrounding during encrypted-
+video playback can prevent a correct passcode from reopening the vault until
+the app is relaunched. The current work is a bounded repair for a Build 53
+candidate; no Family, external TestFlight, or App Store release is authorized.

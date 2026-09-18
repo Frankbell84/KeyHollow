@@ -58,7 +58,11 @@ This checklist must be executed on a physical iPhone before external TestFlight 
 - Confirm the active vault session is destroyed.
 - Confirm the app-switcher preview shows only the opaque KeyHollow privacy shield and never the photo/gallery.
 - Return to KeyHollow and confirm a passcode is required again.
-- Repeat during photo import, gallery view, and full-screen photo view.
+- Enter the known correct vault passcode once and require the same vault to
+  reopen without a generic wrong-passcode message, a second attempt, or an app
+  relaunch.
+- Repeat during photo import, gallery view, full-screen photo view, and active
+  encrypted-video playback.
 
 ## Device authentication exclusion
 
@@ -331,15 +335,20 @@ that state occurs even once.
   temporary playback files are removed only through the established owner-
   release boundary.
 
-## Build 52 stable portrait playback session
+## Build 52 stable portrait playback session (failed candidate)
 
-Run these checks only after the stable-session repair passes automated review
-and is packaged under the next unused Internal build number. Build 51 is a
-failed candidate: retaining the player during representable dismantle was not
-enough because playback ownership still followed a transient SwiftUI task and
-an embedded child controller still initiated fullscreen. Reject this candidate
-if a blank player, inert Play control, duplicate modal, automatic reopen loop,
-or protected-file cleanup race occurs even once.
+These checks governed the stable-session repair packaged as Build 52. Build 51
+was already a failed candidate: retaining the player during representable
+dismantle was not enough because playback ownership still followed a transient
+SwiftUI task and an embedded child controller still initiated fullscreen. The
+same rejection standard remains useful evidence: a blank player, inert Play
+control, duplicate modal, automatic reopen loop, or protected-file cleanup race
+is a failure if it occurs even once.
+
+Build 52 resolved the blank-player path but later failed acceptance because
+backgrounding during encrypted-video playback could leave a correct passcode
+unable to reopen the vault until relaunch. Preserve the checks below as prior
+evidence; they do not constitute Build 52 acceptance.
 
 - Open portrait `.mov` and `.mp4` fixtures from the gallery. Confirm KeyHollow
   presents one native full-screen AVKit player after the viewer-root transition
@@ -373,6 +382,32 @@ or protected-file cleanup race occurs even once.
   KeyHollow's protected media must not publish a Now Playing card or remote
   controls. Long-press a paused frame and confirm iOS does not expose visual
   lookup, subject lifting, or copy/analyze affordances.
+
+## Build 53 background-video unlock regression
+
+Run these checks on the next unused Internal build after the bounded lifecycle
+repair and its automated missing-callback, session-barrier, correct-passcode,
+and plaintext-cleanup tests pass. Reject Build 53 if any cycle requires a second
+passcode attempt, a delay beyond normal unlock work, force-quit, or relaunch.
+
+- Open encrypted portrait `.mov` and `.mp4` fixtures, enter native fullscreen,
+  start playback, and confirm picture, audio, controls, and playback time are
+  advancing. Send KeyHollow fully to the background, wait for the app-switcher
+  state to settle, then return.
+- Require the opaque privacy shield during transition and the locked keypad on
+  return. Enter the known correct KeyHollow passcode exactly once. It must open
+  the same vault normally without `Passcode not recognized`, a secure-operation
+  retry message, a second attempt, or an app relaunch.
+- Repeat at least ten cycles across active playback, paused playback, full-screen
+  entry, AVKit **Done**, explicit replay, and presentation/dismissal transitions.
+  Include portrait, square, and landscape video fixtures.
+- After every cycle, require audio to stop on background, no player or modal to
+  resurrect, the prior vault contents to remain intact, and the video to reopen
+  through one fresh playback route. In a development build, also confirm the
+  retired player has no item and the protected temporary export is removed.
+- Enter one deliberate wrong passcode, observe only the generic failure state,
+  then enter the correct passcode once. The genuine failure must not poison or
+  mislabel the following successful unlock.
 
 ## Backup Verification Center
 

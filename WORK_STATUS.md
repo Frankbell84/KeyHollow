@@ -7,6 +7,41 @@ evidence remains in `docs/PROJECT_CHECKPOINT.md`.
 
 ## Provenance
 
+- PR [#83](https://github.com/Frankbell84/KeyHollow/pull/83) merged the exact
+  reviewed Build 52 release head
+  `d2d2caa7cb5c0a89c899038f72983da7404a4d1f` through protected `main` commit
+  `0dfc5a1faa5fd0664ead1df1d7ed5b5a43f1498e`; both resolve to exact tree
+  `a60d448d81dded58e7cc6c366c8f9c7e7fdb2d1e`.
+- PR CI run
+  [#35277285149](https://github.com/Frankbell84/KeyHollow/actions/runs/35277285149)
+  and exact merged-main CI run
+  [#35279640351](https://github.com/Frankbell84/KeyHollow/actions/runs/35279640351)
+  passed the complete build-and-test lane and Swift CodeQL.
+- Protected Build 52 signing-only preflight run
+  [#35282133029](https://github.com/Frankbell84/KeyHollow/actions/runs/35282133029)
+  passed for the exact protected-main source without uploading or publishing.
+  Separately authorized upload run
+  [#35284768545](https://github.com/Frankbell84/KeyHollow/actions/runs/35284768545)
+  then completed successfully. IPA artifact `10523584655` is 2,413,044 bytes
+  and has SHA-256
+  `4e62152e5a6f3c00fe4031c9f25c01fea9f5d228080c7f1279bfa13208c27f04`;
+  Apple delivery UUID is `c1d1cc03-f011-41d9-8102-d7def57637d1`.
+- App Store Connect completed processing Build 52, reports `Ready to Submit`,
+  and assigns it only to `KeyHollow Internal`. Physical-device testing
+  confirmed that the prior portrait-video blank-player defect was resolved,
+  but subsequent testing found a separate release blocker: backgrounding while
+  an encrypted video is playing can leave re-entry unable to complete with the
+  correct passcode until KeyHollow is relaunched. Build 52 is therefore failed
+  and unaccepted. It must not be expanded to Family, external TestFlight, or App
+  Store review.
+- Documentation-only commit
+  `6c4a64218008fd697203d64aae6b9c4d2175d2bd` on
+  `docs/build52-acceptance-record` was prepared before that blocker was found.
+  This correction supersedes that false acceptance record; it must not be
+  merged or cited as acceptance evidence.
+- Build 48 remains the physically accepted rollback and comparison baseline at
+  exact protected `main` commit
+  `fd2f39f079f3dca853f09e2d67caa8a5cd2eab5c`.
 - PR [#82](https://github.com/Frankbell84/KeyHollow/pull/82) merged the exact
   reviewed stable playback-session repair head
   `fa9976e13ab15bac48edea37133a8ceed5d45f83` through protected `main` commit
@@ -275,27 +310,30 @@ evidence remains in `docs/PROJECT_CHECKPOINT.md`.
 
 Build 48 remains the physically accepted rollback and comparison baseline at
 exact protected `main` commit
-`fd2f39f079f3dca853f09e2d67caa8a5cd2eab5c`. Build 50's Files-style nested
-move picker passed physical-device testing, but Builds 50 and 51 remain
-Internal-only and unaccepted because their portrait-fullscreen paths reproduced
-the blank AVKit surface and inert Play control.
+`fd2f39f079f3dca853f09e2d67caa8a5cd2eab5c`. Builds 49 through 52 remain
+Internal-only and unaccepted candidates. Build 52 resolved the earlier portrait-
+video blank-player defect, but physical-device testing found a separate release
+blocker: after backgrounding during encrypted-video playback, a correct
+passcode can fail to reopen the vault until the app is relaunched.
 
-The stable playback-session repair is now merged to exact protected `main`
-commit `837874744fcd31834fd9dba925212e4edf215b30`, and its exact-main build,
-security tests, and Swift CodeQL are green. The current task is the isolated
-Build 52 release candidate on
-`release/build52-stable-portrait-playback-session`, created directly from that
-commit. Its packaging changes only both product build numbers from 51 to 52,
-refreshes the canonical `project.yml` security pin, and records exact release
-evidence.
+The current task is the isolated lifecycle repair on
+`fix/build52-video-background-unlock`, created directly from exact protected
+`main` commit `0dfc5a1faa5fd0664ead1df1d7ed5b5a43f1498e`. The false documentation-
+only acceptance record at `6c4a64218008fd697203d64aae6b9c4d2175d2bd` is
+superseded and must not merge. The repair must make terminal video teardown and
+session retirement complete without depending indefinitely on UIKit
+presentation callbacks, while preserving the existing requirement that
+protected plaintext is not discarded before the player graph releases it.
 
 Protected records, cryptography, archive formats, media payloads, hierarchy
 metadata, and ciphertext remain unchanged. External playback, Picture in
 Picture, system Now Playing publication, and paused-frame visual analysis
 remain disabled. The application coordinator still owns protected plaintext
 and cannot discard it until the module-owned session has cancelled its monitor,
-dismissed AVKit, detached controller/player/item, and released its one-shot
-lease.
+dismissed or terminally detached AVKit, detached controller/player/item, and
+released its one-shot lease. Any repaired Internal candidate must use the next
+unused build number, Build 53, and pass the dedicated background-video unlock
+regression before it can supersede Build 48.
 
 ## Unified Media Navigation candidate
 
@@ -741,23 +779,25 @@ only boundary.
 
 ## Next action
 
-1. Preserve exact Build 51 source
-   `9578136b74cbda7c5221c71cf7d357fa087b8a98` as the failed-candidate evidence
-   point and preserve Build 48 as the accepted rollback/comparison baseline.
-2. Publish only the reviewed Build 52 packaging head through a draft pull
-   request and require the complete macOS build, unit/integration, security,
-   and Swift CodeQL gates.
-3. Merge only that exact packaging head through protected `main`, verify tree
-   equality, and require complete exact-main CI.
-4. Run the Build 52 no-upload signing preflight from the exact resulting
-   protected-main commit.
-5. Only after that preflight passes, authorize an exact-commit signed upload to
-   `KeyHollow Internal` only.
-6. Execute the stable-session checks in `docs/DEVICE_TEST_PLAN.md`. A native
-   Done must return to the selected video poster without an automatic reopen;
-   explicit replay must work, and the blank/inert Play state is a rejection if
-   it occurs even once. Do not expand to Family or external testers without a
-   separate decision.
+1. Preserve exact Build 48 source
+   `fd2f39f079f3dca853f09e2d67caa8a5cd2eab5c` as the accepted rollback and
+   comparison baseline. Preserve exact Build 52 source
+   `0dfc5a1faa5fd0664ead1df1d7ed5b5a43f1498e` only as failed-candidate evidence.
+2. Complete the bounded background-video teardown and unlock repair with
+   deterministic missing-callback, session-barrier, correct-passcode, and
+   plaintext-cleanup regression coverage.
+3. Publish only the reviewed repair head through a protected pull request and
+   require the complete macOS build, unit/integration, security, and Swift
+   CodeQL gates. Merge only that exact head, then require complete exact-main CI.
+4. Package the repair under the next unused build number, Build 53. Run the
+   protected no-upload signing preflight before any separately authorized
+   `KeyHollow Internal` upload.
+5. Execute the Build 53 background-video unlock checks in
+   `docs/DEVICE_TEST_PLAN.md`. A correct passcode must reopen the same vault on
+   the first attempt after every tested background transition, without a retry
+   or app relaunch.
+6. Do not expand Build 52 or any unaccepted replacement to Family, external
+   TestFlight, or App Store review.
 
 ## Frank's decisions required
 

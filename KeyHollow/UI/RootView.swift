@@ -322,9 +322,17 @@ private struct LockView: View {
                 guard session.securityEpoch == requestSecurityEpoch else { return }
                 message = "A secure vault operation is still finishing. Try again shortly."
                 isWorking = false
-            } catch {
+            } catch is CancellationError {
+                guard session.securityEpoch == requestSecurityEpoch else { return }
+                message = "Unlock was interrupted. Try again."
+                isWorking = false
+            } catch VaultUnlockError.invalidCredentials {
                 guard session.securityEpoch == requestSecurityEpoch else { return }
                 message = "Passcode not recognized."
+                isWorking = false
+            } catch {
+                guard session.securityEpoch == requestSecurityEpoch else { return }
+                message = "Secure local storage could not be opened. Try again."
                 isWorking = false
             }
         }

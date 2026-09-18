@@ -176,7 +176,7 @@ public final class VaultEncryptedVideoPlaybackSession:
     @Published public private(set) var canPresent = false
     @Published public private(set) var isPlayerPresented = false
 
-    private let playerController: AVPlayerViewController
+    private var playerController: AVPlayerViewController
     private let waitForFailure: FailureWaiter
     private let teardownObserver: TeardownObserver?
 
@@ -191,9 +191,21 @@ public final class VaultEncryptedVideoPlaybackSession:
     private var hasPendingPresentation = false
     private var isAnchorReadyForPresentation = false
     private var isPresentationTransitionActive = false
-    private var transitionWaiters: [CheckedContinuation<Void, Never>] = []
+    private var playbackGeneration: UInt64 = 0
+    private var presentationEpoch: UInt64 = 0
+    private var presentationControllerEpochs: [
+        ObjectIdentifier: (controller: UIPresentationController, epoch: UInt64)
+    ] = [:]
+    private weak var activePresentationController: UIPresentationController?
     private weak var anchorController:
         VaultEncryptedVideoPresentationAnchorViewController?
+
+    /// UIKit can stop delivering presentation completions while the scene is
+    /// backgrounding. Terminal cleanup may briefly give an in-flight
+    /// transition a chance to settle, but it must never retain the protected
+    /// player/file lease indefinitely waiting for an animation callback.
+    private static let terminalTransitionWaitLimit: Duration = .milliseconds(250)
+    private static let terminalTransitionPollInterval: Duration = .milliseconds(10)
 
     public override init() {
         playerController = AVPlayerViewController()
@@ -217,11 +229,15 @@ public final class VaultEncryptedVideoPlaybackSession:
     }
 
     private func finishInitialization() {
-        playerController.view.backgroundColor = .black
-        playerController.videoGravity = .resizeAspect
-        playerController.modalPresentationStyle = .fullScreen
-        playerController.delegate = self
-        VaultEncryptedVideoPlayerSecurityPolicy.configure(playerController)
+        configurePlayerController(playerController)
+    }
+
+    private func configurePlayerController(_ controller: AVPlayerViewController) {
+        controller.view.backgroundColor = .black
+        controller.videoGravity = .resizeAspect
+        controller.modalPresentationStyle = .fullScreen
+        controller.delegate = self
+        VaultEncryptedVideoPlayerSecurityPolicy.configure(controller)
     }
 
     /// Installs one validated protected playback and acquires its application
@@ -239,14 +255,24 @@ public final class VaultEncryptedVideoPlaybackSession:
         guard phase == .idle, teardownTask == nil else { return false }
         guard onPlayerWillAttach() else { return false }
 
+        playbackGeneration &+= 1
+        presentationEpoch &+= 1
+        presentationControllerEpochs.removeAll()
+        activePresentationController = nil
+        // A retired UIKit controller may report a very late transition entry.
+        // Each fresh playback owns a clean local gate and a fresh controller.
+        isPresentationTransitionActive = false
+        isPlayerPresented = false
+        let controller = AVPlayerViewController()
+        configurePlayerController(controller)
         let item = AVPlayerItem(asset: playback.makeRestrictedAsset())
         let player = AVPlayer(playerItem: item)
         VaultEncryptedVideoPlayerSecurityPolicy.configure(player)
-        VaultEncryptedVideoPlayerSecurityPolicy.configure(playerController)
 
+        playerController = controller
         self.item = item
         self.player = player
-        playerController.player = player
+        controller.player = player
         releasePlayerLease = onPlayerReleased
         reportFailure = onFailure
         didReleasePlayerLease = false
@@ -270,8 +296,28 @@ public final class VaultEncryptedVideoPlaybackSession:
               canPresent,
               !isPlayerPresented,
               !isPresentationTransitionActive else { return }
+        if hasPendingPresentation {
+            attemptPendingPresentation()
+            return
+        }
+        replacePlayerControllerForReplay()
         hasPendingPresentation = true
         attemptPendingPresentation()
+    }
+
+    private func replacePlayerControllerForReplay() {
+        let retiredController = playerController
+        retiredController.delegate = nil
+        retiredController.presentationController?.delegate = nil
+        retiredController.player = nil
+
+        presentationEpoch &+= 1
+        presentationControllerEpochs.removeAll()
+        activePresentationController = nil
+        let replacementController = AVPlayerViewController()
+        configurePlayerController(replacementController)
+        replacementController.player = player
+        playerController = replacementController
     }
 
     /// Synchronous terminal signal for selection changes, the outer viewer's
@@ -283,6 +329,9 @@ public final class VaultEncryptedVideoPlaybackSession:
         guard phase != .idle else { return }
         guard phase != .stopping else { return }
 
+        playbackGeneration &+= 1
+        let teardownGeneration = playbackGeneration
+        let retiringPlayerController = playerController
         phase = .stopping
         canPresent = false
         hasPendingPresentation = false
@@ -302,10 +351,13 @@ public final class VaultEncryptedVideoPlaybackSession:
             teardownObserver?(.monitorFinished)
 
             await waitForPresentationTransition()
-            await dismissPlayerControllerIfNeeded()
+            await dismissPlayerControllerIfNeeded(
+                retiringPlayerController,
+                generation: teardownGeneration
+            )
             teardownObserver?(.modalDismissed)
 
-            playerController.player = nil
+            retiringPlayerController.player = nil
             VaultEncryptedVideoPlayerLifecycle.release(player)
             item = nil
             player = nil
@@ -315,6 +367,8 @@ public final class VaultEncryptedVideoPlaybackSession:
             releaseLeaseOnce()
 
             reportFailure = nil
+            presentationControllerEpochs.removeAll()
+            activePresentationController = nil
             activePlaybackID = nil
             phase = .idle
             teardownTask = nil
@@ -371,13 +425,41 @@ public final class VaultEncryptedVideoPlaybackSession:
         }
 
         hasPendingPresentation = false
+        let presentingPlayerController = playerController
+        let presentationGeneration = playbackGeneration
+        presentationEpoch &+= 1
+        let attemptedPresentationEpoch = presentationEpoch
+        activePresentationController = nil
         beginPresentationTransition()
-        anchorController.present(playerController, animated: true) { [weak self] in
+        anchorController.present(
+            presentingPlayerController,
+            animated: true
+        ) { [weak self, weak presentingPlayerController] in
+            guard let presentingPlayerController else { return }
             guard let self else { return }
-            let didPresent = self.playerController.presentingViewController != nil
+            guard self.phase == .ready,
+                  self.playbackGeneration == presentationGeneration,
+                  self.presentationEpoch == attemptedPresentationEpoch,
+                  self.playerController === presentingPlayerController else {
+                // A terminal stop or replacement playback may have completed
+                // while UIKit still owned the presentation callback. Dismiss
+                // only a controller retired by that terminal boundary. An
+                // older attempt for the still-current controller must not
+                // dismiss a newer retry of that controller.
+                if self.playbackGeneration != presentationGeneration
+                    || self.playerController !== presentingPlayerController {
+                    presentingPlayerController.dismiss(animated: false)
+                }
+                return
+            }
+            let didPresent =
+                presentingPlayerController.presentingViewController != nil
             self.isPlayerPresented = didPresent
             if didPresent {
-                self.playerController.presentationController?.delegate = self
+                self.registerPresentationController(
+                    presentingPlayerController.presentationController,
+                    epoch: attemptedPresentationEpoch
+                )
             } else if self.phase == .ready, self.canPresent {
                 // Keep one retry available on the visible poster if UIKit
                 // declines a presentation instead of losing the request.
@@ -385,29 +467,68 @@ public final class VaultEncryptedVideoPlaybackSession:
             }
             self.finishPresentationTransition()
         }
+        registerPresentationController(
+            presentingPlayerController.presentationController,
+            epoch: attemptedPresentationEpoch
+        )
     }
 
-    private func dismissPlayerControllerIfNeeded() async {
+    private func dismissPlayerControllerIfNeeded(
+        _ dismissingPlayerController: AVPlayerViewController,
+        generation: UInt64
+    ) async {
         await waitForPresentationTransition()
-        guard playerController.presentingViewController != nil || isPlayerPresented else {
+        guard dismissingPlayerController.presentingViewController != nil
+                || isPlayerPresented else {
             finishModalDismissal()
             return
         }
 
         beginPresentationTransition()
-        await withCheckedContinuation { continuation in
-            playerController.dismiss(animated: false) { [weak self] in
-                self?.finishModalDismissal()
-                continuation.resume()
+        dismissingPlayerController.dismiss(animated: false) {
+            [weak self, weak dismissingPlayerController] in
+            guard let self,
+                  let dismissingPlayerController,
+                  self.playbackGeneration == generation,
+                  self.playerController === dismissingPlayerController else {
+                return
             }
+            self.finishModalDismissal()
+            self.finishPresentationTransition()
         }
+        await waitForPresentationTransition()
+        // The bounded wait may have expired because UIKit stopped delivering
+        // callbacks during backgrounding. State reconciliation is idempotent;
+        // the caller now detaches the AVPlayer graph before releasing its
+        // application-owned plaintext lease.
+        finishModalDismissal()
         finishPresentationTransition()
     }
 
     func finishModalDismissal() {
+        presentationEpoch &+= 1
+        presentationControllerEpochs.removeAll()
+        activePresentationController = nil
         hasPendingPresentation = false
         player?.pause()
         isPlayerPresented = false
+    }
+
+    private func registerPresentationController(
+        _ controller: UIPresentationController?,
+        epoch: UInt64
+    ) {
+        guard let controller,
+              epoch == presentationEpoch,
+              controller.presentedViewController === playerController else {
+            return
+        }
+        presentationControllerEpochs[ObjectIdentifier(controller)] = (
+            controller: controller,
+            epoch: epoch
+        )
+        activePresentationController = controller
+        controller.delegate = self
     }
 
     private func beginPresentationTransition() {
@@ -417,16 +538,25 @@ public final class VaultEncryptedVideoPlaybackSession:
     private func finishPresentationTransition() {
         guard isPresentationTransitionActive else { return }
         isPresentationTransitionActive = false
-        let waiters = transitionWaiters
-        transitionWaiters.removeAll()
-        waiters.forEach { $0.resume() }
     }
 
     private func waitForPresentationTransition() async {
         guard isPresentationTransitionActive else { return }
-        await withCheckedContinuation { continuation in
-            transitionWaiters.append(continuation)
+
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: Self.terminalTransitionWaitLimit)
+        while isPresentationTransitionActive, clock.now < deadline {
+            do {
+                try await Task.sleep(for: Self.terminalTransitionPollInterval)
+            } catch {
+                break
+            }
         }
+
+        // Terminal teardown owns the final state. If UIKit did not finish the
+        // transition inside the bound, force the local transition gate open so
+        // player/item detachment and lease release can still complete.
+        finishPresentationTransition()
     }
 
     private func releaseLeaseOnce() {
@@ -438,14 +568,32 @@ public final class VaultEncryptedVideoPlaybackSession:
         teardownObserver?(.leaseReleased)
     }
 
+    func beginFullScreenDismissal(
+        for playerViewController: AVPlayerViewController
+    ) -> (playbackGeneration: UInt64, presentationEpoch: UInt64)? {
+        guard phase == .ready,
+              playerViewController === self.playerController else { return nil }
+        beginModalDismissal()
+        return (playbackGeneration, presentationEpoch)
+    }
+
     public func playerViewController(
         _ playerViewController: AVPlayerViewController,
         willEndFullScreenPresentationWithAnimationCoordinator coordinator:
             any UIViewControllerTransitionCoordinator
     ) {
-        beginModalDismissal()
-        coordinator.animate(alongsideTransition: nil) { [weak self] context in
-            guard let self else { return }
+        guard let transition = beginFullScreenDismissal(
+            for: playerViewController
+        ) else { return }
+        coordinator.animate(alongsideTransition: nil) {
+            [weak self, weak playerViewController] context in
+            guard let self,
+                  let playerViewController,
+                  self.playbackGeneration == transition.playbackGeneration,
+                  self.presentationEpoch == transition.presentationEpoch,
+                  self.playerController === playerViewController else {
+                return
+            }
             if !context.isCancelled {
                 self.finishModalDismissal()
             }
@@ -465,12 +613,33 @@ public final class VaultEncryptedVideoPlaybackSession:
     public func presentationControllerWillDismiss(
         _ presentationController: UIPresentationController
     ) {
+        guard phase == .ready,
+              presentationController.presentedViewController === playerController else {
+            return
+        }
+        let identifier = ObjectIdentifier(presentationController)
+        guard let registration = presentationControllerEpochs[identifier],
+              registration.controller === presentationController,
+              registration.epoch == presentationEpoch,
+              activePresentationController === presentationController else {
+            return
+        }
         beginModalDismissal()
     }
 
     public func presentationControllerDidDismiss(
         _ presentationController: UIPresentationController
     ) {
+        guard presentationController.presentedViewController === playerController else {
+            return
+        }
+        let identifier = ObjectIdentifier(presentationController)
+        guard let registration = presentationControllerEpochs[identifier],
+              registration.controller === presentationController,
+              registration.epoch == presentationEpoch,
+              activePresentationController === presentationController else {
+            return
+        }
         finishModalDismissal()
         finishPresentationTransition()
     }
@@ -529,6 +698,15 @@ public final class VaultEncryptedVideoPlaybackSession:
     var activePlayer: AVPlayer? { player }
     var presentationIsPending: Bool { hasPendingPresentation }
     var presentationAnchorIsReady: Bool { isAnchorReadyForPresentation }
+    var presentationTransitionIsActive: Bool {
+        isPresentationTransitionActive
+    }
+
+    func registerPresentationControllerForTesting(
+        _ controller: UIPresentationController
+    ) {
+        registerPresentationController(controller, epoch: presentationEpoch)
+    }
 }
 
 @MainActor

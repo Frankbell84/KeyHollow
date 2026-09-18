@@ -934,9 +934,11 @@ struct VaultGalleryView: View {
         .onDisappear {
             // A full-screen media cover temporarily removes the gallery from
             // the visible hierarchy. The cover owns the active playback/image
-            // lifecycle; session revocation still cancels it through the
-            // security-epoch observer above.
-            guard mediaNavigationQueue == nil else { return }
+            // lifecycle only while the vault still owns active access. A lock
+            // must never let that temporary cover suppress terminal cleanup.
+            guard !session.hasActiveAccess || mediaNavigationQueue == nil else {
+                return
+            }
             cancelMediaNavigationForLifecycle()
         }
     }
@@ -2611,7 +2613,15 @@ struct VaultGalleryView: View {
             return
         }
 
-        await session.performSensitiveTask { _ in
+        await session.performSensitiveTask(
+            onSessionRevocation: {
+                // Session retirement is authoritative. SwiftUI may remove the
+                // gallery before its security-epoch observer runs, so signal
+                // both halves of the protected playback lifetime here.
+                videoPlaybackSession.requestStop()
+                videoPlayback.dismiss()
+            }
+        ) { _ in
             do {
                 try await videoPlayback.prepare(record, using: generalFileStore)
             } catch is CancellationError {

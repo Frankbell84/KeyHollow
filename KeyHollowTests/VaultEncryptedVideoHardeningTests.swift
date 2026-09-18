@@ -145,6 +145,7 @@ final class VaultEncryptedVideoHardeningTests: XCTestCase {
             presentedViewController: controller,
             presenting: UIViewController()
         )
+        session.registerPresentationControllerForTesting(presentationController)
         session.presentationControllerWillDismiss(presentationController)
         session.requestPresentation()
         XCTAssertFalse(session.presentationIsPending)
@@ -161,6 +162,231 @@ final class VaultEncryptedVideoHardeningTests: XCTestCase {
         session.requestPresentation()
         session.requestPresentation()
         XCTAssertTrue(session.presentationIsPending)
+
+        await session.stopAndWait()
+        XCTAssertEqual(releaseCount, 1)
+    }
+
+    @MainActor
+    func testTerminalStopBoundsMissingModalDismissalCallbackAndReleasesLeaseOnce() async throws {
+        let fixture = try makePreparedPlayback()
+        defer { removePreparedPlayback(fixture) }
+        var releaseCount = 0
+        var callbackObservedDetachedGraph = false
+        var events: [VaultEncryptedVideoSessionTeardownEvent] = []
+        let session = VaultEncryptedVideoPlaybackSession(
+            waitForFailure: { _ in await waitUntilCancelled() },
+            teardownObserver: { events.append($0) }
+        )
+
+        XCTAssertTrue(
+            session.activate(
+                playback: fixture.playback,
+                onPlayerReleased: {
+                    releaseCount += 1
+                    callbackObservedDetachedGraph =
+                        session.retainedPlayerController.player == nil
+                        && session.activePlayer == nil
+                }
+            )
+        )
+        let player = try XCTUnwrap(session.activePlayer)
+        let presentationController = UIPresentationController(
+            presentedViewController: session.retainedPlayerController,
+            presenting: UIViewController()
+        )
+        session.registerPresentationControllerForTesting(presentationController)
+
+        // Model backgrounding after UIKit announces dismissal but before it
+        // delivers either the matching did-dismiss or transition completion.
+        session.presentationControllerWillDismiss(presentationController)
+
+        let stopped = expectation(description: "terminal video teardown completed")
+        let stopTask = Task { @MainActor in
+            await session.stopAndWait()
+            stopped.fulfill()
+        }
+        await fulfillment(of: [stopped], timeout: 2)
+        // If this ever regresses to an unbounded wait, deliver the omitted
+        // callback after XCTest records the timeout so the suite itself can
+        // still finish instead of hanging the entire CI job.
+        session.presentationControllerDidDismiss(presentationController)
+        await stopTask.value
+
+        // Repeated terminal requests remain harmless after the bounded
+        // fallback has already released the graph.
+        session.requestStop()
+        await session.stopAndWait()
+
+        XCTAssertEqual(
+            events,
+            [
+                .rejectedNewPresentations,
+                .playerPaused,
+                .monitorFinished,
+                .modalDismissed,
+                .playerDetached,
+                .leaseReleased
+            ]
+        )
+        XCTAssertEqual(releaseCount, 1)
+        XCTAssertTrue(callbackObservedDetachedGraph)
+        XCTAssertNil(player.currentItem)
+        XCTAssertNil(session.retainedPlayerController.player)
+        XCTAssertNil(session.activePlayer)
+        XCTAssertNil(session.activePlaybackID)
+        XCTAssertFalse(session.canPresent)
+        XCTAssertFalse(session.isPlayerPresented)
+    }
+
+    @MainActor
+    func testLateDismissalFromRetiredGenerationCannotMutateReplacementPlayback() async throws {
+        let firstFixture = try makePreparedPlayback()
+        let secondFixture = try makePreparedPlayback()
+        defer {
+            removePreparedPlayback(firstFixture)
+            removePreparedPlayback(secondFixture)
+        }
+        var firstReleaseCount = 0
+        var secondReleaseCount = 0
+        var firstStopFinished = false
+        let session = VaultEncryptedVideoPlaybackSession(
+            waitForFailure: { _ in await waitUntilCancelled() }
+        )
+
+        XCTAssertTrue(
+            session.activate(
+                playback: firstFixture.playback,
+                onPlayerReleased: { firstReleaseCount += 1 }
+            )
+        )
+        let retiredController = session.retainedPlayerController
+        let retiredPresentationController = UIPresentationController(
+            presentedViewController: retiredController,
+            presenting: UIViewController()
+        )
+        session.registerPresentationControllerForTesting(
+            retiredPresentationController
+        )
+        session.presentationControllerWillDismiss(retiredPresentationController)
+
+        let stopped = expectation(description: "retired playback stopped")
+        let stopTask = Task { @MainActor in
+            await session.stopAndWait()
+            firstStopFinished = true
+            stopped.fulfill()
+        }
+        await fulfillment(of: [stopped], timeout: 2)
+        if !firstStopFinished {
+            // Keep a regressed implementation from hanging the full suite after
+            // XCTest records the bounded-stop failure.
+            session.presentationControllerDidDismiss(retiredPresentationController)
+        }
+        await stopTask.value
+
+        // A delayed transition-entry callback while the old controller is
+        // still the idle placeholder must not poison the next activation.
+        session.presentationControllerWillDismiss(retiredPresentationController)
+
+        XCTAssertTrue(
+            session.activate(
+                playback: secondFixture.playback,
+                onPlayerReleased: { secondReleaseCount += 1 }
+            )
+        )
+        let replacementController = session.retainedPlayerController
+        let replacementPlayer = try XCTUnwrap(session.activePlayer)
+        let replacementItem = try XCTUnwrap(replacementPlayer.currentItem)
+        XCTAssertFalse(retiredController === replacementController)
+        XCTAssertFalse(session.presentationTransitionIsActive)
+
+        // UIKit may deliver the retired controller's adaptive callback after
+        // the timeout and after the next video has activated. It must not pause,
+        // detach, or alter presentation state for the replacement generation.
+        session.presentationControllerDidDismiss(retiredPresentationController)
+
+        XCTAssertEqual(session.activePlaybackID, secondFixture.playback.id)
+        XCTAssertTrue(session.retainedPlayerController === replacementController)
+        XCTAssertTrue(session.activePlayer === replacementPlayer)
+        XCTAssertTrue(replacementPlayer.currentItem === replacementItem)
+        XCTAssertTrue(session.canPresent)
+        XCTAssertFalse(session.presentationTransitionIsActive)
+        XCTAssertEqual(firstReleaseCount, 1)
+        XCTAssertEqual(secondReleaseCount, 0)
+
+        await session.stopAndWait()
+        XCTAssertEqual(firstReleaseCount, 1)
+        XCTAssertEqual(secondReleaseCount, 1)
+    }
+
+    @MainActor
+    func testLateDismissalFromPriorPresentationCannotMutateSamePlaybackReplay() async throws {
+        let fixture = try makePreparedPlayback()
+        defer { removePreparedPlayback(fixture) }
+        var releaseCount = 0
+        let session = VaultEncryptedVideoPlaybackSession(
+            waitForFailure: { _ in await waitUntilCancelled() }
+        )
+
+        XCTAssertTrue(
+            session.activate(
+                playback: fixture.playback,
+                onPlayerReleased: { releaseCount += 1 }
+            )
+        )
+        let controller = session.retainedPlayerController
+        let player = try XCTUnwrap(session.activePlayer)
+        let item = try XCTUnwrap(player.currentItem)
+        let firstPresentation = UIPresentationController(
+            presentedViewController: controller,
+            presenting: UIViewController()
+        )
+
+        session.registerPresentationControllerForTesting(firstPresentation)
+        session.presentationControllerWillDismiss(firstPresentation)
+        XCTAssertTrue(session.presentationTransitionIsActive)
+        session.presentationControllerDidDismiss(firstPresentation)
+        XCTAssertFalse(session.presentationTransitionIsActive)
+
+        // Replay keeps the protected player graph but owns a fresh AVKit
+        // controller and presentation epoch, making every delegate callback
+        // attributable to exactly one fullscreen presentation.
+        session.requestPresentation()
+        let replayController = session.retainedPlayerController
+        XCTAssertFalse(replayController === controller)
+        XCTAssertNil(controller.player)
+        XCTAssertTrue(replayController.player === player)
+        let unregisteredPresentation = UIPresentationController(
+            presentedViewController: replayController,
+            presenting: UIViewController()
+        )
+        session.presentationControllerWillDismiss(unregisteredPresentation)
+        XCTAssertFalse(session.presentationTransitionIsActive)
+        let replayPresentation = UIPresentationController(
+            presentedViewController: replayController,
+            presenting: UIViewController()
+        )
+        session.registerPresentationControllerForTesting(replayPresentation)
+        session.presentationControllerWillDismiss(replayPresentation)
+        XCTAssertTrue(session.presentationTransitionIsActive)
+
+        // A delayed did-dismiss callback from the first presentation must not
+        // finish the replay's transition, pause/detach its graph, or release
+        // the protected plaintext lease.
+        session.presentationControllerDidDismiss(firstPresentation)
+        XCTAssertNil(session.beginFullScreenDismissal(for: controller))
+
+        XCTAssertTrue(session.presentationTransitionIsActive)
+        XCTAssertEqual(session.activePlaybackID, fixture.playback.id)
+        XCTAssertTrue(session.retainedPlayerController === replayController)
+        XCTAssertTrue(session.activePlayer === player)
+        XCTAssertTrue(player.currentItem === item)
+        XCTAssertTrue(session.canPresent)
+        XCTAssertEqual(releaseCount, 0)
+
+        session.presentationControllerDidDismiss(replayPresentation)
+        XCTAssertFalse(session.presentationTransitionIsActive)
+        XCTAssertEqual(releaseCount, 0)
 
         await session.stopAndWait()
         XCTAssertEqual(releaseCount, 1)
