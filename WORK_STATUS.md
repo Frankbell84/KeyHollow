@@ -1,12 +1,25 @@
 # KeyHollow Work Status
 
-Updated: 2026-09-17
+Updated: 2026-09-18
 
 This is the authoritative operational resume point. Historical Build 38
 evidence remains in `docs/PROJECT_CHECKPOINT.md`.
 
 ## Provenance
 
+- PR [#84](https://github.com/Frankbell84/KeyHollow/pull/84) merged the exact
+  reviewed background-video unlock repair head
+  `65e57bb8be8456474310e654126e1193dc13be7a` through protected `main` commit
+  `925b5b539a72d0f8043d385d083b5b6293ecd19e`.
+- PR CI run
+  [#35304387976](https://github.com/Frankbell84/KeyHollow/actions/runs/35304387976)
+  passed the complete pull-request gate. Exact merged-main CI run
+  [#35305926384](https://github.com/Frankbell84/KeyHollow/actions/runs/35305926384)
+  also passed on protected `main` commit
+  `925b5b539a72d0f8043d385d083b5b6293ecd19e`.
+- Build 53 is the next `KeyHollow Internal`-only repair candidate. It remains
+  unaccepted until exact-main CI, protected signing preflight, delivery, and
+  the dedicated physical-device background-video unlock regression all pass.
 - PR [#83](https://github.com/Frankbell84/KeyHollow/pull/83) merged the exact
   reviewed Build 52 release head
   `d2d2caa7cb5c0a89c899038f72983da7404a4d1f` through protected `main` commit
@@ -314,16 +327,18 @@ exact protected `main` commit
 Internal-only and unaccepted candidates. Build 52 resolved the earlier portrait-
 video blank-player defect, but physical-device testing found a separate release
 blocker: after backgrounding during encrypted-video playback, a correct
-passcode can fail to reopen the vault until the app is relaunched.
+passcode can fail to reopen the vault until the app is relaunched. Build 52
+remains rejected.
 
-The current task is the isolated lifecycle repair on
-`fix/build52-video-background-unlock`, created directly from exact protected
-`main` commit `0dfc5a1faa5fd0664ead1df1d7ed5b5a43f1498e`. The false documentation-
-only acceptance record at `6c4a64218008fd697203d64aae6b9c4d2175d2bd` is
-superseded and must not merge. The repair must make terminal video teardown and
-session retirement complete without depending indefinitely on UIKit
-presentation callbacks, while preserving the existing requirement that
-protected plaintext is not discarded before the player graph releases it.
+PR #84 merged the isolated lifecycle repair head
+`65e57bb8be8456474310e654126e1193dc13be7a` through exact protected `main`
+commit `925b5b539a72d0f8043d385d083b5b6293ecd19e`; PR CI is green and exact-main
+CI run [#35305926384](https://github.com/Frankbell84/KeyHollow/actions/runs/35305926384)
+is green. The current task is packaging that exact source as Build 53, the next
+Internal-only and unaccepted candidate. The false
+documentation-only acceptance record at
+`6c4a64218008fd697203d64aae6b9c4d2175d2bd` remains superseded and must not
+merge.
 
 Protected records, cryptography, archive formats, media payloads, hierarchy
 metadata, and ciphertext remain unchanged. External playback, Picture in
@@ -783,20 +798,17 @@ only boundary.
    `fd2f39f079f3dca853f09e2d67caa8a5cd2eab5c` as the accepted rollback and
    comparison baseline. Preserve exact Build 52 source
    `0dfc5a1faa5fd0664ead1df1d7ed5b5a43f1498e` only as failed-candidate evidence.
-2. Complete the bounded background-video teardown and unlock repair with
-   deterministic missing-callback, session-barrier, correct-passcode, and
-   plaintext-cleanup regression coverage.
-3. Publish only the reviewed repair head through a protected pull request and
-   require the complete macOS build, unit/integration, security, and Swift
-   CodeQL gates. Merge only that exact head, then require complete exact-main CI.
-4. Package the repair under the next unused build number, Build 53. Run the
+2. Package the repair source validated by exact-main CI run
+   [#35305926384](https://github.com/Frankbell84/KeyHollow/actions/runs/35305926384)
+   under the next unused build number, Build
+   53. Run the
    protected no-upload signing preflight before any separately authorized
    `KeyHollow Internal` upload.
-5. Execute the Build 53 background-video unlock checks in
+3. Execute the Build 53 background-video unlock checks in
    `docs/DEVICE_TEST_PLAN.md`. A correct passcode must reopen the same vault on
    the first attempt after every tested background transition, without a retry
    or app relaunch.
-6. Do not expand Build 52 or any unaccepted replacement to Family, external
+4. Do not expand Build 52 or any unaccepted replacement to Family, external
    TestFlight, or App Store review.
 
 ## Frank's decisions required
