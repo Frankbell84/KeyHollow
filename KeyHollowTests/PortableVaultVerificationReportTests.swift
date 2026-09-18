@@ -167,6 +167,8 @@ final class PortableVaultVerificationReportTests: XCTestCase {
         XCTAssertEqual(report.authenticatedPhotoCount, 1)
         XCTAssertEqual(report.authenticatedFileCount, 1)
         XCTAssertEqual(report.authenticatedEntryCount, 5)
+        XCTAssertEqual(report.authenticatedFolderCount, 0)
+        XCTAssertEqual(report.authenticatedFolderMembershipCount, 0)
         XCTAssertEqual(report.sourceVaultCreatedAt, createdAt)
         XCTAssertEqual(report.catalogVersion, PortableArchivePayloadCatalog.currentVersion)
         XCTAssertEqual(report.legacyOversizedPhotoCount, 0)
@@ -180,6 +182,8 @@ final class PortableVaultVerificationReportTests: XCTestCase {
                 "authenticatedPhotoCount",
                 "authenticatedFileCount",
                 "authenticatedEntryCount",
+                "authenticatedFolderCount",
+                "authenticatedFolderMembershipCount",
                 "sourceVaultCreatedAt",
                 "catalogVersion",
                 "legacyOversizedPhotoCount"
@@ -541,6 +545,7 @@ final class PortableVaultVerificationReportTests: XCTestCase {
             credential: credential,
             destinationURL: roots.archive,
             sourceRootOverride: roots.photoSource,
+            folderContent: PortableVaultNoFolderContent(),
             workingRootOverride: roots.working,
             keyDeriver: VerificationTestKeyDeriver()
         )
@@ -582,6 +587,7 @@ final class PortableVaultVerificationReportTests: XCTestCase {
             sourceRootOverride: roots.photoSource,
             supplementalSourceRootOverride: roots.generalFileSource,
             supplementalContent: GeneralFilePortableTransferBridge(access: generalAccess),
+            folderContent: PortableVaultNoFolderContent(),
             workingRootOverride: roots.working,
             keyDeriver: VerificationTestKeyDeriver()
         )
@@ -794,6 +800,7 @@ final class PortableVaultVerificationReportTests: XCTestCase {
             sourceRootOverride: roots.photoSource,
             supplementalSourceRootOverride: roots.generalFileSource,
             supplementalContent: GeneralFilePortableTransferBridge(access: generalAccess),
+            folderContent: PortableVaultNoFolderContent(),
             workingRootOverride: roots.working,
             keyDeriver: VerificationTestKeyDeriver()
         )

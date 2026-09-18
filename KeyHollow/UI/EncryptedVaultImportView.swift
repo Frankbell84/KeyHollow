@@ -43,7 +43,7 @@ struct EncryptedVaultImportView: View {
             ScrollViewReader { proxy in
                 Form {
                 Section {
-                    Text("Import creates a new independent local vault. It never replaces, merges with, or deletes an existing vault. Folder names and organization are not included in this archive version, so restored items appear at the new vault's top level.")
+                    Text("Import creates a new independent local vault. It never replaces, merges with, or deletes an existing vault. Folder-aware backups restore their authenticated folder names and organization; root-level catalog backups restore content at the new vault's top level.")
                         .foregroundStyle(.secondary)
                 }
 
@@ -427,6 +427,7 @@ struct EncryptedVaultImportView: View {
                     archiveURL: selectedArchive.url,
                     credential: credential,
                     supplementalContent: GeneralFilePortableTransferBridge(),
+                    folderContent: FolderPresentationPortableTransferBridge(),
                     progress: { progress in
                         Task { @MainActor in
                             guard activeOperationID == operationID else { return }
@@ -437,6 +438,8 @@ struct EncryptedVaultImportView: View {
                 let summary = ValidatedVaultContentSummary(
                     photoCount: report.authenticatedPhotoCount,
                     generalFileCount: report.authenticatedFileCount,
+                    folderCount: report.authenticatedFolderCount,
+                    folderMembershipCount: report.authenticatedFolderMembershipCount,
                     legacyOversizedPhotoCount: report.legacyOversizedPhotoCount
                 )
                 guard !Task.isCancelled, activeOperationID == operationID else { return }
@@ -486,6 +489,7 @@ struct EncryptedVaultImportView: View {
                     archiveURL: selectedArchive.url,
                     credential: credential,
                     supplementalContent: GeneralFilePortableTransferBridge(),
+                    folderContent: FolderPresentationPortableTransferBridge(),
                     progress: { progress in
                         Task { @MainActor in
                             guard activeOperationID == operationID else { return }
@@ -595,15 +599,21 @@ enum ImportLowKeyContinuation {
 private struct ValidatedVaultContentSummary: Equatable {
     let photoCount: Int
     let generalFileCount: Int
+    let folderCount: Int
+    let folderMembershipCount: Int
     let legacyOversizedPhotoCount: Int
 
     var verificationMessage: String {
         let photoNoun = photoCount == 1 ? "photo" : "photos"
         let fileNoun = generalFileCount == 1 ? "file" : "files"
-        let verified = "Authenticated and verified: \(photoCount) \(photoNoun), \(generalFileCount) \(fileNoun)"
+        let folderNoun = folderCount == 1 ? "folder" : "folders"
+        let folderDetail = folderCount == 0
+            ? "root-level organization"
+            : "\(folderCount) \(folderNoun) with \(folderMembershipCount) organized items"
+        let verified = "Authenticated and verified: \(photoCount) \(photoNoun), \(generalFileCount) \(fileNoun), \(folderDetail)"
         guard legacyOversizedPhotoCount > 0 else { return verified }
         let itemNoun = legacyOversizedPhotoCount == 1 ? "photo" : "photos"
-        return "Archive authenticated: \(photoCount) \(photoNoun), \(generalFileCount) \(fileNoun). \(legacyOversizedPhotoCount) legacy \(itemNoun) exceed the current open-size limit; their encrypted bytes and archive digests are preserved, but full item verification is deferred until migration."
+        return "Archive authenticated: \(photoCount) \(photoNoun), \(generalFileCount) \(fileNoun), \(folderDetail). \(legacyOversizedPhotoCount) legacy \(itemNoun) exceed the current open-size limit; their encrypted bytes and archive digests are preserved, but full item verification is deferred until migration."
     }
 }
 

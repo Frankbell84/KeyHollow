@@ -42,7 +42,8 @@ struct GeneralFilePortableTransferBridge: PortableVaultSupplementalContentProvid
                     sourceURL: sourceURL
                 )
             },
-            itemCount: inventory.manifest.files.count
+            itemCount: inventory.manifest.files.count,
+            itemIDs: Set(inventory.manifest.files.map(\.id))
         )
     }
 
@@ -62,7 +63,8 @@ struct GeneralFilePortableTransferBridge: PortableVaultSupplementalContentProvid
         let manifest = try await store.validateAllEncryptedFiles()
         return PortableVaultSupplementalValidation(
             itemCount: manifest.files.count,
-            storageNames: Set(manifest.files.map(\.blobName))
+            storageNames: Set(manifest.files.map(\.blobName)),
+            itemIDs: Set(manifest.files.map(\.id))
         )
     }
 
@@ -88,7 +90,8 @@ struct GeneralFilePortableTransferBridge: PortableVaultSupplementalContentProvid
         }
         return PortableVaultSupplementalValidation(
             itemCount: manifest.files.count,
-            storageNames: Set(manifest.files.map(\.blobName))
+            storageNames: Set(manifest.files.map(\.blobName)),
+            itemIDs: Set(manifest.files.map(\.id))
         )
     }
 

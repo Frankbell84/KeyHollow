@@ -2,12 +2,66 @@ import CryptoKit
 import Foundation
 import XCTest
 @testable import KeyHollow
+@testable import KeyHollowFolderPresentationAddOn
 @testable import KeyHollowGeneralFileSupportAddOn
 @testable import KeyHollowTransferCore
 @testable import KeyHollowPhotoCore
 @testable import KeyHollowVaultCore
 
 final class PortableArchivePayloadTests: XCTestCase {
+    func testFolderManifestRequiresV4AndCanonicalPath() throws {
+        let folderEntries = [
+            entry(storageName: "manifest.khm", role: .manifest),
+            entry(storageName: "folders/manifest.khm", role: .folderManifest)
+        ]
+
+        XCTAssertNoThrow(
+            try PortableArchivePayloadCatalog(
+                version: PortableArchivePayloadCatalog.folderHierarchyVersion,
+                entries: folderEntries
+            ).validate()
+        )
+        XCTAssertThrowsError(
+            try PortableArchivePayloadCatalog(
+                version: PortableArchivePayloadCatalog.currentVersion,
+                entries: folderEntries
+            ).validate()
+        )
+        XCTAssertThrowsError(
+            try PortableArchivePayloadCatalog(
+                version: PortableArchivePayloadCatalog.folderHierarchyVersion,
+                entries: [entry(storageName: "manifest.khm", role: .manifest)]
+            ).validate()
+        )
+        XCTAssertThrowsError(
+            try PortableArchivePayloadCatalog.validateStorageName(
+                "folders/../manifest.khm",
+                role: .folderManifest
+            )
+        )
+    }
+
+    func testFolderManifestSelectsV4WithoutLegacyFallback() throws {
+        let entries = [
+            entry(storageName: "manifest.khm", role: .manifest),
+            entry(storageName: "folders/manifest.khm", role: .folderManifest)
+        ]
+        XCTAssertEqual(
+            try PortableArchivePayloadCatalog.forExport(entries: entries).version,
+            PortableArchivePayloadCatalog.folderHierarchyVersion
+        )
+
+        var oversized = entries
+        oversized[1] = entry(
+            storageName: "folders/manifest.khm",
+            role: .folderManifest,
+            ciphertextByteCount: PortableArchivePayloadFormat.maximumCiphertextByteCount(
+                for: .folderManifest
+            ) + 1
+        )
+        XCTAssertThrowsError(try PortableArchivePayloadCatalog.forExport(entries: oversized))
+    }
+
     func testLegacyPhotoOnlyCatalogRemainsSupported() throws {
         let legacy = PortableArchivePayloadCatalog(
             version: PortableArchivePayloadCatalog.legacyPhotoOnlyVersion,
@@ -511,7 +565,8 @@ final class PortableArchivePayloadTests: XCTestCase {
             .original,
             .thumbnail,
             .supplementalManifest,
-            .supplementalBlob
+            .supplementalBlob,
+            .folderManifest
         ]
 
         for role in roles {
@@ -542,7 +597,8 @@ final class PortableArchivePayloadTests: XCTestCase {
             .original,
             .thumbnail,
             .supplementalManifest,
-            .supplementalBlob
+            .supplementalBlob,
+            .folderManifest
         ]
 
         for role in roles {
@@ -592,6 +648,14 @@ final class PortableArchivePayloadTests: XCTestCase {
             VaultGeneralFileStore.maximumStoredFileCount
         )
         XCTAssertEqual(
+            PortableArchivePayloadFormat.maximumFolderCount,
+            VaultFolderPresentationStore.maximumFolderCount
+        )
+        XCTAssertEqual(
+            PortableArchivePayloadFormat.maximumFolderMembershipCount,
+            VaultFolderPresentationStore.maximumMembershipCount
+        )
+        XCTAssertEqual(
             PortableArchivePayloadFormat.maximumCiphertextByteCount(for: .manifest),
             UInt64(VaultPhotoStore.maximumManifestByteCount) + overhead
         )
@@ -612,6 +676,10 @@ final class PortableArchivePayloadTests: XCTestCase {
             VaultGeneralFileStore.maximumFileByteCount + overhead
         )
         XCTAssertEqual(
+            PortableArchivePayloadFormat.maximumCiphertextByteCount(for: .folderManifest),
+            UInt64(VaultFolderPresentationStore.maximumManifestByteCount) + overhead
+        )
+        XCTAssertEqual(
             PortableArchivePayloadFormat.maximumEntryByteCount,
             max(
                 VaultPhotoStore.maximumOriginalByteCount,
@@ -630,6 +698,18 @@ final class PortableArchivePayloadTests: XCTestCase {
             PortableArchivePayloadFormat.maximumEntryCount
         )
         XCTAssertNoThrow(try maximumShape.validate())
+
+        let folderAwareMaximum = PortableArchivePayloadCatalog(
+            version: PortableArchivePayloadCatalog.folderHierarchyVersion,
+            entries: maximumShape.entries + [
+                entry(storageName: "folders/manifest.khm", role: .folderManifest)
+            ]
+        )
+        XCTAssertEqual(
+            folderAwareMaximum.entries.count,
+            PortableArchivePayloadFormat.maximumFolderAwareEntryCount
+        )
+        XCTAssertNoThrow(try folderAwareMaximum.validate())
 
         var excessiveEntryCount = maximumShape.entries
         excessiveEntryCount.append(
@@ -1008,9 +1088,11 @@ final class PortableArchivePayloadTests: XCTestCase {
     ) -> (catalog: PortableArchivePayloadCatalog, testedStorageName: String) {
         let testedStorageName: String
         let entries: [PortableArchivePayloadEntry]
+        let catalogVersion: Int
 
         switch role {
         case .manifest:
+            catalogVersion = PortableArchivePayloadCatalog.currentVersion
             testedStorageName = "manifest.khm"
             entries = [
                 entry(
@@ -1020,6 +1102,7 @@ final class PortableArchivePayloadTests: XCTestCase {
                 )
             ]
         case .original:
+            catalogVersion = PortableArchivePayloadCatalog.currentVersion
             testedStorageName = "boundary.khp"
             entries = [
                 entry(storageName: "manifest.khm", role: .manifest),
@@ -1031,6 +1114,7 @@ final class PortableArchivePayloadTests: XCTestCase {
                 entry(storageName: "boundary.kht", role: .thumbnail)
             ]
         case .thumbnail:
+            catalogVersion = PortableArchivePayloadCatalog.currentVersion
             testedStorageName = "boundary.kht"
             entries = [
                 entry(storageName: "manifest.khm", role: .manifest),
@@ -1042,6 +1126,7 @@ final class PortableArchivePayloadTests: XCTestCase {
                 )
             ]
         case .supplementalManifest:
+            catalogVersion = PortableArchivePayloadCatalog.currentVersion
             testedStorageName = "supplemental/manifest.khm"
             entries = [
                 entry(storageName: "manifest.khm", role: .manifest),
@@ -1052,6 +1137,7 @@ final class PortableArchivePayloadTests: XCTestCase {
                 )
             ]
         case .supplementalBlob:
+            catalogVersion = PortableArchivePayloadCatalog.currentVersion
             testedStorageName = "supplemental/boundary.khf"
             entries = [
                 entry(storageName: "manifest.khm", role: .manifest),
@@ -1062,11 +1148,22 @@ final class PortableArchivePayloadTests: XCTestCase {
                     ciphertextByteCount: ciphertextByteCount
                 )
             ]
+        case .folderManifest:
+            catalogVersion = PortableArchivePayloadCatalog.folderHierarchyVersion
+            testedStorageName = "folders/manifest.khm"
+            entries = [
+                entry(storageName: "manifest.khm", role: .manifest),
+                entry(
+                    storageName: testedStorageName,
+                    role: .folderManifest,
+                    ciphertextByteCount: ciphertextByteCount
+                )
+            ]
         }
 
         return (
             PortableArchivePayloadCatalog(
-                version: PortableArchivePayloadCatalog.currentVersion,
+                version: catalogVersion,
                 entries: entries
             ),
             testedStorageName

@@ -64,6 +64,7 @@ public struct PortableVaultRestoreTransactionJournal {
     let journalRoot: URL
     let photoDataRoot: URL
     let generalFileDataRoot: URL
+    let folderPresentationDataRoot: URL
 
     private let authenticationKey: SymmetricKey
     private let fileManager = FileManager.default
@@ -108,7 +109,8 @@ public struct PortableVaultRestoreTransactionJournal {
         authenticationKey: SymmetricKey,
         journalRootOverride: URL? = nil,
         photoDataRootOverride: URL? = nil,
-        generalFileDataRootOverride: URL? = nil
+        generalFileDataRootOverride: URL? = nil,
+        folderPresentationDataRootOverride: URL? = nil
     ) throws {
         self.authenticationKey = authenticationKey
 
@@ -154,9 +156,27 @@ public struct PortableVaultRestoreTransactionJournal {
                 .standardizedFileURL
         }
 
+        if let folderPresentationDataRootOverride {
+            folderPresentationDataRoot = folderPresentationDataRootOverride.standardizedFileURL
+        } else {
+            let appSupport = try fileManager.url(
+                for: .applicationSupportDirectory,
+                in: .userDomainMask,
+                appropriateFor: nil,
+                create: true
+            )
+            folderPresentationDataRoot = appSupport
+                .appendingPathComponent(
+                    "KeyHollow/FolderPresentationData",
+                    isDirectory: true
+                )
+                .standardizedFileURL
+        }
+
         try Self.prepareProtectedRoot(journalRoot)
         try Self.prepareProtectedRoot(photoDataRoot)
         try Self.prepareProtectedRoot(generalFileDataRoot)
+        try Self.prepareProtectedRoot(folderPresentationDataRoot)
     }
 
     func begin(
@@ -282,6 +302,14 @@ public struct PortableVaultRestoreTransactionJournal {
         if fileManager.fileExists(atPath: generalFileDestinationURL.path) {
             try? fileManager.removeItem(at: generalFileDestinationURL)
         }
+        let folderPresentationDestinationURL = folderPresentationDataRoot
+            .appendingPathComponent(
+                record.destinationVaultID.uuidString.lowercased(),
+                isDirectory: true
+            )
+        if fileManager.fileExists(atPath: folderPresentationDestinationURL.path) {
+            try? fileManager.removeItem(at: folderPresentationDestinationURL)
+        }
 
         let remainingEnvelope: VaultEnvelope?
         do {
@@ -296,7 +324,8 @@ public struct PortableVaultRestoreTransactionJournal {
         } ?? false
         guard !transactionEnvelopeRemains,
               !fileManager.fileExists(atPath: destinationURL.path),
-              !fileManager.fileExists(atPath: generalFileDestinationURL.path) else {
+              !fileManager.fileExists(atPath: generalFileDestinationURL.path),
+              !fileManager.fileExists(atPath: folderPresentationDestinationURL.path) else {
             throw PortableVaultRestoreTransactionError.rollbackIncomplete
         }
         try finish(record)

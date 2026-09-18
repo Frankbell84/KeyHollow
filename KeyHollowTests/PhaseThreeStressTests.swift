@@ -44,6 +44,7 @@ final class PhaseThreeStressTests: XCTestCase {
             credential: credential,
             destinationURL: roots.archive,
             sourceRootOverride: roots.source,
+            folderContent: PortableVaultNoFolderContent(),
             workingRootOverride: roots.working,
             keyDeriver: PhaseThreeKeyDeriver()
         )

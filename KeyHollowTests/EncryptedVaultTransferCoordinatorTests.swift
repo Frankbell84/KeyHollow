@@ -2,6 +2,7 @@ import CryptoKit
 import Foundation
 import XCTest
 @testable import KeyHollow
+@testable import KeyHollowFolderPresentationAddOn
 @testable import KeyHollowGeneralFileSupportAddOn
 @testable import KeyHollowPhotoCore
 @testable import KeyHollowTransferCore
@@ -203,6 +204,7 @@ final class EncryptedVaultTransferCoordinatorTests: XCTestCase {
             sourceRootOverride: roots.source,
             supplementalSourceRootOverride: roots.generalSource,
             supplementalContent: GeneralFilePortableTransferBridge(access: generalAccess),
+            folderContent: PortableVaultNoFolderContent(),
             workingRootOverride: roots.working,
             keyDeriver: TestTransferKeyDeriver()
         )
@@ -228,7 +230,8 @@ final class EncryptedVaultTransferCoordinatorTests: XCTestCase {
             journalAuthenticationKey: testRestoreJournalKey,
             journalRootOverride: roots.transactions,
             photoDataRootOverride: roots.installed,
-            generalFileDataRootOverride: roots.generalInstalled
+            generalFileDataRootOverride: roots.generalInstalled,
+            folderPresentationDataRootOverride: roots.folderInstalled
         )
         let installed = try await installer.install(
             restore,
@@ -300,6 +303,7 @@ final class EncryptedVaultTransferCoordinatorTests: XCTestCase {
             sourceRootOverride: roots.source,
             supplementalSourceRootOverride: roots.generalSource,
             supplementalContent: bridge,
+            folderContent: PortableVaultNoFolderContent(),
             workingRootOverride: roots.working,
             keyDeriver: TestTransferKeyDeriver()
         )
@@ -320,7 +324,8 @@ final class EncryptedVaultTransferCoordinatorTests: XCTestCase {
             journalAuthenticationKey: testRestoreJournalKey,
             journalRootOverride: roots.transactions,
             photoDataRootOverride: roots.installed,
-            generalFileDataRootOverride: roots.generalInstalled
+            generalFileDataRootOverride: roots.generalInstalled,
+            folderPresentationDataRootOverride: roots.folderInstalled
         )
         let installed = try await installer.install(
             restore,
@@ -358,6 +363,333 @@ final class EncryptedVaultTransferCoordinatorTests: XCTestCase {
         let prepared = try await installedGeneralStore.prepareExport(installedManifest.files)
         XCTAssertEqual(try Data(contentsOf: try XCTUnwrap(prepared.urls.first)), expectedFile)
         await installedGeneralStore.discardExport(prepared)
+    }
+
+    func testFolderAwareArchiveRestoresNestedMixedMembershipWithoutThumbnailCache() async throws {
+        let roots = try TestRoots.create()
+        defer { roots.remove() }
+
+        let vaultID = UUID()
+        let vaultKey = SymmetricKey(data: Data(repeating: 0x6c, count: 32))
+        let capability = VaultAccessCapability(vaultID: vaultID, vaultKey: vaultKey)
+        let photoStore = try VaultPhotoStore(
+            vaultID: vaultID,
+            vaultKey: vaultKey,
+            storageRoot: roots.source
+        )
+        let photoRecord = try await photoStore.importPhoto(
+            originalData: Data("folder-aware photo".utf8),
+            thumbnailData: Data("folder-aware thumbnail".utf8)
+        )
+
+        let generalAccess = SessionGeneralFileAccess(capability: capability)
+        let generalStore = try VaultGeneralFileStore(
+            vaultID: vaultID,
+            access: generalAccess,
+            storageRoot: roots.generalSource,
+            temporaryRoot: roots.parent
+        )
+        let sourceFile = roots.parent.appendingPathComponent("nested.pdf")
+        try Data("folder-aware file".utf8).write(to: sourceFile)
+        let fileRecord = try await generalStore.importFile(at: sourceFile)
+
+        let folderAccess = SessionFolderPresentationAccess(capability: capability)
+        let folderStore = try VaultFolderPresentationStore(
+            vaultID: vaultID,
+            access: folderAccess,
+            storageRoot: roots.folderSource
+        )
+        let parent = try await folderStore.createFolder(named: "Family")
+        let child = try await folderStore.createFolder(named: "Trips", in: parent.id)
+        let photoReference = VaultPresentedContentReference(
+            kind: .photo,
+            id: photoRecord.id
+        )
+        let fileReference = VaultPresentedContentReference(
+            kind: .generalFile,
+            id: fileRecord.id
+        )
+        try await folderStore.move(Set([photoReference, fileReference]), to: child.id)
+        try await folderStore.storeThumbnail(Data("cache-only".utf8), for: fileReference)
+
+        let credential = PortableArchiveCredential.recoveryCode(
+            "0123-4567-89AB-CDEF-GHJK-MNPQ-RSTV-WXYZ"
+        )
+        let coordinator = EncryptedVaultTransferCoordinator()
+        let receipt = try await coordinator.exportVault(
+            vaultID: vaultID,
+            createdAt: Date(timeIntervalSince1970: 1_700_000_150),
+            access: capability,
+            credential: credential,
+            destinationURL: roots.archive,
+            sourceRootOverride: roots.source,
+            supplementalSourceRootOverride: roots.generalSource,
+            supplementalContent: GeneralFilePortableTransferBridge(access: generalAccess),
+            folderSourceRootOverride: roots.folderSource,
+            folderContent: FolderPresentationPortableTransferBridge(access: folderAccess),
+            workingRootOverride: roots.working,
+            keyDeriver: TestTransferKeyDeriver()
+        )
+        XCTAssertEqual(receipt.encryptedFileCount, 6)
+
+        let verification = try await coordinator.verifyArchive(
+            archiveURL: roots.archive,
+            credential: credential,
+            workingRootOverride: roots.working,
+            supplementalContent: GeneralFilePortableTransferBridge(),
+            folderContent: FolderPresentationPortableTransferBridge(),
+            keyDeriver: TestTransferKeyDeriver()
+        )
+        XCTAssertEqual(verification.authenticatedPhotoCount, 1)
+        XCTAssertEqual(verification.authenticatedFileCount, 1)
+        XCTAssertEqual(verification.authenticatedFolderCount, 2)
+        XCTAssertEqual(verification.authenticatedFolderMembershipCount, 2)
+        XCTAssertEqual(
+            verification.catalogVersion,
+            PortableArchivePayloadCatalog.folderHierarchyVersion
+        )
+        XCTAssertTrue(
+            try FileManager.default.contentsOfDirectory(atPath: roots.working.path).isEmpty
+        )
+
+        let restore = try await coordinator.stageAndValidateRestore(
+            archiveURL: roots.archive,
+            credential: credential,
+            workingRootOverride: roots.working,
+            supplementalContent: GeneralFilePortableTransferBridge(),
+            folderContent: FolderPresentationPortableTransferBridge(),
+            keyDeriver: TestTransferKeyDeriver()
+        )
+        XCTAssertEqual(
+            restore.catalog.version,
+            PortableArchivePayloadCatalog.folderHierarchyVersion
+        )
+        XCTAssertEqual(restore.folderCount, 2)
+        XCTAssertEqual(restore.folderMembershipCount, 2)
+
+        let installer = try PortableVaultRestoreInstaller(
+            credentialStore: TestPortableVaultCredentialStore(),
+            journalAuthenticationKey: testRestoreJournalKey,
+            journalRootOverride: roots.transactions,
+            photoDataRootOverride: roots.installed,
+            generalFileDataRootOverride: roots.generalInstalled,
+            folderPresentationDataRootOverride: roots.folderInstalled
+        )
+        let installed = try await installer.install(
+            restore,
+            localUnlockKey: SymmetricKey(data: Data(repeating: 0x51, count: 32))
+        )
+
+        let installedFolderRoot = roots.folderInstalled.appendingPathComponent(
+            installed.vaultID.uuidString.lowercased(),
+            isDirectory: true
+        )
+        let installedCapability = VaultAccessCapability(
+            vaultID: installed.vaultID,
+            vaultKey: SymmetricKey(data: installed.vaultKey)
+        )
+        let installedFolderStore = try VaultFolderPresentationStore(
+            vaultID: installed.vaultID,
+            access: SessionFolderPresentationAccess(capability: installedCapability),
+            storageRoot: installedFolderRoot
+        )
+        let installedManifest = try await installedFolderStore.loadManifest()
+        XCTAssertEqual(installedManifest.folders, [parent, child])
+        XCTAssertEqual(Set(installedManifest.memberships), Set([
+            VaultFolderMembership(item: photoReference, folderID: child.id),
+            VaultFolderMembership(item: fileReference, folderID: child.id)
+        ]))
+        XCTAssertTrue(installedManifest.thumbnails.isEmpty)
+    }
+
+    func testFolderAwareArchiveRequiresFolderAdapterAndCleansStaging() async throws {
+        let roots = try TestRoots.create()
+        defer { roots.remove() }
+        let receipt = try await createOpaqueFolderArchive(at: roots)
+
+        do {
+            _ = try await EncryptedVaultTransferCoordinator().stageAndValidateRestore(
+                archiveURL: receipt.archiveURL,
+                credential: .recoveryCode(
+                    "0123-4567-89AB-CDEF-GHJK-MNPQ-RSTV-WXYZ"
+                ),
+                workingRootOverride: roots.working,
+                keyDeriver: TestTransferKeyDeriver()
+            )
+            XCTFail("A folder-aware archive was accepted without its folder adapter")
+        } catch {
+            XCTAssertEqual(
+                error as? EncryptedVaultTransferError,
+                .restoredCatalogMismatch
+            )
+        }
+
+        XCTAssertTrue(
+            try FileManager.default.contentsOfDirectory(atPath: roots.working.path).isEmpty
+        )
+    }
+
+    func testFolderDestinationCollisionFailsBeforeConsumingRestore() async throws {
+        let roots = try TestRoots.create()
+        defer { roots.remove() }
+        let receipt = try await createOpaqueFolderArchive(at: roots)
+        let restore = try await EncryptedVaultTransferCoordinator()
+            .stageAndValidateRestore(
+                archiveURL: receipt.archiveURL,
+                credential: .recoveryCode(
+                    "0123-4567-89AB-CDEF-GHJK-MNPQ-RSTV-WXYZ"
+                ),
+                workingRootOverride: roots.working,
+                folderContent: TestOpaqueFolderContent(),
+                keyDeriver: TestTransferKeyDeriver()
+            )
+        defer { restore.discard() }
+
+        let folderDestination = roots.folderInstalled.appendingPathComponent(
+            restore.destinationVaultPayload.vaultID.uuidString.lowercased(),
+            isDirectory: true
+        )
+        try FileManager.default.createDirectory(
+            at: folderDestination,
+            withIntermediateDirectories: true
+        )
+        let installer = try PortableVaultRestoreInstaller(
+            credentialStore: TestPortableVaultCredentialStore(),
+            journalAuthenticationKey: testRestoreJournalKey,
+            journalRootOverride: roots.transactions,
+            photoDataRootOverride: roots.installed,
+            generalFileDataRootOverride: roots.generalInstalled,
+            folderPresentationDataRootOverride: roots.folderInstalled
+        )
+
+        do {
+            _ = try await installer.install(
+                restore,
+                localUnlockKey: SymmetricKey(data: Data(repeating: 0x52, count: 32))
+            )
+            XCTFail("A colliding folder destination was overwritten")
+        } catch {
+            XCTAssertEqual(
+                error as? PortableVaultRestoreInstallationError,
+                .destinationExists
+            )
+        }
+
+        XCTAssertTrue(FileManager.default.fileExists(atPath: restore.stagingURL.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: folderDestination.path))
+        XCTAssertTrue(
+            try FileManager.default.contentsOfDirectory(atPath: roots.transactions.path).isEmpty
+        )
+    }
+
+    func testLegacyRestorePreservesPreexistingFolderDestinationByFailingPreflight() async throws {
+        let roots = try TestRoots.create()
+        defer { roots.remove() }
+        let receipt = try await createArchive(at: roots)
+        let restore = try await EncryptedVaultTransferCoordinator()
+            .stageAndValidateRestore(
+                archiveURL: receipt.archiveURL,
+                credential: .recoveryCode(
+                    "0123-4567-89AB-CDEF-GHJK-MNPQ-RSTV-WXYZ"
+                ),
+                workingRootOverride: roots.working,
+                keyDeriver: TestTransferKeyDeriver()
+            )
+        defer { restore.discard() }
+
+        let folderDestination = roots.folderInstalled.appendingPathComponent(
+            restore.destinationVaultPayload.vaultID.uuidString.lowercased(),
+            isDirectory: true
+        )
+        try FileManager.default.createDirectory(
+            at: folderDestination,
+            withIntermediateDirectories: true
+        )
+        let sentinel = folderDestination.appendingPathComponent("keep.me")
+        try Data("unrelated folder data".utf8).write(to: sentinel)
+        let installer = try PortableVaultRestoreInstaller(
+            credentialStore: TestPortableVaultCredentialStore(),
+            journalAuthenticationKey: testRestoreJournalKey,
+            journalRootOverride: roots.transactions,
+            photoDataRootOverride: roots.installed,
+            generalFileDataRootOverride: roots.generalInstalled,
+            folderPresentationDataRootOverride: roots.folderInstalled
+        )
+
+        do {
+            _ = try await installer.install(
+                restore,
+                localUnlockKey: SymmetricKey(data: Data(repeating: 0x53, count: 32))
+            )
+            XCTFail("A legacy restore started over unrelated folder data")
+        } catch {
+            XCTAssertEqual(
+                error as? PortableVaultRestoreInstallationError,
+                .destinationExists
+            )
+        }
+
+        XCTAssertEqual(try Data(contentsOf: sentinel), Data("unrelated folder data".utf8))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: restore.stagingURL.path))
+        XCTAssertTrue(
+            try FileManager.default.contentsOfDirectory(atPath: roots.transactions.path).isEmpty
+        )
+    }
+
+    func testFolderManifestMutationAfterValidationFailsClosed() async throws {
+        let roots = try TestRoots.create()
+        defer { roots.remove() }
+        let restore = try await makeValidatedOpaqueFolderRestore(at: roots)
+        defer { restore.discard() }
+        let manifestURL = restore.stagingURL.appendingPathComponent(
+            "folders/manifest.khm",
+            isDirectory: false
+        )
+        let original = try Data(contentsOf: manifestURL)
+        try Data(repeating: 0x9a, count: original.count).write(
+            to: manifestURL,
+            options: .atomic
+        )
+
+        try await assertInstallFailsClosed(restore, roots: roots)
+    }
+
+    func testFolderDirectoryUnexpectedFileAfterValidationFailsClosed() async throws {
+        let roots = try TestRoots.create()
+        defer { roots.remove() }
+        let restore = try await makeValidatedOpaqueFolderRestore(at: roots)
+        defer { restore.discard() }
+        try Data("unexpected encrypted folder data".utf8).write(
+            to: restore.stagingURL.appendingPathComponent(
+                "folders/unexpected.khm",
+                isDirectory: false
+            )
+        )
+
+        try await assertInstallFailsClosed(restore, roots: roots)
+    }
+
+    func testFolderManifestSymlinkAfterValidationFailsClosed() async throws {
+        let roots = try TestRoots.create()
+        defer { roots.remove() }
+        let restore = try await makeValidatedOpaqueFolderRestore(at: roots)
+        defer { restore.discard() }
+        let manifestURL = restore.stagingURL.appendingPathComponent(
+            "folders/manifest.khm",
+            isDirectory: false
+        )
+        let replacementURL = roots.parent.appendingPathComponent(
+            "replacement-folder-manifest.khm",
+            isDirectory: false
+        )
+        try Data(repeating: 0x7e, count: 28).write(to: replacementURL)
+        try FileManager.default.removeItem(at: manifestURL)
+        try FileManager.default.createSymbolicLink(
+            at: manifestURL,
+            withDestinationURL: replacementURL
+        )
+
+        try await assertInstallFailsClosed(restore, roots: roots)
     }
 
     func testVideoGeneralFileArchiveRoundTripPreservesRecordAndBytes() async throws {
@@ -403,6 +735,7 @@ final class EncryptedVaultTransferCoordinatorTests: XCTestCase {
             sourceRootOverride: roots.source,
             supplementalSourceRootOverride: roots.generalSource,
             supplementalContent: GeneralFilePortableTransferBridge(access: generalAccess),
+            folderContent: PortableVaultNoFolderContent(),
             workingRootOverride: roots.working,
             keyDeriver: TestTransferKeyDeriver()
         )
@@ -421,7 +754,8 @@ final class EncryptedVaultTransferCoordinatorTests: XCTestCase {
             journalAuthenticationKey: testRestoreJournalKey,
             journalRootOverride: roots.transactions,
             photoDataRootOverride: roots.installed,
-            generalFileDataRootOverride: roots.generalInstalled
+            generalFileDataRootOverride: roots.generalInstalled,
+            folderPresentationDataRootOverride: roots.folderInstalled
         )
         let installed = try await installer.install(
             restore,
@@ -493,6 +827,7 @@ final class EncryptedVaultTransferCoordinatorTests: XCTestCase {
             credential: credential,
             destinationURL: roots.archive,
             sourceRootOverride: roots.source,
+            folderContent: PortableVaultNoFolderContent(),
             workingRootOverride: roots.working,
             keyDeriver: TestTransferKeyDeriver()
         )
@@ -586,6 +921,7 @@ final class EncryptedVaultTransferCoordinatorTests: XCTestCase {
                 credential: .passphrase("correct horse battery staple"),
                 destinationURL: roots.archive,
                 sourceRootOverride: roots.source,
+                folderContent: PortableVaultNoFolderContent(),
                 workingRootOverride: roots.working,
                 keyDeriver: TestTransferKeyDeriver()
             )
@@ -620,6 +956,7 @@ final class EncryptedVaultTransferCoordinatorTests: XCTestCase {
                 credential: .passphrase("correct horse battery staple"),
                 destinationURL: unsafeDestination,
                 sourceRootOverride: roots.source,
+                folderContent: PortableVaultNoFolderContent(),
                 workingRootOverride: roots.working,
                 keyDeriver: TestTransferKeyDeriver()
             )
@@ -645,7 +982,9 @@ final class EncryptedVaultTransferCoordinatorTests: XCTestCase {
             credentialStore: credentialStore,
             journalAuthenticationKey: testRestoreJournalKey,
             journalRootOverride: roots.transactions,
-            photoDataRootOverride: roots.installed
+            photoDataRootOverride: roots.installed,
+            generalFileDataRootOverride: roots.generalInstalled,
+            folderPresentationDataRootOverride: roots.folderInstalled
         )
 
         let installed = try await installer.install(
@@ -688,7 +1027,9 @@ final class EncryptedVaultTransferCoordinatorTests: XCTestCase {
             credentialStore: credentialStore,
             journalAuthenticationKey: testRestoreJournalKey,
             journalRootOverride: roots.transactions,
-            photoDataRootOverride: roots.installed
+            photoDataRootOverride: roots.installed,
+            generalFileDataRootOverride: roots.generalInstalled,
+            folderPresentationDataRootOverride: roots.folderInstalled
         )
         let localUnlockKey = SymmetricKey(data: Data(repeating: 0x43, count: 32))
 
@@ -726,7 +1067,9 @@ final class EncryptedVaultTransferCoordinatorTests: XCTestCase {
             credentialStore: credentialStore,
             journalAuthenticationKey: testRestoreJournalKey,
             journalRootOverride: roots.transactions,
-            photoDataRootOverride: roots.installed
+            photoDataRootOverride: roots.installed,
+            generalFileDataRootOverride: roots.generalInstalled,
+            folderPresentationDataRootOverride: roots.folderInstalled
         )
 
         await XCTAssertThrowsErrorAsync {
@@ -765,7 +1108,9 @@ final class EncryptedVaultTransferCoordinatorTests: XCTestCase {
             credentialStore: credentialStore,
             journalAuthenticationKey: testRestoreJournalKey,
             journalRootOverride: roots.transactions,
-            photoDataRootOverride: roots.installed
+            photoDataRootOverride: roots.installed,
+            generalFileDataRootOverride: roots.generalInstalled,
+            folderPresentationDataRootOverride: roots.folderInstalled
         )
 
         do {
@@ -833,14 +1178,23 @@ final class EncryptedVaultTransferCoordinatorTests: XCTestCase {
     func testCredentialWriteFailureRollsBackCommittedCiphertext() async throws {
         let roots = try TestRoots.create()
         defer { roots.remove() }
-        let fixture = try await createArchive(at: roots)
+        let fixture = try await createOpaqueFolderArchive(at: roots)
         let restore = try await EncryptedVaultTransferCoordinator().stageAndValidateRestore(
             archiveURL: fixture.archiveURL,
             credential: .recoveryCode("0123-4567-89AB-CDEF-GHJK-MNPQ-RSTV-WXYZ"),
             workingRootOverride: roots.working,
+            folderContent: TestOpaqueFolderContent(),
             keyDeriver: TestTransferKeyDeriver()
         )
         let destinationURL = roots.installed.appendingPathComponent(
+            restore.destinationVaultPayload.vaultID.uuidString.lowercased(),
+            isDirectory: true
+        )
+        let generalDestinationURL = roots.generalInstalled.appendingPathComponent(
+            restore.destinationVaultPayload.vaultID.uuidString.lowercased(),
+            isDirectory: true
+        )
+        let folderDestinationURL = roots.folderInstalled.appendingPathComponent(
             restore.destinationVaultPayload.vaultID.uuidString.lowercased(),
             isDirectory: true
         )
@@ -851,7 +1205,9 @@ final class EncryptedVaultTransferCoordinatorTests: XCTestCase {
             credentialStore: credentialStore,
             journalAuthenticationKey: testRestoreJournalKey,
             journalRootOverride: roots.transactions,
-            photoDataRootOverride: roots.installed
+            photoDataRootOverride: roots.installed,
+            generalFileDataRootOverride: roots.generalInstalled,
+            folderPresentationDataRootOverride: roots.folderInstalled
         )
 
         await XCTAssertThrowsErrorAsync {
@@ -862,7 +1218,19 @@ final class EncryptedVaultTransferCoordinatorTests: XCTestCase {
         }
 
         XCTAssertFalse(FileManager.default.fileExists(atPath: destinationURL.path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: generalDestinationURL.path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: folderDestinationURL.path))
         XCTAssertTrue(try FileManager.default.contentsOfDirectory(atPath: roots.installed.path).isEmpty)
+        XCTAssertTrue(
+            try FileManager.default.contentsOfDirectory(
+                atPath: roots.generalInstalled.path
+            ).isEmpty
+        )
+        XCTAssertTrue(
+            try FileManager.default.contentsOfDirectory(
+                atPath: roots.folderInstalled.path
+            ).isEmpty
+        )
         let rolledBackEnvelope = await credentialStore.envelope(for: locator)
         XCTAssertNil(rolledBackEnvelope)
         XCTAssertTrue(try FileManager.default.contentsOfDirectory(atPath: roots.transactions.path).isEmpty)
@@ -888,7 +1256,8 @@ final class EncryptedVaultTransferCoordinatorTests: XCTestCase {
             authenticationKey: testRestoreJournalKey,
             journalRootOverride: roots.transactions,
             photoDataRootOverride: roots.installed,
-            generalFileDataRootOverride: roots.generalInstalled
+            generalFileDataRootOverride: roots.generalInstalled,
+            folderPresentationDataRootOverride: roots.folderInstalled
         )
         _ = try journal.begin(
             destinationVaultID: destinationVaultID,
@@ -918,6 +1287,17 @@ final class EncryptedVaultTransferCoordinatorTests: XCTestCase {
         try Data("interrupted encrypted file manifest".utf8).write(
             to: generalDestinationURL.appendingPathComponent("manifest.khm")
         )
+        let folderDestinationURL = roots.folderInstalled.appendingPathComponent(
+            destinationVaultID.uuidString.lowercased(),
+            isDirectory: true
+        )
+        try FileManager.default.createDirectory(
+            at: folderDestinationURL,
+            withIntermediateDirectories: true
+        )
+        try Data("interrupted encrypted folder manifest".utf8).write(
+            to: folderDestinationURL.appendingPathComponent("manifest.khm")
+        )
         try await credentialStore.writeIfAbsent(
             envelope,
             locator: locator
@@ -927,6 +1307,7 @@ final class EncryptedVaultTransferCoordinatorTests: XCTestCase {
 
         XCTAssertFalse(FileManager.default.fileExists(atPath: destinationURL.path))
         XCTAssertFalse(FileManager.default.fileExists(atPath: generalDestinationURL.path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: folderDestinationURL.path))
         let recoveredEnvelope = await credentialStore.envelope(for: locator)
         XCTAssertNil(recoveredEnvelope)
         XCTAssertTrue(try FileManager.default.contentsOfDirectory(atPath: roots.transactions.path).isEmpty)
@@ -982,7 +1363,8 @@ final class EncryptedVaultTransferCoordinatorTests: XCTestCase {
             authenticationKey: testRestoreJournalKey,
             journalRootOverride: roots.transactions,
             photoDataRootOverride: roots.installed,
-            generalFileDataRootOverride: roots.generalInstalled
+            generalFileDataRootOverride: roots.generalInstalled,
+            folderPresentationDataRootOverride: roots.folderInstalled
         )
         let oversizedURL = roots.transactions
             .appendingPathComponent(UUID().uuidString.lowercased())
@@ -1025,7 +1407,9 @@ final class EncryptedVaultTransferCoordinatorTests: XCTestCase {
         let journal = try PortableVaultRestoreTransactionJournal(
             authenticationKey: testRestoreJournalKey,
             journalRootOverride: roots.transactions,
-            photoDataRootOverride: roots.installed
+            photoDataRootOverride: roots.installed,
+            generalFileDataRootOverride: roots.generalInstalled,
+            folderPresentationDataRootOverride: roots.folderInstalled
         )
         _ = try journal.begin(
             destinationVaultID: destinationVaultID,
@@ -1084,7 +1468,9 @@ final class EncryptedVaultTransferCoordinatorTests: XCTestCase {
         let journal = try PortableVaultRestoreTransactionJournal(
             authenticationKey: testRestoreJournalKey,
             journalRootOverride: roots.transactions,
-            photoDataRootOverride: roots.installed
+            photoDataRootOverride: roots.installed,
+            generalFileDataRootOverride: roots.generalInstalled,
+            folderPresentationDataRootOverride: roots.folderInstalled
         )
         _ = try journal.begin(
             destinationVaultID: interruptedVaultID,
@@ -1177,7 +1563,9 @@ final class EncryptedVaultTransferCoordinatorTests: XCTestCase {
         let journal = try PortableVaultRestoreTransactionJournal(
             authenticationKey: testRestoreJournalKey,
             journalRootOverride: roots.transactions,
-            photoDataRootOverride: roots.installed
+            photoDataRootOverride: roots.installed,
+            generalFileDataRootOverride: roots.generalInstalled,
+            folderPresentationDataRootOverride: roots.folderInstalled
         )
         _ = try journal.begin(
             destinationVaultID: destinationVaultID,
@@ -1241,7 +1629,52 @@ final class EncryptedVaultTransferCoordinatorTests: XCTestCase {
             credential: .recoveryCode("0123-4567-89AB-CDEF-GHJK-MNPQ-RSTV-WXYZ"),
             destinationURL: roots.archive,
             sourceRootOverride: roots.source,
+            folderContent: PortableVaultNoFolderContent(),
             workingRootOverride: roots.working,
+            keyDeriver: TestTransferKeyDeriver()
+        )
+    }
+
+    private func createOpaqueFolderArchive(
+        at roots: TestRoots
+    ) async throws -> EncryptedVaultExportReceipt {
+        let vaultID = UUID()
+        let key = SymmetricKey(size: .bits256)
+        let store = try VaultPhotoStore(
+            vaultID: vaultID,
+            vaultKey: key,
+            storageRoot: roots.source
+        )
+        _ = try await store.importPhoto(
+            originalData: Data("folder original".utf8),
+            thumbnailData: Data("folder thumbnail".utf8)
+        )
+        return try await EncryptedVaultTransferCoordinator().exportVault(
+            vaultID: vaultID,
+            createdAt: Date(timeIntervalSince1970: 1_700_000_200),
+            access: VaultAccessCapability(vaultID: vaultID, vaultKey: key),
+            credential: .recoveryCode(
+                "0123-4567-89AB-CDEF-GHJK-MNPQ-RSTV-WXYZ"
+            ),
+            destinationURL: roots.archive,
+            sourceRootOverride: roots.source,
+            folderContent: TestOpaqueFolderContent(),
+            workingRootOverride: roots.working,
+            keyDeriver: TestTransferKeyDeriver()
+        )
+    }
+
+    private func makeValidatedOpaqueFolderRestore(
+        at roots: TestRoots
+    ) async throws -> ValidatedPortableVaultRestore {
+        let receipt = try await createOpaqueFolderArchive(at: roots)
+        return try await EncryptedVaultTransferCoordinator().stageAndValidateRestore(
+            archiveURL: receipt.archiveURL,
+            credential: .recoveryCode(
+                "0123-4567-89AB-CDEF-GHJK-MNPQ-RSTV-WXYZ"
+            ),
+            workingRootOverride: roots.working,
+            folderContent: TestOpaqueFolderContent(),
             keyDeriver: TestTransferKeyDeriver()
         )
     }
@@ -1269,7 +1702,8 @@ final class EncryptedVaultTransferCoordinatorTests: XCTestCase {
             journalAuthenticationKey: testRestoreJournalKey,
             journalRootOverride: roots.transactions,
             photoDataRootOverride: roots.installed,
-            generalFileDataRootOverride: roots.generalInstalled
+            generalFileDataRootOverride: roots.generalInstalled,
+            folderPresentationDataRootOverride: roots.folderInstalled
         )
 
         do {
@@ -1290,6 +1724,16 @@ final class EncryptedVaultTransferCoordinatorTests: XCTestCase {
         let storedEnvelope = await credentialStore.envelope(for: locator)
         XCTAssertNil(storedEnvelope)
         XCTAssertFalse(FileManager.default.fileExists(atPath: installedURL.path))
+        let generalInstalledURL = roots.generalInstalled.appendingPathComponent(
+            restore.destinationVaultPayload.vaultID.uuidString.lowercased(),
+            isDirectory: true
+        )
+        let folderInstalledURL = roots.folderInstalled.appendingPathComponent(
+            restore.destinationVaultPayload.vaultID.uuidString.lowercased(),
+            isDirectory: true
+        )
+        XCTAssertFalse(FileManager.default.fileExists(atPath: generalInstalledURL.path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: folderInstalledURL.path))
         XCTAssertTrue(FileManager.default.fileExists(atPath: restore.stagingURL.path))
         XCTAssertTrue(
             try FileManager.default.contentsOfDirectory(atPath: roots.transactions.path).isEmpty
@@ -1319,6 +1763,36 @@ private struct TestTransferKeyDeriver: PortableArchiveKeyDeriving {
     }
 }
 
+private struct TestOpaqueFolderContent: PortableVaultFolderContentProviding {
+    func authenticatedArchiveInventory(
+        vaultID: UUID,
+        sourceRootOverride: URL?,
+        validPhotoIDs: Set<UUID>,
+        validGeneralFileIDs: Set<UUID>
+    ) async throws -> PortableVaultFolderArchiveInventory {
+        PortableVaultFolderArchiveInventory(
+            manifestCiphertext: Data(repeating: 0x6d, count: 28),
+            folderCount: 1,
+            membershipCount: 0,
+            referencedItems: []
+        )
+    }
+
+    func validateStagedContent(
+        at rootURL: URL,
+        sourceVaultID: UUID,
+        vaultKey: SymmetricKey,
+        validPhotoIDs: Set<UUID>,
+        validGeneralFileIDs: Set<UUID>
+    ) async throws -> PortableVaultFolderValidation {
+        PortableVaultFolderValidation(
+            folderCount: 1,
+            membershipCount: 0,
+            referencedItems: []
+        )
+    }
+}
+
 private struct TestRoots {
     let parent: URL
     let source: URL
@@ -1326,6 +1800,8 @@ private struct TestRoots {
     let installed: URL
     let generalSource: URL
     let generalInstalled: URL
+    let folderSource: URL
+    let folderInstalled: URL
     let transactions: URL
     let archive: URL
 
@@ -1337,6 +1813,8 @@ private struct TestRoots {
         let installed = parent.appendingPathComponent("installed", isDirectory: true)
         let generalSource = parent.appendingPathComponent("general-source", isDirectory: true)
         let generalInstalled = parent.appendingPathComponent("general-installed", isDirectory: true)
+        let folderSource = parent.appendingPathComponent("folder-source", isDirectory: true)
+        let folderInstalled = parent.appendingPathComponent("folder-installed", isDirectory: true)
         let transactions = parent.appendingPathComponent("transactions", isDirectory: true)
         try FileManager.default.createDirectory(at: parent, withIntermediateDirectories: true)
         return TestRoots(
@@ -1346,6 +1824,8 @@ private struct TestRoots {
             installed: installed,
             generalSource: generalSource,
             generalInstalled: generalInstalled,
+            folderSource: folderSource,
+            folderInstalled: folderInstalled,
             transactions: transactions,
             archive: parent.appendingPathComponent("transfer.khvault")
         )

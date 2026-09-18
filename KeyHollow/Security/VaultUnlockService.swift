@@ -78,6 +78,7 @@ actor VaultUnlockService {
     private let store: any VaultCredentialStoring
     private let photoStorageRootOverride: URL?
     private let generalFileStorageRootOverride: URL?
+    private let folderPresentationStorageRootOverride: URL?
     private let portableRestoreJournalRootOverride: URL?
     private let portableRestoreWorkingRootOverride: URL?
     private let passcodeRotationJournalRootOverride: URL?
@@ -96,6 +97,7 @@ actor VaultUnlockService {
         vaultStorageRootOverride: URL? = nil,
         photoStorageRootOverride: URL? = nil,
         generalFileStorageRootOverride: URL? = nil,
+        folderPresentationStorageRootOverride: URL? = nil,
         portableRestoreJournalRootOverride: URL? = nil,
         portableRestoreWorkingRootOverride: URL? = nil,
         passcodeRotationJournalRootOverride: URL? = nil,
@@ -112,6 +114,7 @@ actor VaultUnlockService {
         self.store = try VaultStore(rootOverride: vaultStorageRootOverride)
         self.photoStorageRootOverride = photoStorageRootOverride
         self.generalFileStorageRootOverride = generalFileStorageRootOverride
+        self.folderPresentationStorageRootOverride = folderPresentationStorageRootOverride
         self.portableRestoreJournalRootOverride = portableRestoreJournalRootOverride
         self.portableRestoreWorkingRootOverride = portableRestoreWorkingRootOverride
         self.passcodeRotationJournalRootOverride = passcodeRotationJournalRootOverride
@@ -128,6 +131,7 @@ actor VaultUnlockService {
         secrets: DeviceSecretProviding = DevicePepperStore(),
         photoStorageRootOverride: URL? = nil,
         generalFileStorageRootOverride: URL? = nil,
+        folderPresentationStorageRootOverride: URL? = nil,
         portableRestoreJournalRootOverride: URL? = nil,
         portableRestoreWorkingRootOverride: URL? = nil,
         passcodeRotationJournalRootOverride: URL? = nil,
@@ -144,6 +148,7 @@ actor VaultUnlockService {
         self.store = credentialStore
         self.photoStorageRootOverride = photoStorageRootOverride
         self.generalFileStorageRootOverride = generalFileStorageRootOverride
+        self.folderPresentationStorageRootOverride = folderPresentationStorageRootOverride
         self.portableRestoreJournalRootOverride = portableRestoreJournalRootOverride
         self.portableRestoreWorkingRootOverride = portableRestoreWorkingRootOverride
         self.passcodeRotationJournalRootOverride = passcodeRotationJournalRootOverride
@@ -240,7 +245,8 @@ actor VaultUnlockService {
             journalAuthenticationKey: try portableRestoreJournalKey(),
             journalRootOverride: portableRestoreJournalRootOverride,
             photoDataRootOverride: photoStorageRootOverride,
-            generalFileDataRootOverride: generalFileStorageRootOverride
+            generalFileDataRootOverride: generalFileStorageRootOverride,
+            folderPresentationDataRootOverride: folderPresentationStorageRootOverride
         )
         try Task.checkCancellation()
         do {
@@ -710,7 +716,8 @@ actor VaultUnlockService {
                 journalAuthenticationKey: try portableRestoreJournalKey(),
                 journalRootOverride: portableRestoreJournalRootOverride,
                 photoDataRootOverride: photoStorageRootOverride,
-                generalFileDataRootOverride: generalFileStorageRootOverride
+                generalFileDataRootOverride: generalFileStorageRootOverride,
+                folderPresentationDataRootOverride: folderPresentationStorageRootOverride
             )
             try await installer.recoverInterruptedInstalls()
         }

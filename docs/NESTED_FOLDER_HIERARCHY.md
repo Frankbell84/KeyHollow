@@ -12,6 +12,11 @@ the prior accepted rollback/comparison reference. No Family, external
 TestFlight, App Store expansion, or portable-archive format change is authorized
 by the hierarchy work or by Build 53 acceptance.
 
+That remains the historical Build 53 boundary. Folder-aware portable backup v2
+is a separately authorized follow-on. It consumes Folder Presentation's
+already-authenticated hierarchy through application composition and does not
+expand Nested Folder's responsibilities.
+
 ## Product boundary
 
 - Allow a folder to contain child folders and mixed Photos-origin and
@@ -22,8 +27,10 @@ by the hierarchy work or by Build 53 acceptance.
   bounded breadcrumb path for navigation.
 - Continue rejecting `.khvault` files as ordinary vault content. A portable
   backup is never an active vault inside another vault.
-- Do not change photo storage, general-file storage, vault credentials,
-  cryptography, media loading, or the portable archive format.
+- In the Build 53 hierarchy phase, do not change photo storage, general-file
+  storage, vault credentials, cryptography, media loading, or the portable
+  archive format. The later portable-backup feature is governed independently
+  by `FOLDER_AWARE_PORTABLE_BACKUP.md`.
 
 ## Current-code mapping
 
@@ -33,7 +40,8 @@ by the hierarchy work or by Build 53 acceptance.
 | Breadcrumb, current-location navigation, descendant, and destination policy | New `KeyHollowNestedFolderAddOn` | Pure bounded metadata-policy module with no manifest, storage, key, or mutation access |
 | Grid, search, sort, selection, move, and navigation wiring | Application composition plus `KeyHollowGalleryUI` | Map FolderPresentation records into neutral NestedFolder descriptors, build one immutable current-location snapshot, and route mutations back through FolderPresentation |
 | Photos and general files | Existing protected stores | No change; encrypted payloads never move when presentation membership changes |
-| Portable `.khvault` backup | `KeyHollowTransferCore` | No format change; existing disclosure that folders are not preserved remains authoritative |
+| Build 53 portable `.khvault` behavior | `KeyHollowTransferCore` | No format change in the hierarchy release; catalog v1-v3 restore content at root |
+| Folder-aware portable-backup follow-on | Application composition plus Folder Presentation and `KeyHollowTransferCore` | The app bridge validates and supplies opaque folder-manifest ciphertext; TransferCore owns neutral catalog/staging mechanics and imports neither folder add-on |
 
 The new policy add-on may receive only immutable folder identifiers, bounded
 display names, parent identifiers, timestamps, and stable ordinals. It must not
@@ -60,8 +68,17 @@ ignore, and later overwrite.
   in the presentation layer. The protected photo and general-file stores remain
   operational and unchanged; an older build must never flatten or rewrite the
   hierarchy unknowingly.
-- No portable archive version changes in this phase. Backup and restore retain
-  their current, explicit root-level restore behavior.
+- No portable archive version changes occurred in the Build 53 hierarchy
+  phase. Catalog v1-v3 therefore retain their explicit root-level restore
+  behavior.
+
+The separately versioned follow-on adds catalog v4 inside the unchanged
+version-1 outer archive and payload framing. Catalog v4 carries exactly one
+authenticated Folder Presentation manifest at `folders/manifest.khm`.
+Application composition validates its hierarchy and cross-checks neutral
+photo/general-file membership references; TransferCore treats the manifest as
+opaque ciphertext. Folder thumbnail caches are excluded. Nested Folder remains
+a pure UI-policy module with no archive, key, store, or persistence access.
 
 Before implementation, tests must prove version-one decoding, deterministic
 version-two encoding, failed-migration rollback, interrupted commit recovery,
@@ -126,6 +143,9 @@ and preservation of a previously valid authenticated manifest.
 ## Deliberate exclusions
 
 Recursive/global search, folder metadata editing beyond rename, favorites,
-albums, cross-vault references, active vaults inside vaults, folder-aware
-portable backups, cloud sync, sharing services, analytics, and account systems
-remain separate proposals. They must not be folded into this phase.
+albums, cross-vault references, active vaults inside vaults, cloud sync,
+sharing services, analytics, and account systems remain separate proposals.
+Folder-aware portable backup is also separate from the accepted hierarchy
+phase, but now has its own isolated implementation contract in
+`FOLDER_AWARE_PORTABLE_BACKUP.md`; it must not be treated as a Nested Folder
+feature.
