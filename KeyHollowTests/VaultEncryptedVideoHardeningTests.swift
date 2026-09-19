@@ -6,6 +6,102 @@ import XCTest
 
 final class VaultEncryptedVideoHardeningTests: XCTestCase {
     @MainActor
+    func testCompletedUserDismissalClosesOwnerOnceAndAllowsTerminalCleanup() async throws {
+        let fixture = try makePreparedPlayback()
+        defer { removePreparedPlayback(fixture) }
+        let session = VaultEncryptedVideoPlaybackSession(
+            waitForFailure: { _ in await waitUntilCancelled() }
+        )
+        var dismissals = 0
+        var releases = 0
+        XCTAssertTrue(session.activate(
+            playback: fixture.playback,
+            onPlayerReleased: { releases += 1 },
+            onDismissal: {
+                dismissals += 1
+                // The application closes its outer viewer through this route.
+                session.requestStop()
+            }
+        ))
+        let player = try XCTUnwrap(session.activePlayer)
+        let controller = session.retainedPlayerController
+        let presentation = UIPresentationController(
+            presentedViewController: controller, presenting: UIViewController()
+        )
+        session.registerPresentationControllerForTesting(presentation)
+        let transition = try XCTUnwrap(session.beginFullScreenDismissal(for: controller))
+        session.presentationControllerDidDismiss(presentation)
+        session.completeFullScreenDismissal(
+            for: controller, transition: transition, isCancelled: false
+        )
+        session.presentationControllerDidDismiss(presentation)
+        await session.stopAndWait()
+        XCTAssertEqual(dismissals, 1)
+        XCTAssertEqual(releases, 1)
+        XCTAssertNil(player.currentItem)
+        XCTAssertNil(session.activePlaybackID)
+        XCTAssertFalse(session.presentationIsPending)
+    }
+
+    @MainActor
+    func testCancelledSwipeKeepsOwnerOpenAndTerminalStopDoesNotReportUserClose() async throws {
+        let fixture = try makePreparedPlayback()
+        defer { removePreparedPlayback(fixture) }
+        let session = VaultEncryptedVideoPlaybackSession(
+            waitForFailure: { _ in await waitUntilCancelled() }
+        )
+        var dismissals = 0
+        XCTAssertTrue(session.activate(
+            playback: fixture.playback, onDismissal: { dismissals += 1 }
+        ))
+        let controller = session.retainedPlayerController
+        let transition = try XCTUnwrap(session.beginFullScreenDismissal(for: controller))
+        session.completeFullScreenDismissal(
+            for: controller, transition: transition, isCancelled: true
+        )
+        XCTAssertEqual(dismissals, 0)
+        XCTAssertTrue(session.canPresent)
+        XCTAssertNotNil(session.activePlayer?.currentItem)
+        XCTAssertFalse(session.presentationTransitionIsActive)
+        // Background/lock wins over any delayed native dismissal completion.
+        session.requestStop()
+        session.completeFullScreenDismissal(
+            for: controller, transition: transition, isCancelled: false
+        )
+        await session.stopAndWait()
+        XCTAssertEqual(dismissals, 0)
+        XCTAssertNil(session.activePlayer)
+    }
+
+    @MainActor
+    func testNativeCloseAfterCancelledSwipeNotifiesOwner() async throws {
+        let fixture = try makePreparedPlayback()
+        defer { removePreparedPlayback(fixture) }
+        let session = VaultEncryptedVideoPlaybackSession(
+            waitForFailure: { _ in await waitUntilCancelled() }
+        )
+        var dismissals = 0
+        XCTAssertTrue(session.activate(
+            playback: fixture.playback, onDismissal: { dismissals += 1 }
+        ))
+        let controller = session.retainedPlayerController
+        let cancelled = try XCTUnwrap(session.beginFullScreenDismissal(for: controller))
+        session.completeFullScreenDismissal(
+            for: controller, transition: cancelled, isCancelled: true
+        )
+        let completed = try XCTUnwrap(session.beginFullScreenDismissal(for: controller))
+        session.completeFullScreenDismissal(
+            for: controller, transition: completed, isCancelled: false
+        )
+        XCTAssertEqual(dismissals, 1)
+        session.completeFullScreenDismissal(
+            for: controller, transition: completed, isCancelled: false
+        )
+        XCTAssertEqual(dismissals, 1)
+        await session.stopAndWait()
+    }
+
+    @MainActor
     func testPlayerSecurityPolicyDisablesExternalAndPictureInPicturePlayback() {
         let player = AVPlayer()
         let controller = AVPlayerViewController()

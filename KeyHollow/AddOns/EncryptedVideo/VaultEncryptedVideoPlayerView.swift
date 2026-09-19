@@ -187,6 +187,7 @@ public final class VaultEncryptedVideoPlaybackSession:
     private var teardownTask: Task<Void, Never>?
     private var releasePlayerLease: (() -> Void)?
     private var reportFailure: ((VaultPreparedVideoPlaybackError) -> Void)?
+    private var reportUserDismissal: (() -> Void)?
     private var didReleasePlayerLease = false
     private var hasPendingPresentation = false
     private var isAnchorReadyForPresentation = false
@@ -250,7 +251,8 @@ public final class VaultEncryptedVideoPlaybackSession:
         playback: VaultPreparedVideoPlayback,
         onPlayerWillAttach: () -> Bool = { true },
         onPlayerReleased: @escaping () -> Void = {},
-        onFailure: ((VaultPreparedVideoPlaybackError) -> Void)? = nil
+        onFailure: ((VaultPreparedVideoPlaybackError) -> Void)? = nil,
+        onDismissal: (() -> Void)? = nil
     ) -> Bool {
         if activePlaybackID == playback.id {
             return phase == .ready
@@ -278,6 +280,7 @@ public final class VaultEncryptedVideoPlaybackSession:
         controller.player = player
         releasePlayerLease = onPlayerReleased
         reportFailure = onFailure
+        reportUserDismissal = onDismissal
         didReleasePlayerLease = false
         activePlaybackID = playback.id
         phase = .ready
@@ -285,9 +288,8 @@ public final class VaultEncryptedVideoPlaybackSession:
 
         startFailureMonitor(item: item, playbackID: playback.id)
 
-        // Each newly activated playback opens once. Returning from AVKit's Done
-        // control leaves the outer pager on a poster with an explicit replay
-        // button instead of immediately opening the modal again.
+        // Each newly activated playback opens once. The application's dismissal
+        // callback closes the outer viewer; recomposition must never reopen it.
         hasPendingPresentation = true
         attemptPendingPresentation()
         return true
@@ -324,8 +326,8 @@ public final class VaultEncryptedVideoPlaybackSession:
     }
 
     /// Synchronous terminal signal for selection changes, the outer viewer's
-    /// Done action, lock, and backgrounding. AVKit's own Done action is not
-    /// terminal: it returns to the poster for explicit replay. A terminal stop
+    /// Done action, lock, and backgrounding. AVKit's completed user dismissal
+    /// notifies the owner, which requests the same terminal cleanup. A stop
     /// immediately rejects new presentations and pauses; the retained teardown
     /// task completes the ordered asynchronous release.
     public func requestStop() {
@@ -336,6 +338,7 @@ public final class VaultEncryptedVideoPlaybackSession:
         let teardownGeneration = playbackGeneration
         let retiringPlayerController = playerController
         phase = .stopping
+        reportUserDismissal = nil
         canPresent = false
         hasPendingPresentation = false
         teardownObserver?(.rejectedNewPresentations)
@@ -517,6 +520,34 @@ public final class VaultEncryptedVideoPlaybackSession:
         isPlayerPresented = false
     }
 
+    /// Notify the application only for a completed user dismissal, never a
+    /// canceled gesture or terminal background/selection teardown. Consume the
+    /// callback before calling out because closing the outer viewer reenters
+    /// requestStop synchronously.
+    private func finishUserDismissal() {
+        let onDismissal = phase == .ready ? reportUserDismissal : nil
+        reportUserDismissal = nil
+        finishModalDismissal()
+        finishPresentationTransition()
+        onDismissal?()
+    }
+
+    func completeFullScreenDismissal(
+        for controller: AVPlayerViewController,
+        transition: (playbackGeneration: UInt64, presentationEpoch: UInt64),
+        isCancelled: Bool
+    ) {
+        guard phase == .ready,
+              playbackGeneration == transition.playbackGeneration,
+              presentationEpoch == transition.presentationEpoch,
+              playerController === controller else { return }
+        if isCancelled {
+            finishPresentationTransition()
+        } else {
+            finishUserDismissal()
+        }
+    }
+
     private func registerPresentationController(
         _ controller: UIPresentationController?,
         epoch: UInt64
@@ -590,17 +621,12 @@ public final class VaultEncryptedVideoPlaybackSession:
         ) else { return }
         coordinator.animate(alongsideTransition: nil) {
             [weak self, weak playerViewController] context in
-            guard let self,
-                  let playerViewController,
-                  self.playbackGeneration == transition.playbackGeneration,
-                  self.presentationEpoch == transition.presentationEpoch,
-                  self.playerController === playerViewController else {
-                return
-            }
-            if !context.isCancelled {
-                self.finishModalDismissal()
-            }
-            self.finishPresentationTransition()
+            guard let self, let playerViewController else { return }
+            self.completeFullScreenDismissal(
+                for: playerViewController,
+                transition: transition,
+                isCancelled: context.isCancelled
+            )
         }
     }
 
@@ -643,8 +669,7 @@ public final class VaultEncryptedVideoPlaybackSession:
               activePresentationController === presentationController else {
             return
         }
-        finishModalDismissal()
-        finishPresentationTransition()
+        finishUserDismissal()
     }
 
     func presentationAnchorDidAppear(
@@ -655,11 +680,10 @@ public final class VaultEncryptedVideoPlaybackSession:
         // UIKit can restore the presenter without sending every adaptive-
         // presentation callback (for example AVKit's own Done route). The
         // stable root anchor is the final source of truth that the modal is no
-        // longer attached, so reconcile before enabling explicit replay.
+        // longer attached, so close the outer viewer as well.
         if isPlayerPresented,
            playerController.presentingViewController == nil {
-            finishModalDismissal()
-            finishPresentationTransition()
+            finishUserDismissal()
         }
         attemptPendingPresentation()
     }
@@ -758,8 +782,8 @@ public struct VaultEncryptedVideoPresentationAnchorView: View {
     }
 }
 
-/// Poster/replay surface for one validated local video. Actual playback is
-/// presented by the module-owned session from the viewer-root UIKit anchor.
+/// Activates one validated local video without introducing another playback
+/// screen. The native player's dismissal closes the application-owned viewer.
 @MainActor
 public struct VaultEncryptedVideoPlayerView: View {
     @ObservedObject private var session: VaultEncryptedVideoPlaybackSession
@@ -767,52 +791,33 @@ public struct VaultEncryptedVideoPlayerView: View {
     private let onPlayerWillAttach: () -> Bool
     private let onPlayerReleased: () -> Void
     private let onFailure: ((VaultPreparedVideoPlaybackError) -> Void)?
+    private let onDismissal: () -> Void
 
     public init(
         session: VaultEncryptedVideoPlaybackSession,
         playback: VaultPreparedVideoPlayback,
         onPlayerWillAttach: @escaping () -> Bool = { true },
         onPlayerReleased: @escaping () -> Void = {},
-        onFailure: ((VaultPreparedVideoPlaybackError) -> Void)? = nil
+        onFailure: ((VaultPreparedVideoPlaybackError) -> Void)? = nil,
+        onDismissal: @escaping () -> Void
     ) {
         self.session = session
         self.playback = playback
         self.onPlayerWillAttach = onPlayerWillAttach
         self.onPlayerReleased = onPlayerReleased
         self.onFailure = onFailure
+        self.onDismissal = onDismissal
     }
 
     public var body: some View {
-        ZStack {
-            Color.clear
-
-            Button {
-                session.requestPresentation()
-            } label: {
-                VStack(spacing: 12) {
-                    Image(systemName: "play.circle.fill")
-                        .font(.system(size: 58))
-                    Text("Play Full Screen")
-                        .font(.headline)
-                }
-                .padding(22)
-                .foregroundStyle(.white)
-                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
-            }
-            .buttonStyle(.plain)
-            .disabled(
-                session.activePlaybackID != playback.id
-                    || !session.canPresent
-                    || session.isPlayerPresented
-            )
-            .accessibilityLabel("Play \(playback.descriptor.displayName) full screen")
-        }
+        Color.clear
         .onAppear {
             session.activate(
                 playback: playback,
                 onPlayerWillAttach: onPlayerWillAttach,
                 onPlayerReleased: onPlayerReleased,
-                onFailure: onFailure
+                onFailure: onFailure,
+                onDismissal: onDismissal
             )
         }
     }

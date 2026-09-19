@@ -5,7 +5,33 @@ Updated: 2026-09-18
 This is the authoritative operational resume point. Historical Build 38
 evidence remains in `docs/PROJECT_CHECKPOINT.md`.
 
-## Latest checkpoint: Build 54 portrait-video dismissal
+## Latest checkpoint: remove the video replay screen (Build 56 candidate)
+
+PR #89 delivered Build 55 from `cf1e5dcb9dbe110601242560668d7714452bfc87`.
+PR CI `35414578943`, main CI `35415828527`, signing preflight
+`35416636135`, and upload `35416851376` all passed. Apple processed it and
+assigned it only to KeyHollow Internal. Delivery UUID:
+`e21e4b3d-697f-4dae-ae01-be1c1f3dd7dc`; complete evidence is in PR #89.
+
+The user reports that swiping down still leaves the added "Play Full Screen"
+screen and requests its removal. Build 55 is not device-accepted. The current
+repair removes that button entirely and connects completed native dismissal
+to the application's existing outer-viewer dismissal/cleanup path. Canceled
+swipes keep the viewer open; terminal background/lock cleanup must not publish
+a user-close callback; duplicate and stale completions must be harmless.
+The callback checks selected-item and playback identity before closing.
+
+The user-authorized continuation to an installable Internal test build applies
+to this correction. Build 56 is the next candidate: Apple iOS builds and
+all-status uploads show Build 55 latest and no Build 56. Both product build
+numbers and the exact project fingerprint advance together. Require fresh
+exact-head and exact-main CI, signing preflight, protected upload with live
+build-number checks, and Apple Internal availability. Record resulting SHA
+and run evidence in the delivery PR, then await physical-device results.
+Build 53 remains the accepted rollback. No Family/external/App Store expansion
+or N150 retirement is authorized.
+
+## Previous checkpoint: Build 54 portrait-video dismissal
 
 This checkpoint supersedes the older Build 54 preparation/approval steps below.
 PR #88 merged as `5c998e4a67a90c0d492ef7ec49d31ecec81a4e42`.

@@ -851,6 +851,8 @@ def encrypted_video_terminal_boundary_violations(source: str) -> list[str]:
     fullscreen_body = swift_declaration_body(
         source, "willEndFullScreenPresentationWithAnimationCoordinator coordinator:"
     )
+    fullscreen_completion = swift_declaration_body(source, "func completeFullScreenDismissal(")
+    user_completion = swift_declaration_body(source, "private func finishUserDismissal()")
     if not (
         fullscreen_begin_body is not None
         and contains_in_order(
@@ -868,13 +870,31 @@ def encrypted_video_terminal_boundary_violations(source: str) -> list[str]:
             (
                 "guard let transition = beginFullScreenDismissal(",
                 "for: playerViewController",
-                "self.playbackGeneration == transition.playbackGeneration",
-                "self.presentationEpoch == transition.presentationEpoch",
-                "self.playerController === playerViewController",
-                "self.finishModalDismissal()",
-                "self.finishPresentationTransition()",
+                "self.completeFullScreenDismissal(",
+                "for: playerViewController",
+                "transition: transition",
+                "isCancelled: context.isCancelled",
             ),
         )
+        and fullscreen_completion is not None
+        and contains_in_order(fullscreen_completion, (
+            "guard phase == .ready",
+            "playbackGeneration == transition.playbackGeneration",
+            "presentationEpoch == transition.presentationEpoch",
+            "playerController === controller",
+            "if isCancelled",
+            "finishPresentationTransition()",
+            "else",
+            "finishUserDismissal()",
+        ))
+        and user_completion is not None
+        and contains_in_order(user_completion, (
+            "let onDismissal = phase == .ready ? reportUserDismissal : nil",
+            "reportUserDismissal = nil",
+            "finishModalDismissal()",
+            "finishPresentationTransition()",
+            "onDismissal?()",
+        ))
     ):
         failures.append(
             "fullscreen exit callbacks must reject retired playback and presentation generations"
@@ -918,8 +938,7 @@ def encrypted_video_terminal_boundary_violations(source: str) -> list[str]:
                 "registration.controller === presentationController",
                 "registration.epoch == presentationEpoch",
                 "activePresentationController === presentationController",
-                "finishModalDismissal()",
-                "finishPresentationTransition()",
+                "finishUserDismissal()",
             ),
         )
     ):
@@ -1192,6 +1211,16 @@ def checker_probe_violations() -> list[str]:
                 "fullscreen exact-controller entry gate",
                 "playerViewController === self.playerController else { return nil }",
                 "playerViewController !== self.playerController else { return nil }",
+            ),
+            (
+                "user dismissal generation gate",
+                "playbackGeneration == transition.playbackGeneration",
+                "playbackGeneration >= transition.playbackGeneration",
+            ),
+            (
+                "one-shot user close callback",
+                "reportUserDismissal = nil\n        finishModalDismissal()",
+                "finishModalDismissal()",
             ),
         ):
             require_detected_mutation(
@@ -4738,13 +4767,17 @@ def main() -> int:
                 "videoPlayback.playerWillAttach(active.playback.id)",
                 "onPlayerReleased:",
                 "videoPlayback.playerDidRelease(active.playback.id)",
+                "onDismissal:",
+                "mediaNavigationQueue?.selectedID == item.id",
+                "videoPlayback.active?.playback.id == active.playback.id",
+                "beginMediaNavigationDismissal()",
             ),
         )
     ):
         violations.append(
             "KeyHollow/Photos/VaultGalleryView.swift: video pages must be a "
-            "poster/replay surface backed by the stable module-owned session "
-            "and the app-owned plaintext lease coordinator"
+            "single player backed by the stable module-owned session, closing "
+            "the selected outer viewer through the app-owned cleanup path"
         )
 
     if not (
