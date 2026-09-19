@@ -25,10 +25,19 @@ recommended presentation supplies the native fullscreen controls and
 interactive dismissal while retaining the existing session-owned player,
 replay, generation guards, and bounded terminal cleanup. See
 https://developer.apple.com/videos/play/wwdc2019/503/ (fullscreen best practices).
-No storage, cryptography, build number, or release-workflow change is included.
-Required next evidence: exact-head macOS build/XCTest/CodeQL, review, and the
-portrait-video dismissal device checks in `docs/DEVICE_TEST_PLAN.md` on a
-separately packaged replacement Internal build. No device fix is claimed yet.
+The user authorized continued delivery through an installable Internal build.
+Build 55 packaging is included in PR #89: app and thumbnail-extension build
+numbers advance together, with the matching reviewed project fingerprint.
+App Store Connect's iOS builds and all-status uploads were checked on
+2026-09-18 local time: Build 54 is latest and Build 55 is absent. The protected
+upload guard must recheck availability immediately before delivery.
+No storage, cryptography, or release-workflow change is included.
+The pre-packaging fix at `4e4a27fd89c9122b015636218191545120a17059`
+passed exact-head CI `35412484869`, including build/XCTest and Swift CodeQL.
+The packaged head requires fresh complete PR CI, exact-main CI, no-upload
+signing preflight, and protected upload before the portrait-video dismissal
+device checks in `docs/DEVICE_TEST_PLAN.md`. Resulting SHA/run evidence belongs
+in PR #89. No device fix is claimed yet; distribution remains Internal only.
 
 ## Provenance
 
