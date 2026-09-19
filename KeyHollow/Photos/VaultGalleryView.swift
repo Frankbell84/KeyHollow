@@ -955,8 +955,8 @@ struct VaultGalleryView: View {
                     && isMediaNavigationContentReady(queue),
                 onSelectionChange: selectMediaNavigationItem,
                 onChromeToggleRequested: {
-                    // The module-owned video session owns its replay surface
-                    // and modal AVKit controls. Only image pages use a content
+                    // The module-owned video session owns the modal AVKit
+                    // controls. Only image pages use a content
                     // tap to reveal or hide KeyHollow's action overlay.
                     guard VaultMediaChromeInteractionPolicy.acceptsContentTap(
                         for: queue.currentItem.kind
@@ -1093,6 +1093,13 @@ struct VaultGalleryView: View {
                             },
                             onFailure: { _ in
                                 handleMediaPlaybackFailure(for: item.id)
+                            },
+                            onDismissal: {
+                                guard mediaNavigationQueue?.selectedID == item.id,
+                                      videoPlayback.active?.playback.id == active.playback.id else {
+                                    return
+                                }
+                                beginMediaNavigationDismissal()
                             }
                         )
                     }
