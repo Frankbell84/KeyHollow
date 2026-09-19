@@ -200,7 +200,7 @@ PRIVILEGED_SOURCE_SHA256 = {
         "9ff597ee8db1228de2e91df3863a34e83c73305b2f00fe08faf5a931929cdee3"
     ),
     "scripts/check_architecture_boundaries.py": (
-        "bdd1e8d7b3a1fbcfd4fe16c3c1f13b592889b04fc7ff7992c6c7c1741a4aed74"
+        "ce5df0e73746784333c8a8d8fe586e8502f934b036cd9380264cc50d4057929e"
     ),
     "scripts/check_privacy_manifest.py": (
         "c8c255c8d6465aafd04f941daa4bee3fa0f3a9881390032666f3eb38fa0c979a"
