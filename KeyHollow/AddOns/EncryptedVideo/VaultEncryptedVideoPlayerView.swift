@@ -235,7 +235,10 @@ public final class VaultEncryptedVideoPlaybackSession:
     private func configurePlayerController(_ controller: AVPlayerViewController) {
         controller.view.backgroundColor = .black
         controller.videoGravity = .resizeAspect
-        controller.modalPresentationStyle = .fullScreen
+        // Let AVKit choose its fullscreen presentation, including its close
+        // control and interactive swipe-down dismissal. Forcing UIKit's
+        // generic fullScreen style bypasses that player-specific presentation.
+        controller.modalPresentationStyle = .automatic
         controller.delegate = self
         VaultEncryptedVideoPlayerSecurityPolicy.configure(controller)
     }
