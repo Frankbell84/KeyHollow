@@ -569,6 +569,23 @@ archives. Do not use the only copy of a real backup for tamper tests.
   the privacy shield, session revocation, player/image release, temporary-file
   cleanup, and relock behavior remain unchanged.
 
+## Portrait-video dismissal regression
+
+- On the replacement for Build 54, open a portrait MOV and MP4 and confirm
+  fullscreen playback shows AVKit's close control when the controls are
+  revealed by a tap. Close without rotating the phone or leaving the app.
+- Replay, swipe down on the video to dismiss, and confirm playback pauses and
+  the selected item's poster returns without reopening automatically. Repeat
+  close/replay/swipe-down five times in portrait and landscape, including with
+  controls hidden. Seek and horizontal gestures must not accidentally close.
+- Start a downward dismissal and cancel it; confirm the player remains usable
+  and can still close or resume. Background during a dismissal, return, and
+  unlock with the first correct passcode. Confirm no black/inert player,
+  lingering audio, stale video frame, or blocked unlock.
+- Dismiss the outer viewer after closing playback and confirm ordinary gallery
+  navigation and protected temporary-file cleanup still work. Repeat with
+  VoiceOver using the native close control.
+
 ## Backup/container inspection
 
 - Confirm KeyHollow encrypted storage directories/files carry complete file protection.

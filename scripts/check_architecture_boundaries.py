@@ -3633,7 +3633,7 @@ def main() -> int:
                     "private var player: AVPlayer?",
                     "private var playbackGeneration: UInt64",
                     "controller.videoGravity = .resizeAspect",
-                    "controller.modalPresentationStyle = .fullScreen",
+                    "controller.modalPresentationStyle = .automatic",
                     "VaultEncryptedVideoPresentationAnchorView",
                     "public func requestStop()",
                     "public func stopAndWait() async",

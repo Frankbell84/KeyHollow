@@ -5,6 +5,31 @@ Updated: 2026-09-18
 This is the authoritative operational resume point. Historical Build 38
 evidence remains in `docs/PROJECT_CHECKPOINT.md`.
 
+## Latest checkpoint: Build 54 portrait-video dismissal
+
+This checkpoint supersedes the older Build 54 preparation/approval steps below.
+PR #88 merged as `5c998e4a67a90c0d492ef7ec49d31ecec81a4e42`.
+Main CI #396 (`35405975479`), signing preflight #21 (`35407068071`),
+and authorized Internal upload #64 (`35407486940`) passed. Apple completed
+Build 54 processing and assigned it only to KeyHollow Internal; delivery UUID
+is `dd08286a-55e9-400f-9772-8959d1575273`. Full evidence is in PR #88.
+
+The user reports Build 54 works but portrait fullscreen video has no
+discoverable close route, and requests downward-swipe dismissal. This is an
+outstanding device defect, not unconditional acceptance of Build 54 or the
+full folder-backup test matrix. Build 53 remains the accepted rollback.
+
+The focused `codex/portrait-video-dismissal` repair restores AVKit's automatic
+modal presentation instead of forcing generic UIKit fullscreen. Apple's
+recommended presentation supplies the native fullscreen controls and
+interactive dismissal while retaining the existing session-owned player,
+replay, generation guards, and bounded terminal cleanup. See
+https://developer.apple.com/videos/play/wwdc2019/503/ (fullscreen best practices).
+No storage, cryptography, build number, or release-workflow change is included.
+Required next evidence: exact-head macOS build/XCTest/CodeQL, review, and the
+portrait-video dismissal device checks in `docs/DEVICE_TEST_PLAN.md` on a
+separately packaged replacement Internal build. No device fix is claimed yet.
+
 ## Provenance
 
 - Build 53 is the current accepted `KeyHollow Internal` baseline from exact
