@@ -5,7 +5,7 @@ Updated: 2026-09-19
 This is the authoritative operational resume point. Historical Build 38
 evidence remains in `docs/PROJECT_CHECKPOINT.md`.
 
-## Latest checkpoint: integrated video viewer
+## Latest checkpoint: integrated video viewer (Build 57 candidate)
 
 PR #90 delivered Build 56 from `6a69e868d9ff4b0162c19d8814fb2a12a30ceb92`.
 PR CI `35417577448`, main CI `35418441412`, signing preflight
@@ -24,8 +24,13 @@ excluded. System Control Center gestures are not overridden. Photos and
 protected storage behavior remain unchanged.
 
 The existing authorization to continue through an installable Internal test
-build applies. Confirm the next unused build number with Apple before packaging;
-require exact-head/main CI, signing preflight and protected upload. Record final
+build applies. Apple sign-in was restored and the iOS build/all-status upload lists show
+Build 56 latest with no Build 57. App and thumbnail-extension build numbers
+advance together to 57 with the matching reviewed project fingerprint.
+The unpackaged fix at `ff7091194bf0e9e20cb1b4b1807fe1e571ff5b9d` passed
+macOS build, full XCTest (including five new regression tests), and Swift
+CodeQL in run `35436665265`. Require fresh exact-head/main CI for this
+packaged candidate, signing preflight and protected upload. Record final
 delivery evidence in the PR, then await portrait/landscape device tests.
 Build 53 remains the accepted rollback; no distribution expansion is authorized.
 
