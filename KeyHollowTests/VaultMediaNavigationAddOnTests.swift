@@ -3,6 +3,32 @@ import XCTest
 @testable import KeyHollowMediaNavigationAddOn
 
 final class VaultMediaNavigationAddOnTests: XCTestCase {
+    func testVideoDismissalStartsInContentInPortraitAndLandscape() {
+        for height: CGFloat in [700, 300, 220] {
+            XCTAssertTrue(VaultMediaDismissalGesturePolicy.accepts(
+                translation: CGSize(width: 10, height: 110),
+                startY: height / 2, viewportHeight: height
+            ))
+            for startY: CGFloat in [0, 20, height - 40] {
+                XCTAssertFalse(VaultMediaDismissalGesturePolicy.accepts(
+                    translation: CGSize(width: 0, height: 110),
+                    startY: startY, viewportHeight: height
+                ))
+            }
+        }
+    }
+
+    func testVideoDismissalRejectsCancelledSidewaysAndUpwardSwipes() {
+        for translation in [
+            CGSize.zero, CGSize(width: 0, height: 50),
+            CGSize(width: 150, height: 110), CGSize(width: 0, height: -150)
+        ] {
+            XCTAssertFalse(VaultMediaDismissalGesturePolicy.accepts(
+                translation: translation, startY: 100, viewportHeight: 300
+            ))
+        }
+    }
+
     func testPhotoAndGeneralFileWithSameUUIDHaveDistinctIdentity() throws {
         let sharedUUID = UUID()
         let photoID = VaultMediaNavigationID(source: .photo, rawValue: sharedUUID)

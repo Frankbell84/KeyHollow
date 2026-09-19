@@ -621,6 +621,26 @@ def encrypted_video_terminal_boundary_violations(source: str) -> list[str]:
     executable = swift_executable_text(source)
     failures: list[str] = []
 
+    embedded_attach = swift_block_body(source, "func attachEmbeddedPlayer(")
+    terminal_stop = swift_block_body(source, "public func requestStop()")
+    if not (
+        embedded_attach is not None
+        and contains_in_order(embedded_attach, (
+            "guard phase == .ready", "presentationStyle == .embedded",
+            "activePlaybackID == playbackID", "playerController.parent == nil",
+            "host.addChild(playerController)", "host.view.addSubview(surface)",
+            "playerController.didMove(toParent: host)",
+        ))
+        and terminal_stop is not None
+        and contains_in_order(terminal_stop, (
+            "detachEmbeddedPlayer(retiringPlayerController)",
+            "retiringPlayerController.player = nil", "releaseLeaseOnce()",
+        ))
+        and "hasPendingPresentation = presentationStyle == .fullscreen" in executable
+        and "presentationStyle: .embedded" in executable
+    ):
+        failures.append("embedded playback must use the current lease and detach before release without automatically presenting a modal")
+
     for pattern, label in (
         (
             r"private\s+static\s+let\s+terminalTransitionWaitLimit\s*:\s*"
@@ -1162,6 +1182,16 @@ def checker_probe_violations() -> list[str]:
         )
     else:
         for label, old, new in (
+            (
+                "embedded playback identity",
+                "activePlaybackID == playbackID,\n              playerController.parent == nil",
+                "playerController.parent == nil",
+            ),
+            (
+                "embedded surface removal before lease release",
+                "detachEmbeddedPlayer(retiringPlayerController)",
+                "// omitted embedded detach",
+            ),
             (
                 "bounded transition deadline",
                 "while isPresentationTransitionActive, clock.now < deadline",
@@ -3242,9 +3272,8 @@ def main() -> int:
                         (
                             "guard isNavigationEnabled else { return }",
                             "if queue.currentItem.kind == .video",
-                            "let excludedHeight = max(",
-                            "VaultMediaNavigationPagerMetrics.videoControlExclusionMinimumHeight",
-                            "VaultMediaNavigationPagerMetrics.videoControlExclusionHeightRatio",
+                            "let excludedHeight = VaultMediaNavigationPagerMetrics",
+                            ".videoControlExclusionHeight(for: viewportHeight)",
                             "guard value.startLocation.y < viewportHeight - excludedHeight else",
                             "let horizontalDistance = value.translation.width",
                             "let verticalDistance = value.translation.height",
@@ -3260,6 +3289,11 @@ def main() -> int:
                     and drag_body.count(
                         "guard value.startLocation.y < viewportHeight - excludedHeight else"
                     ) == 1
+                    and "max(videoControlExclusionMinimumHeight," in source
+                    and "viewportHeight * videoControlExclusionHeightRatio" in source
+                    and "viewportHeight * 0.35" in source
+                    and "VaultMediaDismissalGesturePolicy.accepts(" in drag_body
+                    and "onDismissalRequested()" in drag_body
                 ):
                     violations.append(
                         f"{path}: page drags must stop while media work is busy and "
@@ -4690,8 +4724,10 @@ def main() -> int:
                 "&& !isMediaImageZoomed",
                 "&& isMediaNavigationContentReady(queue)",
                 "onSelectionChange: selectMediaNavigationItem",
-                "VaultEncryptedVideoPresentationAnchorView(",
-                "session: videoPlaybackSession",
+                "onDismissalRequested: beginMediaNavigationDismissal",
+                ".safeAreaInset(edge: .top, spacing: 0)",
+                "if queue.currentItem.kind == .video",
+                "mediaNavigationToolbar(for: queue)",
             ),
         )
     ):
@@ -4722,6 +4758,7 @@ def main() -> int:
 
     if not (
         media_active_content_body is not None
+        and "mediaNavigationPlaceholder" not in media_active_content_body
         and contains_in_order(
             media_active_content_body,
             (
@@ -4759,7 +4796,6 @@ def main() -> int:
             (
                 "case .video:",
                 "let active = videoPlayback.active",
-                "mediaNavigationPlaceholder(for: item.id)",
                 "VaultEncryptedVideoPlayerView(",
                 "session: videoPlaybackSession",
                 "playback: active.playback",
@@ -5428,8 +5464,8 @@ def main() -> int:
                 "module-owned player surface",
             ),
             (
-                r"VaultEncryptedVideoPresentationAnchorView\s*\(",
-                "viewer-root modal presentation anchor",
+                r"onDismissalRequested:\s*beginMediaNavigationDismissal",
+                "content-swipe application dismissal",
             ),
             (
                 r"@StateObject\s+private\s+var\s+videoPlaybackSession\s*=\s*"

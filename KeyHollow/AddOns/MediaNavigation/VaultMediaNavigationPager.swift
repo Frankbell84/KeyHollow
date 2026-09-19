@@ -5,6 +5,16 @@ private enum VaultMediaNavigationPagerMetrics {
     static let horizontalDominanceRatio: CGFloat = 1.15
     static let videoControlExclusionMinimumHeight: CGFloat = 140
     static let videoControlExclusionHeightRatio: CGFloat = 0.24
+
+    static func videoControlExclusionHeight(for viewportHeight: CGFloat) -> CGFloat {
+        // A fixed portrait exclusion would consume the center of a short
+        // landscape page once safe areas and the Done bar are accounted for.
+        min(
+            max(videoControlExclusionMinimumHeight,
+                viewportHeight * videoControlExclusionHeightRatio),
+            viewportHeight * 0.35
+        )
+    }
 }
 
 /// Keeps application chrome gestures away from AVKit's native playback and
@@ -16,6 +26,23 @@ public enum VaultMediaChromeInteractionPolicy {
     }
 }
 
+/// Close from the content, leaving the screen edge and playback controls to
+/// their existing owners. An incomplete or primarily horizontal drag is inert.
+public enum VaultMediaDismissalGesturePolicy {
+    public static func accepts(
+        translation: CGSize,
+        startY: CGFloat,
+        viewportHeight: CGFloat
+    ) -> Bool {
+        let bottomExclusion = VaultMediaNavigationPagerMetrics
+            .videoControlExclusionHeight(for: viewportHeight)
+        return startY >= 44
+            && startY < viewportHeight - bottomExclusion
+            && translation.height >= 96
+            && translation.height > abs(translation.width) * 1.5
+    }
+}
+
 /// A single-surface pager for an application-owned active payload. The content
 /// builder is invoked only for `queue.currentItem`; this add-on never builds
 /// adjacent full-resolution pages or requests media on its own.
@@ -23,6 +50,7 @@ public struct VaultMediaNavigationPager<ActiveContent: View>: View {
     private let queue: VaultMediaNavigationQueue
     private let isNavigationEnabled: Bool
     private let onSelectionChange: (VaultMediaNavigationID) -> Void
+    private let onDismissalRequested: () -> Void
     private let onChromeToggleRequested: () -> Void
     private let activeContent: (VaultMediaNavigationItem) -> ActiveContent
 
@@ -30,12 +58,14 @@ public struct VaultMediaNavigationPager<ActiveContent: View>: View {
         queue: VaultMediaNavigationQueue,
         isNavigationEnabled: Bool = true,
         onSelectionChange: @escaping (VaultMediaNavigationID) -> Void,
+        onDismissalRequested: @escaping () -> Void = {},
         onChromeToggleRequested: @escaping () -> Void = {},
         @ViewBuilder activeContent: @escaping (VaultMediaNavigationItem) -> ActiveContent
     ) {
         self.queue = queue
         self.isNavigationEnabled = isNavigationEnabled
         self.onSelectionChange = onSelectionChange
+        self.onDismissalRequested = onDismissalRequested
         self.onChromeToggleRequested = onChromeToggleRequested
         self.activeContent = activeContent
     }
@@ -85,15 +115,22 @@ public struct VaultMediaNavigationPager<ActiveContent: View>: View {
     ) {
         guard isNavigationEnabled else { return }
 
+        if queue.currentItem.kind == .video,
+           VaultMediaDismissalGesturePolicy.accepts(
+               translation: value.translation,
+               startY: value.startLocation.y,
+               viewportHeight: viewportHeight
+           ) {
+            onDismissalRequested()
+            return
+        }
+
         // Native video controls own the lower playback region. Ignoring drags
         // that begin there prevents a scrub gesture from also changing pages,
         // while the rest of the video surface remains swipeable.
         if queue.currentItem.kind == .video {
-            let excludedHeight = max(
-                VaultMediaNavigationPagerMetrics.videoControlExclusionMinimumHeight,
-                viewportHeight
-                    * VaultMediaNavigationPagerMetrics.videoControlExclusionHeightRatio
-            )
+            let excludedHeight = VaultMediaNavigationPagerMetrics
+                .videoControlExclusionHeight(for: viewportHeight)
             guard value.startLocation.y < viewportHeight - excludedHeight else {
                 return
             }

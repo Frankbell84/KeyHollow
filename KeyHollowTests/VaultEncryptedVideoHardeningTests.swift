@@ -1,10 +1,40 @@
 import AVFoundation
 import AVKit
 import CoreGraphics
+import SwiftUI
 import XCTest
 @testable import KeyHollowEncryptedVideoAddOn
 
 final class VaultEncryptedVideoHardeningTests: XCTestCase {
+    @MainActor
+    func testGalleryPlayerViewAttachesAfterSwiftUIAppearanceWithoutModal() async throws {
+        let fixture = try makePreparedPlayback()
+        defer { removePreparedPlayback(fixture) }
+        let session = VaultEncryptedVideoPlaybackSession(
+            waitForFailure: { _ in await waitUntilCancelled() }
+        )
+        let root = UIHostingController(rootView: VaultEncryptedVideoPlayerView(
+            session: session, playback: fixture.playback, onDismissal: {}
+        ))
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 844, height: 390))
+        window.rootViewController = root
+        window.makeKeyAndVisible()
+        defer {
+            window.isHidden = true
+            window.rootViewController = nil
+        }
+        for _ in 0..<100 where session.retainedPlayerController.parent == nil {
+            root.view.layoutIfNeeded()
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertEqual(session.activePlaybackID, fixture.playback.id)
+        XCTAssertNotNil(session.retainedPlayerController.parent)
+        XCTAssertNil(root.presentedViewController)
+        XCTAssertFalse(session.presentationIsPending)
+        await session.stopAndWait()
+        XCTAssertNil(session.retainedPlayerController.parent)
+    }
+
     @MainActor
     func testCompletedUserDismissalClosesOwnerOnceAndAllowsTerminalCleanup() async throws {
         let fixture = try makePreparedPlayback()
@@ -583,6 +613,75 @@ final class VaultEncryptedVideoHardeningTests: XCTestCase {
                 .leaseReleased
             ]
         )
+    }
+
+    @MainActor
+    func testEmbeddedPlaybackUsesOneSurfaceAndDetachesBeforeLeaseRelease() async throws {
+        let fixture = try makePreparedPlayback()
+        defer { removePreparedPlayback(fixture) }
+        let host = UIViewController()
+        let session = VaultEncryptedVideoPlaybackSession(
+            waitForFailure: { _ in await waitUntilCancelled() }
+        )
+        var releases = 0
+        XCTAssertTrue(session.activate(
+            playback: fixture.playback,
+            presentationStyle: .embedded,
+            onPlayerReleased: {
+                releases += 1
+                XCTAssertTrue(host.children.isEmpty)
+                XCTAssertNil(session.retainedPlayerController.parent)
+                XCTAssertNil(session.retainedPlayerController.player)
+            }
+        ))
+        session.attachEmbeddedPlayer(to: host, playbackID: fixture.playback.id)
+        session.attachEmbeddedPlayer(to: host, playbackID: fixture.playback.id)
+        XCTAssertEqual(host.children.count, 1)
+        XCTAssertTrue(host.children.first === session.retainedPlayerController)
+        XCTAssertFalse(session.presentationIsPending)
+        session.requestPresentation()
+        XCTAssertFalse(session.presentationIsPending)
+        XCTAssertNil(host.presentedViewController)
+        XCTAssertFalse(session.retainedPlayerController.entersFullScreenWhenPlaybackBegins)
+
+        session.detachEmbeddedPlayer(from: host, playbackID: fixture.playback.id)
+        XCTAssertTrue(host.children.isEmpty)
+        XCTAssertEqual(releases, 0)
+        XCTAssertNotNil(session.activePlayer)
+        session.attachEmbeddedPlayer(to: host, playbackID: fixture.playback.id)
+        XCTAssertEqual(host.children.count, 1)
+
+        session.requestStop()
+        session.attachEmbeddedPlayer(to: UIViewController(), playbackID: fixture.playback.id)
+        await session.stopAndWait()
+        XCTAssertEqual(releases, 1)
+        XCTAssertTrue(host.children.isEmpty)
+    }
+
+    @MainActor
+    func testRetiredEmbeddedPageCannotAcquireReplacementPlayer() async throws {
+        let first = try makePreparedPlayback()
+        let second = try makePreparedPlayback()
+        defer {
+            removePreparedPlayback(first)
+            removePreparedPlayback(second)
+        }
+        let oldHost = UIViewController()
+        let newHost = UIViewController()
+        let session = VaultEncryptedVideoPlaybackSession(
+            waitForFailure: { _ in await waitUntilCancelled() }
+        )
+        XCTAssertTrue(session.activate(playback: first.playback, presentationStyle: .embedded))
+        session.attachEmbeddedPlayer(to: oldHost, playbackID: first.playback.id)
+        await session.stopAndWait()
+        XCTAssertTrue(session.activate(playback: second.playback, presentationStyle: .embedded))
+        session.attachEmbeddedPlayer(to: oldHost, playbackID: first.playback.id)
+        XCTAssertTrue(oldHost.children.isEmpty)
+        session.attachEmbeddedPlayer(to: newHost, playbackID: second.playback.id)
+        session.detachEmbeddedPlayer(from: oldHost, playbackID: first.playback.id)
+        XCTAssertEqual(newHost.children.count, 1)
+        await session.stopAndWait()
+        XCTAssertTrue(newHost.children.isEmpty)
     }
 
     func testSourceDimensionPolicyAdmitsEightKAndRejectsExtremeFrames() {

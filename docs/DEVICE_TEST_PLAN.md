@@ -569,7 +569,26 @@ archives. Do not use the only copy of a real backup for tamper tests.
   the privacy shield, session revocation, player/image release, temporary-file
   cleanup, and relock behavior remain unchanged.
 
-## Portrait-video dismissal regression
+## Integrated video viewer regression
+
+- Open portrait and landscape MOV/MP4 videos from the gallery. Confirm one
+  viewer opens, with native playback controls directly on the video and no
+  enlarged thumbnail followed by a second player presentation. Play, pause,
+  seek, and swipe sideways through video/image/video without stacked screens.
+- Rotate to landscape. Done must remain visible above the video controls and
+  return to the gallery. Start a downward swipe in the middle of the video
+  (away from the top edge and bottom scrubber) and confirm it also closes.
+  A short, canceled, sideways, or upward swipe must not close the viewer.
+- Screen-edge Control Center/notification gestures remain owned by iOS. Open
+  and dismiss Control Center, then confirm playback, Done and a content swipe
+  still work. Scrubbing must neither close nor change the selected item.
+- If using AVKit's optional fullscreen control, test native close and canceled
+  dismissal as well. Repeat background/first-correct-passcode unlock while
+  embedded, fullscreen, opening, switching pages, and closing. Reject lingering
+  audio, stale frames, black/inert controls, or a blocked unlock.
+- Repeat with VoiceOver using Done; reopen the same video after each close.
+
+## Previous portrait-video dismissal regression
 
 - On the replacement for Build 54, open a portrait MOV and MP4 and confirm
   fullscreen playback shows AVKit's close control when the controls are

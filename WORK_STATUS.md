@@ -1,11 +1,40 @@
 # KeyHollow Work Status
 
-Updated: 2026-09-18
+Updated: 2026-09-19
 
 This is the authoritative operational resume point. Historical Build 38
 evidence remains in `docs/PROJECT_CHECKPOINT.md`.
 
-## Latest checkpoint: remove the video replay screen (Build 56 candidate)
+## Latest checkpoint: integrated video viewer (Build 57 candidate)
+
+PR #90 delivered Build 56 from `6a69e868d9ff4b0162c19d8814fb2a12a30ceb92`.
+PR CI `35417577448`, main CI `35418441412`, signing preflight
+`35419421968`, and upload `35419599338` passed. Apple processed it and
+assigned it to KeyHollow Internal (one tester); delivery UUID
+`4bf3318d-6339-4d7b-8a85-6aacd042d04c`. Full delivery evidence is in PR #90.
+
+The user reports the full-screen thumbnail followed by a separate player still
+feels wrong, and landscape edge swipes open the phone's Control Center.
+Build 56 is not device-accepted. The current correction embeds native AVKit
+controls directly in the selected gallery page, removes the enlarged video
+placeholder and automatic second presentation, and keeps Done visible above
+the player. A completed downward content swipe closes through the existing
+application cleanup path; top-edge and lower playback-control gestures remain
+excluded. System Control Center gestures are not overridden. Photos and
+protected storage behavior remain unchanged.
+
+The existing authorization to continue through an installable Internal test
+build applies. Apple sign-in was restored and the iOS build/all-status upload lists show
+Build 56 latest with no Build 57. App and thumbnail-extension build numbers
+advance together to 57 with the matching reviewed project fingerprint.
+The unpackaged fix at `ff7091194bf0e9e20cb1b4b1807fe1e571ff5b9d` passed
+macOS build, full XCTest (including five new regression tests), and Swift
+CodeQL in run `35436665265`. Require fresh exact-head/main CI for this
+packaged candidate, signing preflight and protected upload. Record final
+delivery evidence in the PR, then await portrait/landscape device tests.
+Build 53 remains the accepted rollback; no distribution expansion is authorized.
+
+## Previous checkpoint: remove the video replay screen (Build 56)
 
 PR #89 delivered Build 55 from `cf1e5dcb9dbe110601242560668d7714452bfc87`.
 PR CI `35414578943`, main CI `35415828527`, signing preflight
