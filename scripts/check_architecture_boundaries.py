@@ -3272,9 +3272,8 @@ def main() -> int:
                         (
                             "guard isNavigationEnabled else { return }",
                             "if queue.currentItem.kind == .video",
-                            "let excludedHeight = max(",
-                            "VaultMediaNavigationPagerMetrics.videoControlExclusionMinimumHeight",
-                            "VaultMediaNavigationPagerMetrics.videoControlExclusionHeightRatio",
+                            "let excludedHeight = VaultMediaNavigationPagerMetrics",
+                            ".videoControlExclusionHeight(for: viewportHeight)",
                             "guard value.startLocation.y < viewportHeight - excludedHeight else",
                             "let horizontalDistance = value.translation.width",
                             "let verticalDistance = value.translation.height",
@@ -3290,6 +3289,11 @@ def main() -> int:
                     and drag_body.count(
                         "guard value.startLocation.y < viewportHeight - excludedHeight else"
                     ) == 1
+                    and "max(videoControlExclusionMinimumHeight," in source
+                    and "viewportHeight * videoControlExclusionHeightRatio" in source
+                    and "viewportHeight * 0.35" in source
+                    and "VaultMediaDismissalGesturePolicy.accepts(" in drag_body
+                    and "onDismissalRequested()" in drag_body
                 ):
                     violations.append(
                         f"{path}: page drags must stop while media work is busy and "

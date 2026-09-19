@@ -4,10 +4,10 @@ import XCTest
 
 final class VaultMediaNavigationAddOnTests: XCTestCase {
     func testVideoDismissalStartsInContentInPortraitAndLandscape() {
-        for height: CGFloat in [700, 300] {
+        for height: CGFloat in [700, 300, 220] {
             XCTAssertTrue(VaultMediaDismissalGesturePolicy.accepts(
                 translation: CGSize(width: 10, height: 110),
-                startY: 100, viewportHeight: height
+                startY: height / 2, viewportHeight: height
             ))
             for startY: CGFloat in [0, 20, height - 40] {
                 XCTAssertFalse(VaultMediaDismissalGesturePolicy.accepts(
