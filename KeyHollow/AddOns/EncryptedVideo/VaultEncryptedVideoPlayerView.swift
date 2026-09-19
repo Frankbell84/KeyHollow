@@ -150,6 +150,11 @@ enum VaultEncryptedVideoSessionTeardownEvent: Equatable {
     case leaseReleased
 }
 
+public enum VaultEncryptedVideoPresentationStyle: Equatable {
+    case embedded
+    case fullscreen
+}
+
 /// Owns every UIKit and AVFoundation object for one active playback lease.
 /// SwiftUI view and representable lifetimes are intentionally not ownership
 /// boundaries: a full-screen UIKit presentation can remove those views while
@@ -181,6 +186,7 @@ public final class VaultEncryptedVideoPlaybackSession:
     private let teardownObserver: TeardownObserver?
 
     private var phase: Phase = .idle
+    private var presentationStyle: VaultEncryptedVideoPresentationStyle = .fullscreen
     private var item: AVPlayerItem?
     private var player: AVPlayer?
     private var monitorTask: Task<Void, Never>?
@@ -236,6 +242,7 @@ public final class VaultEncryptedVideoPlaybackSession:
     private func configurePlayerController(_ controller: AVPlayerViewController) {
         controller.view.backgroundColor = .black
         controller.videoGravity = .resizeAspect
+        controller.entersFullScreenWhenPlaybackBegins = false
         // Let AVKit choose its fullscreen presentation, including its close
         // control and interactive swipe-down dismissal. Forcing UIKit's
         // generic fullScreen style bypasses that player-specific presentation.
@@ -249,6 +256,7 @@ public final class VaultEncryptedVideoPlaybackSession:
     @discardableResult
     public func activate(
         playback: VaultPreparedVideoPlayback,
+        presentationStyle: VaultEncryptedVideoPresentationStyle = .fullscreen,
         onPlayerWillAttach: () -> Bool = { true },
         onPlayerReleased: @escaping () -> Void = {},
         onFailure: ((VaultPreparedVideoPlaybackError) -> Void)? = nil,
@@ -284,20 +292,55 @@ public final class VaultEncryptedVideoPlaybackSession:
         didReleasePlayerLease = false
         activePlaybackID = playback.id
         phase = .ready
+        self.presentationStyle = presentationStyle
         canPresent = true
 
         startFailureMonitor(item: item, playbackID: playback.id)
 
         // Each newly activated playback opens once. The application's dismissal
         // callback closes the outer viewer; recomposition must never reopen it.
-        hasPendingPresentation = true
+        hasPendingPresentation = presentationStyle == .fullscreen
         attemptPendingPresentation()
         return true
+    }
+
+    /// The gallery owns a single visible page; attach native controls directly
+    /// to that page without presenting another modal or acquiring another lease.
+    func attachEmbeddedPlayer(to host: UIViewController, playbackID: UUID) {
+        guard phase == .ready,
+              presentationStyle == .embedded,
+              activePlaybackID == playbackID,
+              playerController.parent == nil else { return }
+        host.addChild(playerController)
+        let surface = playerController.view!
+        surface.translatesAutoresizingMaskIntoConstraints = false
+        host.view.addSubview(surface)
+        NSLayoutConstraint.activate([
+            surface.leadingAnchor.constraint(equalTo: host.view.leadingAnchor),
+            surface.trailingAnchor.constraint(equalTo: host.view.trailingAnchor),
+            surface.topAnchor.constraint(equalTo: host.view.topAnchor),
+            surface.bottomAnchor.constraint(equalTo: host.view.bottomAnchor)
+        ])
+        playerController.didMove(toParent: host)
+    }
+
+    private func detachEmbeddedPlayer(_ controller: AVPlayerViewController) {
+        guard controller.parent != nil else { return }
+        controller.willMove(toParent: nil)
+        controller.view.removeFromSuperview()
+        controller.removeFromParent()
+    }
+
+    func detachEmbeddedPlayer(from host: UIViewController, playbackID: UUID) {
+        guard activePlaybackID == playbackID,
+              playerController.parent === host else { return }
+        detachEmbeddedPlayer(playerController)
     }
 
     /// Explicit replay after the user returns from AVKit to the selected page.
     public func requestPresentation() {
         guard phase == .ready,
+              presentationStyle == .fullscreen,
               canPresent,
               !isPlayerPresented,
               !isPresentationTransitionActive else { return }
@@ -363,6 +406,7 @@ public final class VaultEncryptedVideoPlaybackSession:
             )
             teardownObserver?(.modalDismissed)
 
+            detachEmbeddedPlayer(retiringPlayerController)
             retiringPlayerController.player = nil
             VaultEncryptedVideoPlayerLifecycle.release(player)
             item = nil
@@ -782,8 +826,46 @@ public struct VaultEncryptedVideoPresentationAnchorView: View {
     }
 }
 
-/// Activates one validated local video without introducing another playback
-/// screen. The native player's dismissal closes the application-owned viewer.
+/// The session retains the player independently of SwiftUI's page lifetime.
+/// Only terminal cleanup releases its graph and protected-file lease.
+@MainActor
+private struct VaultEncryptedVideoEmbeddedSurface: UIViewControllerRepresentable {
+    @ObservedObject var session: VaultEncryptedVideoPlaybackSession
+    let playbackID: UUID
+
+    final class Coordinator {
+        let session: VaultEncryptedVideoPlaybackSession
+        let playbackID: UUID
+
+        init(session: VaultEncryptedVideoPlaybackSession, playbackID: UUID) {
+            self.session = session
+            self.playbackID = playbackID
+        }
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(session: session, playbackID: playbackID)
+    }
+
+    func makeUIViewController(context: Context) -> UIViewController {
+        let host = UIViewController()
+        host.view.backgroundColor = .black
+        session.attachEmbeddedPlayer(to: host, playbackID: playbackID)
+        return host
+    }
+
+    func updateUIViewController(_ host: UIViewController, context: Context) {
+        session.attachEmbeddedPlayer(to: host, playbackID: playbackID)
+    }
+
+    static func dismantleUIViewController(_ host: UIViewController, coordinator: Coordinator) {
+        // A transient UI removal only detaches this host. It cannot release
+        // the protected lease or stop a newer selected playback.
+        coordinator.session.detachEmbeddedPlayer(from: host, playbackID: coordinator.playbackID)
+    }
+}
+
+/// Plays directly in the selected gallery page with native playback controls.
 @MainActor
 public struct VaultEncryptedVideoPlayerView: View {
     @ObservedObject private var session: VaultEncryptedVideoPlaybackSession
@@ -810,10 +892,11 @@ public struct VaultEncryptedVideoPlayerView: View {
     }
 
     public var body: some View {
-        Color.clear
+        VaultEncryptedVideoEmbeddedSurface(session: session, playbackID: playback.id)
         .onAppear {
             session.activate(
                 playback: playback,
+                presentationStyle: .embedded,
                 onPlayerWillAttach: onPlayerWillAttach,
                 onPlayerReleased: onPlayerReleased,
                 onFailure: onFailure,

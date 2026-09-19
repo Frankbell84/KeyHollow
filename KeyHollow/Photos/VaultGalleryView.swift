@@ -954,8 +954,9 @@ struct VaultGalleryView: View {
                     && !isMediaImageZoomed
                     && isMediaNavigationContentReady(queue),
                 onSelectionChange: selectMediaNavigationItem,
+                onDismissalRequested: beginMediaNavigationDismissal,
                 onChromeToggleRequested: {
-                    // The module-owned video session owns the modal AVKit
+                    // The module-owned video session owns the native AVKit
                     // controls. Only image pages use a content
                     // tap to reveal or hide KeyHollow's action overlay.
                     guard VaultMediaChromeInteractionPolicy.acceptsContentTap(
@@ -966,13 +967,13 @@ struct VaultGalleryView: View {
             ) { item in
                 mediaNavigationActiveContent(item)
             }
-            .background {
-                VaultEncryptedVideoPresentationAnchorView(
-                    session: videoPlaybackSession
-                )
+            .safeAreaInset(edge: .top, spacing: 0) {
+                if queue.currentItem.kind == .video {
+                    mediaNavigationToolbar(for: queue)
+                }
             }
             .overlay(alignment: .top) {
-                if isMediaChromeVisible {
+                if isMediaChromeVisible && queue.currentItem.kind == .image {
                     mediaNavigationToolbar(for: queue)
                         .transition(.move(edge: .top).combined(with: .opacity))
                 }
@@ -1080,34 +1081,28 @@ struct VaultGalleryView: View {
             case .video:
                 if let active = videoPlayback.active,
                    VaultGalleryContentItem.generalFile(active.source).mediaNavigationID == item.id {
-                    ZStack {
-                        mediaNavigationPlaceholder(for: item.id)
-                        VaultEncryptedVideoPlayerView(
-                            session: videoPlaybackSession,
-                            playback: active.playback,
-                            onPlayerWillAttach: {
-                                videoPlayback.playerWillAttach(active.playback.id)
-                            },
-                            onPlayerReleased: {
-                                videoPlayback.playerDidRelease(active.playback.id)
-                            },
-                            onFailure: { _ in
-                                handleMediaPlaybackFailure(for: item.id)
-                            },
-                            onDismissal: {
-                                guard mediaNavigationQueue?.selectedID == item.id,
-                                      videoPlayback.active?.playback.id == active.playback.id else {
-                                    return
-                                }
-                                beginMediaNavigationDismissal()
+                    VaultEncryptedVideoPlayerView(
+                        session: videoPlaybackSession,
+                        playback: active.playback,
+                        onPlayerWillAttach: {
+                            videoPlayback.playerWillAttach(active.playback.id)
+                        },
+                        onPlayerReleased: {
+                            videoPlayback.playerDidRelease(active.playback.id)
+                        },
+                        onFailure: { _ in
+                            handleMediaPlaybackFailure(for: item.id)
+                        },
+                        onDismissal: {
+                            guard mediaNavigationQueue?.selectedID == item.id,
+                                  videoPlayback.active?.playback.id == active.playback.id else {
+                                return
                             }
-                        )
-                    }
+                            beginMediaNavigationDismissal()
+                        }
+                    )
                 } else {
-                    ZStack {
-                        mediaNavigationPlaceholder(for: item.id)
-                        mediaNavigationLoadState(for: item)
-                    }
+                    mediaNavigationLoadState(for: item)
                 }
             }
         }
@@ -1147,25 +1142,6 @@ struct VaultGalleryView: View {
                     .regularMaterial,
                     in: RoundedRectangle(cornerRadius: 12)
                 )
-        }
-    }
-
-    @ViewBuilder
-    private func mediaNavigationPlaceholder(
-        for id: VaultMediaNavigationID
-    ) -> some View {
-        if let source = mediaNavigationSources[id],
-           let placeholder = thumbnail(for: source) {
-            Image(uiImage: placeholder)
-                .resizable()
-                .scaledToFit()
-                .opacity(0.72)
-                .accessibilityHidden(true)
-        } else {
-            Image(systemName: "photo.on.rectangle.angled")
-                .font(.system(size: 52))
-                .foregroundStyle(.secondary)
-                .accessibilityHidden(true)
         }
     }
 
