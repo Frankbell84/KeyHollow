@@ -54,9 +54,12 @@ otherwise.
 - Backup Verification authenticates the same archive contents through the same
   validator but always discards staging and returns only a read-only summary. It
   cannot install a vault or turn the recovery code into a local LowKey.
-- The current payload-catalog version preserves protected photos and general files but
-  not Folder Presentation names or membership metadata. Export and import both
-  disclose that restored items appear at the new vault's top level.
+- Legacy payload catalogs v1-v3 restore supported photo/general-file content
+  at the new vault's top level. The approved folder-aware catalog v4 preserves
+  authenticated folder names, hierarchy and typed membership. Root-only new
+  exports may still use v3. A required folder manifest must never be silently
+  dropped. See `FOLDER_AWARE_PORTABLE_BACKUP.md` and PR #94 for current scoped
+  device acceptance; two-device and extended failure testing remain pending.
 - Wrong recovery codes, tampering, truncation, path traversal, credential
   collision, cancellation, or an interrupted restore must fail closed without
   exposing plaintext or replacing an existing vault.
