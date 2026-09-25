@@ -836,7 +836,7 @@ struct VaultGalleryView: View {
         galleryMoveDestinationView
             .sheet(isPresented: Binding(
                 get: { itemRename.isPresented },
-                set: { if !$0 { itemRename.cancel(in: session) } }
+                set: { if !$0 && itemRename.isPresented { itemRename.cancel(in: session) } }
             )) {
                 ItemRenameEditor(
                     name: $itemRename.draft,

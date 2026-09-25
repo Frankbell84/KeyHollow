@@ -130,12 +130,12 @@ final class VaultItemRenameCoordinator: ObservableObject {
     private static func failureMessage(_ error: Error) -> String {
         if (error as? VaultPhotoStore.StoreError) == .renameConflict
             || (error as? VaultGeneralFileStore.StoreError) == .renameConflict {
-            return "The vault changed while Rename was open. The list has been refreshed. Open Rename again to use the current item."
+            return "The vault changed while Rename was open. Open Rename again to use the current item."
         }
         if (error as? VaultPhotoStore.StoreError) == .manifestCommitStateUnknown
             || (error as? VaultGeneralFileStore.StoreError) == .manifestCommitStateUnknown {
             return "The saved name could not be confirmed. Lock and reopen the vault to check it before trying again. Your encrypted content has been retained."
         }
-        return "The name could not be saved. The list has been refreshed; check the current name before trying again."
+        return "The name could not be saved. Check the current name before trying again."
     }
 }
