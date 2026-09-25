@@ -1,6 +1,6 @@
 # KeyHollow dependency and compatibility plan
 
-Prepared 2026-09-24 (America/Port-au-Prince). Status: **proposed engineering
+Prepared 2026-09-24; updated 2026-09-25 (America/Port-au-Prince). Status: **proposed engineering
 sequence for review; no new product capability implemented by this change**.
 
 ## Decision in plain language
@@ -10,20 +10,22 @@ restoration, locking, and its interface. Extend a shared foundation only when
 that capability actually needs it. Keep account services separate from local
 vault ownership.
 
-The recommended next product milestone is **encrypted item details**: a
-user-edited title and tags, searchable in the current folder and preserved in
-backup/restore. Before coding it, settle its storage ownership, item identity,
-and compatibility contract. This is a new engineering recommendation, not an
-ordering stated by the user or by the addendum.
+The [foundation contract](FOUNDATION_CONTRACT.md) now resolves shared identity,
+data ownership, future module transport, directional compatibility, lifecycle
+and recipient-policy boundaries. Its candidate comparison recommends **R1:
+rename existing items while preserving file type** as the first bounded code
+stage under the user's build-quality preference. It uses existing encrypted
+name fields without a new catalog or root. Tags remain a separate candidate
+that needs a real metadata module and complete portable/recovery support.
 
-A rename-only release can reuse existing name fields and has a smaller scope,
-but it does not establish the metadata/policy foundation. It is an optional
-smaller alternative, not an architectural prerequisite. We should not ship two
-competing title stores or implement a temporary tags format to get a quick UI.
+This is an evidence-backed engineering recommendation, not a user-established
+priority or a claim that renaming is a prerequisite for the whole roadmap.
+Titles and tags do not enable recipient trust or policy enforcement. Another
+feature can be selected using its actual prerequisites in the mapping below.
 
-The plan does not require accounts, sync, a complete policy engine, or every
-future content type before local item details can ship. It also does not treat
-a generic framework with no real consumer as a completed product milestone.
+Do not require accounts, sync, a complete policy engine, or every future content
+type before independent local work. Do not build a generic framework without
+its first real data-owning consumer, or two competing title stores.
 
 ## Source, authority, and baseline
 
@@ -76,13 +78,14 @@ before continuing another. Boxes below describe proposed work unless marked exis
 
 ```mermaid
 flowchart TD
-    A[Existing local vault, session and backup boundaries] --> B[Item identity, metadata ownership and archive contract]
-    B --> C[Encrypted item details with complete backup and restore]
-    C --> D[Local search improvements and templates]
+    A[Existing local vault, session and backup boundaries] --> B[Shared identity, ownership and archive contract]
+    A --> R[Rename in existing records, no new format]
+    B --> C[Optional tags module with complete backup and restore]
+    C --> D[Tag search and metadata templates]
     A --> E[Creator ingestion and editing lifecycle]
     B --> E
     E --> F[Notes, Camera, Scanner, Audio, later Video]
-    C --> G[Revision history, conflict and deletion semantics]
+    B --> G[Revision history, conflict and deletion semantics]
     A --> H[Optional account identity and device trust]
     B --> I[Portable policy and recipient delivery format]
     H --> J[Direct Transfer]
@@ -94,7 +97,9 @@ flowchart TD
     M --> N[Backup Center and Advanced Transfer]
     L --> O[Connected Backup and Sync Center]
     N --> O
-    H --> P[Additional recovery methods]
+    A --> P[User-controlled recovery design]
+    H --> PT[Trusted-contact recovery]
+    P --> PT
     P --> Q[Legacy Center]
     J --> Q
     G --> Q
@@ -117,9 +122,10 @@ may not silently grow into a rewrite.
 | Stage | Deliverable and prerequisite | What closes it / user-visible result |
 | --- | --- | --- |
 | P0 — this plan | Recover the source, map current code, reconcile Build 58 evidence, record dependencies and undecided contracts. | Reviewable documentation; no binary or format change. |
-| P1 — item-details contract | Decide one title owner, bounded tags, compatible typed identity, versioned archive handling and transactional mutation/restore. Use the decisions below. | Written schema/ownership/compatibility decision and concrete test cases. Resolve these before writing a new data format. This is the next engineering step. |
-| P2a — first metadata module and transport | Implement the minimum P1 model and its encrypted store, application bridge, archive validation and complete restore/deletion handling together. Generalize transport only enough for this actual consumer; preserve existing decoders. | Native tests prove old archives still restore, new metadata survives, unsupported metadata is not silently lost, and failures preserve all existing vaults. No release claims from a storage-only implementation. |
-| P2b — first item-details release | Connect title/tags editing, current-folder search and lifecycle cleanup to P2a. No account or sync dependency. | On one iPhone: edit a photo, video and file; search; move between folders; lock/reopen; export/verify/restore a separate vault; confirm details and original bytes. This is the first recommended new testable capability. |
+| P1 — shared contract and candidate comparison | Complete the ownership/identity/module/lifecycle design, then compare roadmap candidates by their actual dependencies. | Recorded in `FOUNDATION_CONTRACT.md`, including concrete acceptance cases. No wire format or feature implementation is introduced. |
+| R1 — recommended first implementation | Add narrow expected-state-aware rename operations to existing stores and a lifecycle-owned editor. Preserve general-file/video extension and type. | Search, playback, export, lock/reopen and backup round trip preserve new names and original bytes; current schemas stay unchanged. See R1-01–08 in the contract. |
+| P2a — optional metadata module and transport | If tags/descriptions are selected, implement their encrypted owner, application bridge, module inventory, archive validation and complete restore/deletion handling together. Finalize encoding/version with this actual consumer. | Native tests prove old archives still restore, new metadata survives, unsupported modules are not silently lost, and failures preserve all existing vaults. Not required for R1 or independent services. |
+| P2b — optional tags/details release | Connect tags editing and current-folder search to P2a. Names stay owned by their existing stores; do not promise atomic multi-owner Save without a transaction. | On one iPhone: edit tags for a photo, video and file; search; move; lock/reopen; export/verify/restore a separate vault; confirm data and bytes. This is a candidate, not a fixed next priority. |
 | P3 — local extensions, individually selected | Metadata-backed search refinements/templates, or one Workspace creator. Use P2 where needed; first creator must prove a shared encrypted-ingestion boundary. Notes is the addendum's first creator; Camera/Scanner/Audio are separate milestones. | Each feature has a complete save, interruption, lock, delete and backup path. OCR/global search and video recording require their own feasibility/performance reviews. |
 | P4 — history and data-state semantics | Add authenticated revisions, conflict preservation and explicitly defined soft-delete/grace behavior before sync or rich lifecycle automation. | Two divergent revisions survive; restore does not resurrect purged data unexpectedly; crash recovery is deterministic. Existing permanent-delete behavior changes only through an explicit product decision. |
 | P5 — optional identity/device trust | Define account identity, device keys, enrollment, revocation, account recovery versus vault recovery, and service failure behavior. Can be designed alongside local stages. | A threat model and tested enrollment/revocation protocol; account/service loss does not block core offline vault use. No biometric/device PIN route to local vault unlock is introduced. |
@@ -129,45 +135,36 @@ may not silently grow into a rewrite.
 | P9 — recovery, Legacy, Secure Threads | Additional recovery methods depend on a reviewed wrapping/authorization design; trusted-contact methods need identity. Legacy then adds verified conditions, recipients and entitlement rules. Threads follows authenticated delivery, participant rules and retention. These are separate modules/releases, not one combined stage. | Failure/abuse scenarios validated separately. Billing lapse never triggers Legacy; no hidden plaintext recovery. Threads stays content-bound and enforces attachment policy. |
 | P10 — richer automation and intelligence | Build on stable metadata/history and explicit privacy choices. Use only the capabilities actually available. | Previewable, bounded actions; permission and locked-state checks; no hidden network disclosure or destructive automatic conflict resolution. |
 
-P4–P10 specify dependencies and useful groupings, not a commitment to implement
-them in numeric order. P1–P2 are the recommended immediate sequence. Optional
-local features can be selected independently once their prerequisites hold.
+Stage labels preserve the roadmap mapping; their numbers are not a universal
+implementation order. P1 is documented and recommends R1 first under the
+build-quality criterion. P2 and P3–P10 are selected according to actual product
+priority and prerequisites, without requiring titles/tags first.
 
-## P1 decisions that must precede implementation
+## Resolved P1 boundaries
 
-1. **Title ownership.** Existing photo/general-file `displayName` values already
-   travel in their encrypted manifests. Decide whether user titles mutate
-   those fields or are explicit metadata overrides with a documented fallback.
-   Prefer existing ownership for a rename-only feature. If overrides serve the
-   broader metadata design, define gallery/search/export precedence and exactly
-   one write path; never maintain two writable copies of the same title.
-2. **Identity.** Preserve existing item UUIDs and source type. Choose a bounded,
-   versioned namespace mapping for any new module. Do not re-key or rewrite
-   blobs merely to rename an item. Map references to the fresh destination
-   vault on restore, and define duplicate-item identity separately from moving.
-3. **Metadata limits and privacy.** Define title/tag lengths, Unicode and empty
-   values, duplicate tags, item/manifest limits and per-vault scope. Keep tags,
-   descriptions and policies in authenticated encrypted data. Separate editable
-   descriptive metadata from security-enforced policy and integrity assertions.
-4. **Portable module contract.** Compare a narrowly versioned extension against
-   a bounded namespaced catalog using metadata as the first consumer. Recommend
-   an explicit module inventory rather than repeatedly adding unowned sidecars;
-   do not allocate a catalog version until the schema is reviewed. Define
-   required versus optional modules, canonical names, limits, authentication,
-   duplicate rejection and required module availability before installation.
-5. **Mutation and recovery.** Decide whether an operation spans stores. A title
-   plus tags edit must be one atomic operation or have explicit partial-result
-   semantics. Integrate every new root into restore, startup recovery, source
-   deletion/vault deletion and cleanup; recover only transaction-owned paths.
-6. **Old-client behavior.** New clients must read historical archives. Old
-   clients may reject newer archives; they must not be described as fully
-   compatible unless tested. Never silently strip user metadata or access
-   restrictions to produce a legacy export. Define unsupported-module errors
-   and safe preservation/rejection before approving any downgrade feature.
-7. **Editor surface.** Existing general-file documentation defers editing to a
-   post-import settings surface. Choose a discoverable item action/details view
-   or retain that location deliberately; update that documented contract if it
-   changes. Keep import direct and unchanged.
+The detailed decisions and acceptance cases are in
+[FOUNDATION_CONTRACT.md](FOUNDATION_CONTRACT.md):
+
+1. Existing names remain owned by their content records; future tags and policy
+   have separate owners. No duplicate writable titles or tags that grant access.
+2. Local identity includes vault instance, content owner and UUID. Restore keeps
+   typed item IDs in a fresh vault; duplicate/sync/device identity is separate.
+3. Add a bounded authenticated module inventory only with a real persistent
+   consumer. Unknown declared user-data modules fail closed; caches are excluded.
+4. New roots must participate in journaled restore, vault deletion and cleanup.
+   Current archives/journals retain their existing decoding and validation rules.
+5. Newer data is not assumed writable by old clients. Unsupported catalogs must
+   reject; no silent metadata/policy stripping or unproved downgrade claims.
+6. Mutations use canonical records, expected-state checks, existing transaction
+   and session barriers, and truthful durable-commit outcomes after errors.
+7. Recipient-restricted delivery must not hand out the owner backup/vault key.
+   Its identity, envelope and policy design is independent of titles/tags.
+
+The selected first candidate includes a defined item Rename action with
+extension/type preservation. If implemented, update the older settings-only
+editing description in that feature PR. Future module encoding, tag limits,
+account protocols and policy semantics remain work for their selected consumer;
+they are not speculative runtime changes required for R1.
 
 ## Proposal-to-code mapping
 
@@ -181,8 +178,8 @@ already exist. Source references point to the recovered addendum sections.
 | --- | --- | --- | --- |
 | §3 Create/encrypt, authorized view, import, export/save | PhotoCore, GeneralFileSupport, Session, preview/video, Transfer; working local flows | E: retain these boundaries for new content; extend ingestion through composition | Per-content lifecycle and format tests; H for new persistence; P2/P3 |
 | §3 Move / duplicate | FolderPresentation moves typed references; duplication is not established by this audit | E: preserve move; define independent copy identity, metadata/policy inheritance and failure cleanup for duplicate | Identity and ownership contract; M/H; P3 separately |
-| §3 Editable metadata; tags/categories | Encrypted display names exist; no general user metadata editor/tag module | N/E: metadata owner, scoped editing API and narrow UI adapter | P1 and complete portable support; H; P2 |
-| §3/§11 Names/metadata search | CatalogSearch supplies current-location text matching/sorting | E: compose sanitized metadata into matching; bound input and clear state on lock | P2 metadata; M; P2b/P3 |
+| §3 Editable metadata; tags/categories | Encrypted display names exist; no general user metadata editor/tag module | E: R1 name mutation in existing stores; N: separate tags/descriptions owner | R1 uses current schema; tags need module portability; M/H; R1/P2 |
+| §3/§11 Names/metadata search | CatalogSearch supplies current-location text matching/sorting | E: refresh current name matching; compose future sanitized metadata through the same boundary | R1 name refresh; P2 only for tags; M; R1/P2b/P3 |
 | §11 Notes/text/OCR/global search and result modes | No full-text/OCR/global index in current search | N: optional encrypted/rebuildable index and OCR adapter, elevated authentication for global scope, Standard/Private results | Content access contract, scoped index lifetime, platform feasibility; H; P3 separately |
 | §3/§10 Backup/restore, archive | Transfer plus BackupVerification and folder bridge | E: include each new module; define archive retention separately from backup and sync | Versioned catalog and complete transaction; H; P2/P7 |
 | §3/§10 Trusted-device selective sync | Local vault ownership; no sync engine found | N: encrypted changes with device scope and conflict-preserving application | P4 history + P5 trust + reviewed transport; H; P8 |
@@ -277,8 +274,9 @@ policy and adversarial/failure tests remain separate from a successful round tri
 
 ## Immediate handoff
 
-P0 produces this source-grounded plan and its review. **P1 is next:** decide the
-item-details ownership/identity/archive contract and write its acceptance cases.
-Only then start P2 implementation. If the user chooses another capability,
-follow that capability's mapped prerequisites instead; this recommendation does
-not authorize a new feature, connected service, format migration, or release.
+P0 and P1 now have source-grounded documentation and a concrete boundary design.
+**R1 is the recommended next implementation:** rename existing items while
+preserving file type, using acceptance cases R1-01–08 in the foundation contract.
+Tags and the other candidates remain separately selectable. Follow the selected
+feature's prerequisites; the design itself does not authorize implementation,
+a connected service, format migration, merge or release.

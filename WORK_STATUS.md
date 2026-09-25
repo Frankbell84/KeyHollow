@@ -1,6 +1,6 @@
 # KeyHollow Work Status
 
-Updated: 2026-09-24
+Updated: 2026-09-25
 
 This is the authoritative operational resume point. Historical Build 38
 evidence remains in `docs/PROJECT_CHECKPOINT.md`.
@@ -19,13 +19,20 @@ upload, merge, or TestFlight assignment changes are part of it.
   proposals to current owners, prerequisites, risks, compatibility requirements
   and testable milestones. Its sequencing is an engineering recommendation,
   distinct from the source document and user commitments.
+- [Foundation contract](docs/FOUNDATION_CONTRACT.md): completes the shared
+  identity, data ownership, module portability, compatibility, lifecycle and
+  recipient-policy design. It compares implementation candidates and provides
+  concrete acceptance cases. These are design decisions; no new tests have
+  been executed for unimplemented features.
 - Audited baseline: protected `main` at
   `36b63e06fae92615fc5b24988ef123355f8b4bf0` (Build 58).
-- Next proposed engineering step, after plan review: decide metadata/title
-  ownership, typed identity and the portable-module/restore contract (P1).
-  The first recommended product milestone is encrypted item details with
-  current-folder search and complete backup/restore support. No implementation
-  is authorized merely by this plan.
+- P1 design is recorded. The next recommended code stage is R1: rename existing
+  items through their current encrypted records, preserving file extensions,
+  content types, identity and backup behavior. This is the bounded candidate
+  selected by the engineering comparison, not a user-established roadmap order.
+  Tags require separate module/backup/recovery work; they are not prerequisites
+  for recipient trust, Direct Transfer or Protected View. No implementation is
+  authorized merely by these documents.
 
 ### Delivered Build 58 and scoped acceptance
 
