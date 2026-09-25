@@ -221,6 +221,20 @@ targets:
         DEFINES_MODULE: YES
         SKIP_INSTALL: YES
 
+  KeyHollowItemRenameAddOn:
+    type: library.static
+    platform: iOS
+    sources:
+      - path: KeyHollow/AddOns/ItemRename
+    settings:
+      base:
+        PRODUCT_NAME: KeyHollowItemRenameAddOn
+        SWIFT_VERSION: 5.0
+        SWIFT_STRICT_CONCURRENCY: complete
+        SWIFT_TREAT_WARNINGS_AS_ERRORS: YES
+        DEFINES_MODULE: YES
+        SKIP_INSTALL: YES
+
   KeyHollowSecurePreviewAddOn:
     type: library.static
     platform: iOS
@@ -283,6 +297,7 @@ targets:
           - AddOns/FolderPresentation
           - AddOns/NestedFolder
           - AddOns/SecurePreview
+          - AddOns/ItemRename
           - AddOns/MediaNavigation
           - UI/VaultGalleryGridView.swift
           - UI/VaultGalleryTilePresentation.swift
@@ -321,6 +336,7 @@ targets:
       - target: KeyHollowGalleryUI
       - target: KeyHollowMediaNavigationAddOn
       - target: KeyHollowSecurePreviewAddOn
+      - target: KeyHollowItemRenameAddOn
       - target: KeyHollowCryptoCore
       - target: KeyHollowPhotoCore
       - target: KeyHollowPhotosAdapter
@@ -396,6 +412,8 @@ targets:
         link: false
       - target: KeyHollowSecurePreviewAddOn
         link: false
+      - target: KeyHollowItemRenameAddOn
+        link: false
       - target: KeyHollowCryptoCore
         link: false
       - target: KeyHollowPhotoCore
@@ -439,6 +457,7 @@ schemes:
         KeyHollowGalleryUI: all
         KeyHollowMediaNavigationAddOn: all
         KeyHollowSecurePreviewAddOn: all
+        KeyHollowItemRenameAddOn: all
         KeyHollowCryptoCore: all
         KeyHollowPhotoCore: all
         KeyHollowPhotosAdapter: all

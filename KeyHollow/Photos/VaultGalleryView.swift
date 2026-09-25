@@ -6,6 +6,7 @@ import KeyHollowEncryptedVideoAddOn
 import KeyHollowFolderPresentationAddOn
 import KeyHollowGalleryUI
 import KeyHollowGeneralFileSupportAddOn
+import KeyHollowItemRenameAddOn
 import KeyHollowMediaNavigationAddOn
 import KeyHollowNestedFolderAddOn
 import KeyHollowPhotoCore
@@ -661,6 +662,7 @@ struct VaultGalleryView: View {
     @State private var generalFileImportProgress: GeneralFileImportProgressState?
     @State private var isMediaImageZoomed = false
     @StateObject private var imagePreview = VaultImagePreviewCoordinator()
+    @StateObject private var itemRename = VaultItemRenameCoordinator()
     @StateObject private var videoPlayback = VaultVideoPlaybackCoordinator()
     @StateObject private var videoPlaybackSession =
         VaultEncryptedVideoPlaybackSession()
@@ -830,8 +832,25 @@ struct VaultGalleryView: View {
             }
     }
 
-    private var galleryAlertView: some View {
+    private var galleryRenameView: some View {
         galleryMoveDestinationView
+            .sheet(isPresented: Binding(
+                get: { itemRename.isPresented },
+                set: { if !$0 { itemRename.cancel(in: session) } }
+            )) {
+                ItemRenameEditor(
+                    name: $itemRename.draft,
+                    retainedExtension: itemRename.retainedExtension,
+                    error: itemRename.error,
+                    isSaving: itemRename.isSaving,
+                    save: { itemRename.save() },
+                    cancel: { itemRename.cancel(in: session) }
+                )
+            }
+    }
+
+    private var galleryAlertView: some View {
+        galleryRenameView
         .confirmationDialog(
             "Delete Selected Items?",
             isPresented: $showingDeleteSelectionConfirmation,
@@ -923,6 +942,7 @@ struct VaultGalleryView: View {
             contentStoresLoaded = session.hasActiveAccess
         }
         .onChange(of: session.securityEpoch) { _, _ in
+            itemRename.cancel(in: session)
             searchText = ""
             folderBeingRenamed = nil
             folderPendingDeletion = nil
@@ -1635,6 +1655,13 @@ struct VaultGalleryView: View {
     private func galleryItemContextMenu(
         _ item: VaultGalleryContentItem
     ) -> some View {
+        Button {
+            beginRename(item)
+        } label: {
+            Label("Rename", systemImage: "pencil")
+        }
+        .disabled(isWorking || itemRename.isActive)
+
         switch item {
         case .photo(let record):
             Button {
@@ -1677,6 +1704,38 @@ struct VaultGalleryView: View {
             } label: {
                 Label("Manage File", systemImage: "doc")
             }
+        }
+    }
+
+    private func beginRename(_ item: VaultGalleryContentItem) {
+        guard !isWorking, session.hasActiveAccess else { return }
+        switch item {
+        case .photo(let record):
+            guard let store else { return }
+            itemRename.begin(photoStore: store, id: record.id, session: session, finished: finishRename)
+        case .generalFile(let record):
+            guard let generalFileStore else { return }
+            itemRename.begin(fileStore: generalFileStore, id: record.id, session: session, finished: finishRename)
+        }
+    }
+
+    @MainActor
+    private func finishRename(_ failure: String?) async {
+        let epoch = session.securityEpoch
+        do {
+            // Load both owners before publishing or reconciling membership.
+            guard let store, let generalFileStore else { return }
+            let photos = try await store.loadManifest().photos
+            let files = try await generalFileStore.loadManifest().files
+            try Task.checkCancellation()
+            guard session.hasActiveAccess, session.securityEpoch == epoch else { return }
+            records = photos
+            generalFileRecords = files
+            reconcileSelection()
+            if let failure { message = failure }
+        } catch {
+            guard !Task.isCancelled, session.hasActiveAccess, session.securityEpoch == epoch else { return }
+            message = failure ?? "The updated name could not be loaded. Lock and reopen the vault to check it."
         }
     }
 

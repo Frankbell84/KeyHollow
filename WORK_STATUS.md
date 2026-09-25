@@ -5,7 +5,29 @@ Updated: 2026-09-25
 This is the authoritative operational resume point. Historical Build 38
 evidence remains in `docs/PROJECT_CHECKPOINT.md`.
 
-## Latest checkpoint: dependency and compatibility planning
+## Latest checkpoint: R1 item rename implementation
+
+The user authorized implementing Rename through an iPhone test build. The P1
+documentation stage, PR #95 at `b8d520f66f920d02872a4fa689268a59a704a902`, passed
+CI `36092944868` and was explicitly approved for readiness and merge. It merged
+as `7b4c8067b45dcb06b5a5695adb013e8b2df7a71e`.
+
+Branch `codex/item-rename` adds Rename to the gallery item menu. Photo and
+general-file owners update only their existing encrypted manifest name. Files
+retain their exact extension and declared type; identities, encrypted content,
+folder membership and external originals remain unchanged. A separate compiled
+ItemRename add-on owns only name policy and the editor. Application composition
+owns the session-bound task and optimistic concurrency snapshots.
+
+See [R1 implementation and test guide](ITEM_RENAME.md) for commit/lock semantics,
+automated cases and the physical-device checklist. Tests are added, not yet
+recorded as passing; macOS CI remains required. The current build number remains
+58 pending fresh Apple verification of the next unused number. The Apple browser
+session expired on refresh; sign-in has been requested. No Rename binary has
+been uploaded or device-accepted. Build 58 acceptance and the deferred two-phone
+transfer/failure matrix below remain scoped as recorded.
+
+## Previous checkpoint: dependency and compatibility planning
 
 The user requested a source-grounded build order after correcting an inferred
 feature list and expressing concern about architectural quality. This stage

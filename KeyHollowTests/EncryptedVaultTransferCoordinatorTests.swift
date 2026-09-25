@@ -366,6 +366,14 @@ final class EncryptedVaultTransferCoordinatorTests: XCTestCase {
     }
 
     func testFolderAwareArchiveRestoresNestedMixedMembershipWithoutThumbnailCache() async throws {
+        try await checkFolderAwareRoundTrip(rename: false)
+    }
+
+    func testRenamedNestedItemsSurviveEncryptedVerificationAndRestore() async throws {
+        try await checkFolderAwareRoundTrip(rename: true)
+    }
+
+    private func checkFolderAwareRoundTrip(rename: Bool) async throws {
         let roots = try TestRoots.create()
         defer { roots.remove() }
 
@@ -411,6 +419,13 @@ final class EncryptedVaultTransferCoordinatorTests: XCTestCase {
         )
         try await folderStore.move(Set([photoReference, fileReference]), to: child.id)
         try await folderStore.storeThumbnail(Data("cache-only".utf8), for: fileReference)
+
+        if rename {
+            let photoSnapshot = try await photoStore.renameSnapshot(for: photoRecord.id)
+            let fileSnapshot = try await generalStore.renameSnapshot(for: fileRecord.id)
+            _ = try await photoStore.rename(photoSnapshot, to: "Mountain view")
+            _ = try await generalStore.rename(fileSnapshot, to: "Travel notes.pdf")
+        }
 
         let credential = PortableArchiveCredential.recoveryCode(
             "0123-4567-89AB-CDEF-GHJK-MNPQ-RSTV-WXYZ"
@@ -500,6 +515,26 @@ final class EncryptedVaultTransferCoordinatorTests: XCTestCase {
             VaultFolderMembership(item: fileReference, folderID: child.id)
         ]))
         XCTAssertTrue(installedManifest.thumbnails.isEmpty)
+        let restoredPhotos = try VaultPhotoStore(
+            vaultID: installed.vaultID, access: installedCapability,
+            storageRoot: roots.installed.appendingPathComponent(installed.vaultID.uuidString.lowercased())
+        )
+        let restoredFiles = try VaultGeneralFileStore(
+            vaultID: installed.vaultID, access: SessionGeneralFileAccess(capability: installedCapability),
+            storageRoot: roots.generalInstalled.appendingPathComponent(installed.vaultID.uuidString.lowercased()),
+            temporaryRoot: roots.parent
+        )
+        let photos = try await restoredPhotos.loadManifest().photos
+        let files = try await restoredFiles.loadManifest().files
+        XCTAssertEqual(photos.first?.displayName, rename ? "Mountain view" : photoRecord.displayName)
+        XCTAssertEqual(files.first?.displayName, rename ? "Travel notes.pdf" : fileRecord.displayName)
+        XCTAssertEqual(photos.first?.id, photoRecord.id)
+        XCTAssertEqual(files.first?.id, fileRecord.id)
+        XCTAssertNotEqual(installed.vaultID, vaultID)
+        let photoBytes = try await restoredPhotos.loadPhoto(try XCTUnwrap(photos.first))
+        let fileBytes = try await restoredFiles.loadFile(try XCTUnwrap(files.first))
+        XCTAssertEqual(photoBytes, Data("folder-aware photo".utf8))
+        XCTAssertEqual(fileBytes, Data("folder-aware file".utf8))
     }
 
     func testFolderAwareArchiveRequiresFolderAdapterAndCleansStaging() async throws {

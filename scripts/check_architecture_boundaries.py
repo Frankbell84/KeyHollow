@@ -31,6 +31,7 @@ PRESENTATION_PREFIXES = (
     "KeyHollow/AddOns/BackupVerification/",
     "KeyHollow/AddOns/MediaNavigation/",
     "KeyHollow/AddOns/SecurePreview/",
+    "KeyHollow/AddOns/ItemRename/",
 )
 
 UI_FRAMEWORKS = {
@@ -1294,6 +1295,14 @@ def main() -> int:
                 continue
 
             addon_name = addon_directory.name
+            if addon_name == "ItemRename":
+                for source_path in addon_sources:
+                    source = source_path.read_text(encoding="utf-8")
+                    rename_imports = set(re.findall(r"(?m)^import\s+(\w+)", source))
+                    if rename_imports - {"Foundation", "SwiftUI"}:
+                        violations.append(f"{source_path.relative_to(ROOT)}: Rename must remain presentation-only")
+                    if re.search(r"\b(?:VaultAccessCapability|VaultSession|VaultPhotoStore|VaultGeneralFileStore|FileManager|URLSession)\b", source):
+                        violations.append(f"{source_path.relative_to(ROOT)}: Rename cannot own protected storage or session access")
             if re.fullmatch(r"[A-Z][A-Za-z0-9]*", addon_name) is None:
                 violations.append(
                     f"KeyHollow/AddOns/{addon_name}: add-on directory must use UpperCamelCase"
@@ -1308,6 +1317,9 @@ def main() -> int:
                     f"KeyHollow/AddOns/{addon_name}: missing compiled target {target}"
                 )
                 continue
+
+            if addon_name == "ItemRename" and re.search(r"(?m)^    dependencies:", body):
+                violations.append("project.yml: ItemRename must remain dependency-free; compose storage in the application")
 
             if re.search(r"(?m)^    type:\s*library\.static\s*$", body) is None:
                 violations.append(f"project.yml: {target} must be a static library")
