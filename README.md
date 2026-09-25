@@ -32,6 +32,10 @@ KeyHollow is a security product first. Cryptographic design, key derivation, sec
 
 ## Status
 
+Build 59 is the Rename candidate in [PR #96](https://github.com/Frankbell84/KeyHollow/pull/96).
+Its final checks and delivery evidence are recorded there. It is not yet
+device-accepted; the delivered baseline remains Build 58 below.
+
 Build 58 was delivered from `36b63e06fae92615fc5b24988ef123355f8b4bf0`.
 The user reported successful current-folder imports and a one-iPhone encrypted
 backup/verify/restore test. It was assigned to both existing TestFlight

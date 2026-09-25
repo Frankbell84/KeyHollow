@@ -1,4 +1,5 @@
 import Foundation
+import CryptoKit
 
 private final class GeneralFileManifestTransaction: @unchecked Sendable {
     private let lock = NSRecursiveLock()
@@ -226,6 +227,14 @@ public actor VaultGeneralFileStore {
         case unsupportedItem
         case verificationFailed
         case invalidStorageRoot
+        case renameConflict
+        case invalidDisplayName
+    }
+
+    public struct RenameSnapshot: Sendable {
+        public let record: VaultGeneralFileRecord
+        fileprivate let vaultID: UUID
+        fileprivate let revision: Data
     }
 
     /// A bounded first release avoids large plaintext/ciphertext copies causing
@@ -258,6 +267,7 @@ public actor VaultGeneralFileStore {
     private let manifestTransaction: GeneralFileManifestTransaction
     private let temporarySession: GeneralFileTemporarySession
     private let manifestCommitDidComplete: @Sendable () throws -> Void
+    private let manifestCommitWillReplace: @Sendable () throws -> Void
 
     public init(
         vaultID: UUID,
@@ -279,7 +289,8 @@ public actor VaultGeneralFileStore {
         access: any VaultGeneralFileCryptographicAccess,
         storageRoot: URL? = nil,
         temporaryRoot: URL? = nil,
-        manifestCommitDidComplete: @escaping @Sendable () throws -> Void
+        manifestCommitDidComplete: @escaping @Sendable () throws -> Void,
+        manifestCommitWillReplace: @escaping @Sendable () throws -> Void = {}
     ) throws {
         guard access.vaultID == vaultID else { throw StoreError.accessMismatch }
         let fileManager = FileManager.default
@@ -334,6 +345,7 @@ public actor VaultGeneralFileStore {
         self.manifestTransaction = manifestTransaction
         self.temporarySession = temporarySession
         self.manifestCommitDidComplete = manifestCommitDidComplete
+        self.manifestCommitWillReplace = manifestCommitWillReplace
     }
 
     public func loadManifest() throws -> VaultGeneralFileManifest {
@@ -356,6 +368,65 @@ public actor VaultGeneralFileStore {
             try Self.validateManifest(manifest)
             return manifest
         }
+    }
+
+    public func renameSnapshot(for id: UUID) throws -> RenameSnapshot {
+        try manifestTransaction.withLock {
+            let state = try readRenameState()
+            guard let record = state.manifest.files.first(where: { $0.id == id }) else {
+                throw StoreError.renameConflict
+            }
+            return RenameSnapshot(record: record, vaultID: vaultID, revision: state.revision)
+        }
+    }
+
+    @discardableResult
+    public func rename(_ snapshot: RenameSnapshot, to displayName: String) throws -> VaultGeneralFileRecord {
+        try manifestTransaction.withLock {
+            let state = try readRenameState()
+            guard snapshot.vaultID == vaultID, snapshot.revision == state.revision,
+                  let index = state.manifest.files.firstIndex(where: { $0.id == snapshot.record.id }) else {
+                throw StoreError.renameConflict
+            }
+            let current = state.manifest.files[index]
+            let suffix = (current.displayName as NSString).pathExtension
+            let basename = suffix.isEmpty ? displayName : String(displayName.dropLast(suffix.count + 1))
+            // Enforce type preservation at the owner boundary, even for callers
+            // other than the editor. Nil type metadata may rely on this suffix.
+            guard !basename.trimmingCharacters(in: .whitespacesAndNewlines.union(CharacterSet(charactersIn: "."))).isEmpty,
+                  displayName.utf8.count <= Self.maximumNormalizedDisplayNameByteCount,
+                  displayName.rangeOfCharacter(from: .controlCharacters) == nil,
+                  !displayName.contains(where: { "/\\:".contains($0) }),
+                  (displayName as NSString).pathExtension == (current.displayName as NSString).pathExtension else {
+                throw StoreError.invalidDisplayName
+            }
+            let renamed = VaultGeneralFileRecord(
+                id: current.id, importedAt: current.importedAt, displayName: displayName,
+                contentTypeIdentifier: current.contentTypeIdentifier,
+                originalByteCount: current.originalByteCount, blobName: current.blobName
+            )
+            var manifest = state.manifest
+            manifest.files[index] = renamed
+            try saveManifest(manifest)
+            return renamed
+        }
+    }
+
+    private func readRenameState() throws -> (manifest: VaultGeneralFileManifest, revision: Data) {
+        try Task.checkCancellation()
+        try access.checkAccess()
+        guard fileManager.fileExists(atPath: manifestURL.path) else { throw StoreError.renameConflict }
+        let ciphertext = try readCiphertext(
+            at: manifestURL,
+            maximumPlaintextByteCount: UInt64(Self.legacyMaximumManifestByteCount),
+            oversizedError: .invalidManifest
+        )
+        let plaintext = try access.open(ciphertext, for: .manifest)
+        try Task.checkCancellation()
+        guard plaintext.count <= Self.legacyMaximumManifestByteCount else { throw StoreError.invalidManifest }
+        let manifest = try JSONDecoder().decode(VaultGeneralFileManifest.self, from: plaintext)
+        try Self.validateManifest(manifest)
+        return (manifest, Data(SHA256.hash(data: ciphertext)))
     }
 
     /// Authenticates the manifest and every referenced encrypted blob before
@@ -721,6 +792,9 @@ public actor VaultGeneralFileStore {
             }
             let ciphertext = try access.seal(plaintext, for: .manifest)
             try Task.checkCancellation()
+            try manifestCommitWillReplace()
+            try Task.checkCancellation()
+            try access.checkAccess()
             do {
                 try commitManifestCiphertext(ciphertext)
             } catch {
@@ -734,6 +808,8 @@ public actor VaultGeneralFileStore {
     }
 
     private func commitManifestCiphertext(_ ciphertext: Data) throws {
+        // Final authorization for already sealed bytes. Revocation after this
+        // point drains the commit rather than assuming cancellation undid it.
         let temporaryURL = root.appendingPathComponent(
             ".manifest-\(UUID().uuidString.lowercased()).pending",
             isDirectory: false

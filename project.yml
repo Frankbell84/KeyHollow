@@ -221,6 +221,20 @@ targets:
         DEFINES_MODULE: YES
         SKIP_INSTALL: YES
 
+  KeyHollowItemRenameAddOn:
+    type: library.static
+    platform: iOS
+    sources:
+      - path: KeyHollow/AddOns/ItemRename
+    settings:
+      base:
+        PRODUCT_NAME: KeyHollowItemRenameAddOn
+        SWIFT_VERSION: 5.0
+        SWIFT_STRICT_CONCURRENCY: complete
+        SWIFT_TREAT_WARNINGS_AS_ERRORS: YES
+        DEFINES_MODULE: YES
+        SKIP_INSTALL: YES
+
   KeyHollowSecurePreviewAddOn:
     type: library.static
     platform: iOS
@@ -249,7 +263,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.keyhollow.app.vault-thumbnail
         PRODUCT_NAME: KeyHollowVaultThumbnail
         MARKETING_VERSION: 1.0
-        CURRENT_PROJECT_VERSION: 58
+        CURRENT_PROJECT_VERSION: 59
         SWIFT_VERSION: 5.0
         SWIFT_STRICT_CONCURRENCY: complete
         APPLICATION_EXTENSION_API_ONLY: YES
@@ -283,6 +297,7 @@ targets:
           - AddOns/FolderPresentation
           - AddOns/NestedFolder
           - AddOns/SecurePreview
+          - AddOns/ItemRename
           - AddOns/MediaNavigation
           - UI/VaultGalleryGridView.swift
           - UI/VaultGalleryTilePresentation.swift
@@ -321,6 +336,7 @@ targets:
       - target: KeyHollowGalleryUI
       - target: KeyHollowMediaNavigationAddOn
       - target: KeyHollowSecurePreviewAddOn
+      - target: KeyHollowItemRenameAddOn
       - target: KeyHollowCryptoCore
       - target: KeyHollowPhotoCore
       - target: KeyHollowPhotosAdapter
@@ -331,7 +347,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.keyhollow.app
         PRODUCT_NAME: KeyHollow
         MARKETING_VERSION: 1.0
-        CURRENT_PROJECT_VERSION: 58
+        CURRENT_PROJECT_VERSION: 59
         VERSIONING_SYSTEM: apple-generic
         SWIFT_VERSION: 5.0
         SWIFT_STRICT_CONCURRENCY: complete
@@ -396,6 +412,8 @@ targets:
         link: false
       - target: KeyHollowSecurePreviewAddOn
         link: false
+      - target: KeyHollowItemRenameAddOn
+        link: false
       - target: KeyHollowCryptoCore
         link: false
       - target: KeyHollowPhotoCore
@@ -439,6 +457,7 @@ schemes:
         KeyHollowGalleryUI: all
         KeyHollowMediaNavigationAddOn: all
         KeyHollowSecurePreviewAddOn: all
+        KeyHollowItemRenameAddOn: all
         KeyHollowCryptoCore: all
         KeyHollowPhotoCore: all
         KeyHollowPhotosAdapter: all

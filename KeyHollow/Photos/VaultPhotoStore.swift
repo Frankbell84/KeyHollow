@@ -63,6 +63,16 @@ public actor VaultPhotoStore {
         case manifestCommitStateUnknown
         case accessMismatch
         case invalidStorageRoot
+        case renameConflict
+        case invalidDisplayName
+    }
+
+    /// A nonpersistent, authenticated expected state. Callers cannot construct
+    /// a replacement record or use a snapshot from another vault.
+    public struct RenameSnapshot: Sendable {
+        public let record: VaultPhotoRecord
+        fileprivate let vaultID: UUID
+        fileprivate let revision: Data
     }
 
     public static let maximumOriginalByteCount: UInt64 = 100 * 1_024 * 1_024
@@ -77,6 +87,7 @@ public actor VaultPhotoStore {
     private let access: any VaultPhotoCryptographicAccess
     private let manifestTransaction: PhotoManifestTransaction
     private let manifestCommitDidComplete: @Sendable () throws -> Void
+    private let manifestCommitWillReplace: @Sendable () throws -> Void
     private let ciphertextReadDidComplete: @Sendable (URL) -> Void
     private var cachedRecordsByID: [UUID: VaultPhotoRecord] = [:]
     private var cachedManifestGeneration: UInt64?
@@ -108,7 +119,8 @@ public actor VaultPhotoStore {
         access: any VaultPhotoCryptographicAccess,
         storageRoot: URL? = nil,
         manifestCommitDidComplete: @escaping @Sendable () throws -> Void,
-        ciphertextReadDidComplete: @escaping @Sendable (URL) -> Void = { _ in }
+        ciphertextReadDidComplete: @escaping @Sendable (URL) -> Void = { _ in },
+        manifestCommitWillReplace: @escaping @Sendable () throws -> Void = {}
     ) throws {
         guard access.vaultID == vaultID else { throw StoreError.accessMismatch }
         let resolvedRoot: URL
@@ -135,6 +147,7 @@ public actor VaultPhotoStore {
         self.access = access
         self.manifestTransaction = manifestTransaction
         self.manifestCommitDidComplete = manifestCommitDidComplete
+        self.manifestCommitWillReplace = manifestCommitWillReplace
         self.ciphertextReadDidComplete = ciphertextReadDidComplete
 
         try manifestTransaction.withLock {
@@ -176,6 +189,64 @@ public actor VaultPhotoStore {
             cache(manifest)
             return manifest
         }
+    }
+
+    public func renameSnapshot(for id: UUID) throws -> RenameSnapshot {
+        try manifestTransaction.withLock {
+            let state = try readRenameState()
+            guard let record = state.manifest.photos.first(where: { $0.id == id }) else {
+                throw StoreError.renameConflict
+            }
+            return RenameSnapshot(record: record, vaultID: vaultID, revision: state.revision)
+        }
+    }
+
+    @discardableResult
+    public func rename(_ snapshot: RenameSnapshot, to displayName: String) throws -> VaultPhotoRecord {
+        try manifestTransaction.withLock {
+            let state = try readRenameState()
+            guard snapshot.vaultID == vaultID, snapshot.revision == state.revision,
+                  let index = state.manifest.photos.firstIndex(where: { $0.id == snapshot.record.id }) else {
+                throw StoreError.renameConflict
+            }
+            guard !displayName.trimmingCharacters(in: .whitespacesAndNewlines.union(CharacterSet(charactersIn: "."))).isEmpty,
+                  displayName.utf8.count <= 180,
+                  displayName.rangeOfCharacter(from: .controlCharacters) == nil,
+                  !displayName.contains(where: { "/\\:".contains($0) }) else {
+                throw StoreError.invalidDisplayName
+            }
+            let current = state.manifest.photos[index]
+            let renamed = VaultPhotoRecord(
+                id: current.id, importedAt: current.importedAt,
+                blobName: current.blobName, thumbnailName: current.thumbnailName,
+                displayName: displayName, originalByteCount: current.originalByteCount
+            )
+            var manifest = state.manifest
+            manifest.photos[index] = renamed
+            try saveManifest(manifest)
+            return renamed
+        }
+    }
+
+    // Hash exactly the ciphertext we authenticated, under the same transaction
+    // lock as the later comparison and replacement. No persisted revision or
+    // second title owner is introduced. A missing/deleted item is a conflict.
+    private func readRenameState() throws -> (manifest: VaultPhotoManifest, revision: Data) {
+        try Task.checkCancellation()
+        try access.checkAccess()
+        guard fileManager.fileExists(atPath: manifestURL.path) else { throw StoreError.renameConflict }
+        let ciphertext = try readCiphertext(
+            at: manifestURL,
+            maximumPlaintextByteCount: UInt64(Self.legacyMaximumManifestByteCount),
+            oversizedError: .invalidManifest
+        )
+        let plaintext = try access.open(ciphertext, for: .manifest)
+        try Task.checkCancellation()
+        guard plaintext.count <= Self.legacyMaximumManifestByteCount else { throw StoreError.invalidManifest }
+        let manifest = try JSONDecoder().decode(VaultPhotoManifest.self, from: plaintext)
+        try Self.validateManifest(manifest)
+        cache(manifest)
+        return (manifest, Data(SHA256.hash(data: ciphertext)))
     }
 
     /// Returns the authenticated manifest used by portable export and ensures
@@ -432,6 +503,9 @@ public actor VaultPhotoStore {
         }
         let ciphertext = try access.seal(plaintext, for: .manifest)
         try Task.checkCancellation()
+        try manifestCommitWillReplace()
+        try Task.checkCancellation()
+        try access.checkAccess()
         do {
             try secureReplaceManifest(ciphertext)
         } catch {
@@ -451,6 +525,9 @@ public actor VaultPhotoStore {
     /// visible. Once the same-volume rename/replace commits, no later metadata
     /// operation can fail and leave a manifest referencing rolled-back blobs.
     private func secureReplaceManifest(_ data: Data) throws {
+        // This is the final authorization for the already sealed replacement.
+        // A subsequent revocation drains this operation; it cannot roll back a
+        // durable commit. No new plaintext work occurs in the commit path.
         let pending = root
             .appendingPathComponent(".pending-\(UUID().uuidString.lowercased())")
             .appendingPathExtension("khmtmp")

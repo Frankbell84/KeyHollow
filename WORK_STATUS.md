@@ -5,7 +5,43 @@ Updated: 2026-09-25
 This is the authoritative operational resume point. Historical Build 38
 evidence remains in `docs/PROJECT_CHECKPOINT.md`.
 
-## Latest checkpoint: dependency and compatibility planning
+## Latest checkpoint: R1 item rename — Build 59 preparation
+
+The user authorized implementing Rename through an iPhone test build. The P1
+documentation stage, PR #95 at `b8d520f66f920d02872a4fa689268a59a704a902`, passed
+CI `36092944868` and was explicitly approved for readiness and merge. It merged
+as `7b4c8067b45dcb06b5a5695adb013e8b2df7a71e`.
+
+Branch `codex/item-rename` adds Rename to the gallery item menu. Photo and
+general-file owners update only their existing encrypted manifest name. Files
+retain their exact extension and declared type; identities, encrypted content,
+folder membership and external originals remain unchanged. A separate compiled
+ItemRename add-on owns only name policy and the editor. Application composition
+owns the session-bound task and optimistic concurrency snapshots.
+
+See [R1 implementation and test guide](ITEM_RENAME.md) for commit/lock semantics,
+automated cases and the physical-device checklist. Implementation head
+`dfe7c01183370a47802a3c325c809bc59b8c62ee` passed CI `36142939037`: native build,
+451 unit tests (including all 13 Rename tests and the renamed nested-folder
+backup round trip), 3 existing UI launch tests, and Swift CodeQL. All four local
+repository checkers also passed. This is automated evidence, not device acceptance.
+
+On 2026-09-25 the user restored Apple sign-in. The signed-in iOS Builds and
+all-status Build Uploads lists show Build 58 latest and no Build 59. Both the app
+and thumbnail extension advance to 59 with the corresponding project fingerprint.
+This packaging commit changes the source SHA and requires fresh candidate checks.
+[PR #96](https://github.com/Frankbell84/KeyHollow/pull/96) records the exact final
+head, review and execution evidence as the release proceeds; do not substitute
+the earlier implementation run for final-candidate or merged-main CI.
+
+Remaining delivery gates are final-candidate CI, PR readiness/merge, exact-main
+CI, signing preflight, protected Internal upload and Apple availability. No
+Rename binary has been uploaded or device-accepted at this preparation checkpoint.
+Build 58 acceptance and the deferred two-phone transfer/failure matrix below
+remain scoped as recorded. No Family, external TestFlight or App Store expansion
+is included for Build 59. Build 53 remains the recorded accepted rollback.
+
+## Previous checkpoint: dependency and compatibility planning
 
 The user requested a source-grounded build order after correcting an inferred
 feature list and expressing concern about architectural quality. This stage
