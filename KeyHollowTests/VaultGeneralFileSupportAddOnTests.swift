@@ -6,6 +6,51 @@ import KeyHollowCryptoCore
 @testable import KeyHollowGeneralFileSupportAddOn
 
 final class VaultGeneralFileSupportAddOnTests: XCTestCase {
+    @MainActor
+    func testBatchImportPublishesOnlyVerifiedRecordsAndPreservesSources() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        let source = try fixture.source(named: "document.txt", data: Data("document".utf8))
+        let missing = fixture.sourceRoot.appendingPathComponent("missing.txt")
+        var imported: [VaultGeneralFileRecord] = []
+        var updates: [GeneralFileImportProgressState] = []
+        let outcome = try await GeneralFileImportCoordinator.importFiles(
+            at: [source, missing], using: fixture.store,
+            recordDidImport: { record in
+                let bytes = try await fixture.store.loadFile(record)
+                XCTAssertEqual(bytes, Data("document".utf8))
+                imported.append(record)
+            },
+            progressDidChange: { updates.append($0) }
+        )
+        XCTAssertEqual(outcome.importedCount, 1)
+        XCTAssertEqual(outcome.failedCount, 1)
+        XCTAssertEqual(imported.count, 1)
+        XCTAssertEqual(updates.last?.completed, 2)
+        XCTAssertEqual(try Data(contentsOf: source), Data("document".utf8))
+    }
+
+    @MainActor
+    func testBatchPlacementCancellationStopsBeforeNextImportAndKeepsVerifiedCopy() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        let first = try fixture.source(named: "first.txt", data: Data("first".utf8))
+        let second = try fixture.source(named: "second.txt", data: Data("second".utf8))
+        do {
+            _ = try await GeneralFileImportCoordinator.importFiles(
+                at: [first, second], using: fixture.store,
+                recordDidImport: { _ in throw CancellationError() },
+                progressDidChange: { _ in }
+            )
+            XCTFail("Cancellation must stop the batch")
+        } catch is CancellationError {}
+        let manifest = try await fixture.store.validateAllEncryptedFiles()
+        XCTAssertEqual(manifest.files.count, 1)
+        XCTAssertEqual(manifest.files.first?.displayName, "first.txt")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: first.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: second.path))
+    }
+
     func testImportLowKeyContinueAppearsOnlyForACompleteValidMatch() {
         XCTAssertTrue(
             ImportLowKeyContinuation.shouldReveal(

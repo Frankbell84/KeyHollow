@@ -1,11 +1,83 @@
 import CryptoKit
 import Foundation
 import XCTest
+@testable import KeyHollow
 import KeyHollowCryptoCore
 import KeyHollowNestedFolderAddOn
 @testable import KeyHollowFolderPresentationAddOn
 
 final class VaultFolderPresentationAddOnTests: XCTestCase {
+    @MainActor
+    func testImportDestinationPlacesTypedItemsInCapturedNestedFolder() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        let parent = try await fixture.store.createFolder(named: "Trip")
+        let child = try await fixture.store.createFolder(named: "Photos", in: parent.id)
+        let destination = VaultImportDestination(
+            vaultID: fixture.access.vaultID, securityEpoch: 7, folderID: child.id
+        )
+        let sharedID = UUID()
+        let items = [
+            VaultPresentedContentReference(kind: .photo, id: sharedID),
+            VaultPresentedContentReference(kind: .generalFile, id: sharedID)
+        ]
+        for item in items {
+            let placed = try await destination.place(item) { reference, folderID in
+                try await fixture.store.move(reference, to: folderID)
+            }
+            XCTAssertTrue(placed)
+        }
+        let manifest = try await fixture.store.loadManifest()
+        XCTAssertEqual(Set(manifest.memberships.map(\.item)), Set(items))
+        XCTAssertTrue(manifest.memberships.allSatisfy { $0.folderID == child.id })
+    }
+
+    @MainActor
+    func testImportToDeletedFolderReportsRootRecoveryWithoutCreatingMembership() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        let folder = try await fixture.store.createFolder(named: "Destination")
+        let destination = VaultImportDestination(
+            vaultID: fixture.access.vaultID, securityEpoch: 7, folderID: folder.id
+        )
+        try await fixture.store.deleteFolder(id: folder.id)
+        let item = VaultPresentedContentReference(kind: .photo, id: UUID())
+        let placed = try await destination.place(item) { reference, folderID in
+            try await fixture.store.move(reference, to: folderID)
+        }
+        XCTAssertFalse(placed)
+        let manifest = try await fixture.store.loadManifest()
+        XCTAssertTrue(manifest.memberships.isEmpty)
+        XCTAssertTrue(VaultImportDestination.recoveryMessage(rootCount: 1).contains("Vault Root"))
+    }
+
+    @MainActor
+    func testRootImportDoesNotWriteMembershipAndOldSessionIsRejected() async throws {
+        let vaultID = UUID()
+        let destination = VaultImportDestination(vaultID: vaultID, securityEpoch: 7, folderID: nil)
+        let placed = try await destination.place(.init(kind: .photo, id: UUID())) { _, _ in
+            XCTFail("Root imports must not write folder metadata")
+        }
+        XCTAssertTrue(placed)
+        XCTAssertTrue(destination.matches(vaultID: vaultID, securityEpoch: 7))
+        XCTAssertFalse(destination.matches(vaultID: vaultID, securityEpoch: 8))
+        XCTAssertFalse(destination.matches(vaultID: UUID(), securityEpoch: 7))
+        XCTAssertFalse(destination.matches(vaultID: nil, securityEpoch: 7))
+    }
+
+    @MainActor
+    func testCanceledPlacementDoesNotBecomeRecoverableSuccess() async throws {
+        let destination = VaultImportDestination(vaultID: UUID(), securityEpoch: 7, folderID: UUID())
+        do {
+            _ = try await destination.place(.init(kind: .photo, id: UUID())) { _, _ in
+                throw CancellationError()
+            }
+            XCTFail("Cancellation must stop the import before originals can be deleted")
+        } catch is CancellationError {
+            // Expected; caller must not count success or schedule source deletion.
+        }
+    }
+
     func testRevokedAccessRejectsEmptyManifestLoad() async throws {
         let fixture = try Fixture()
         defer { fixture.cleanup() }
