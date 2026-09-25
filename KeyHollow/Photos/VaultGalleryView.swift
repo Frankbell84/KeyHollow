@@ -53,6 +53,7 @@ private struct VaultImportProgress {
     var importedCount = 0
     var failedCount = 0
     var identifiersToDelete: [String] = []
+    var rootFallbackCount = 0
 }
 
 /// App-owned routing record. Storage models stop here and are translated into
@@ -634,6 +635,7 @@ struct VaultGalleryView: View {
     @State private var imageSaveTaskID: UUID?
     @State private var previewMessage: String?
     @State private var showingImportOptions = false
+    @State private var importDestination: VaultImportDestination?
     @State private var showingPicker = false
     @State private var showingFilePicker = false
     @State private var showingNewVault = false
@@ -734,7 +736,7 @@ struct VaultGalleryView: View {
                 GeneralFileImportProgressView(progress: generalFileImportProgress)
             }
         }
-        .confirmationDialog("Import to Vault", isPresented: $showingImportOptions, titleVisibility: .visible) {
+        .confirmationDialog(activeFolderID == nil ? "Import to Vault" : "Import to This Folder", isPresented: $showingImportOptions, titleVisibility: .visible) {
             Button("Copy Photos & Videos to Vault") {
                 importMode = .copy
                 showingPicker = true
@@ -749,11 +751,12 @@ struct VaultGalleryView: View {
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("Import encrypted copies from Photos or Files. Moving Photos items verifies the vault copies first, then asks iOS to delete the originals.")
+            Text("Import encrypted copies into the current location from Photos or Files. Moving Photos items verifies the vault copies first, then asks iOS to delete the originals.")
         }
         .sheet(isPresented: $showingPicker) {
+            let destination = importDestination
             SecurePhotoPicker(selectionLimit: 50) { event in
-                await handleImportEvent(event)
+                await handleImportEvent(event, destination: destination)
             }
         }
         .fileImporter(
@@ -895,6 +898,11 @@ struct VaultGalleryView: View {
             presentationStore = nil
             folderManifest = .empty
             activeFolderID = nil
+            importDestination = nil
+            importProgress = nil
+            showingPicker = false
+            showingFilePicker = false
+            showingImportOptions = false
             folderBeingRenamed = nil
             folderPendingDeletion = nil
             moveRequest = nil
@@ -1179,15 +1187,19 @@ struct VaultGalleryView: View {
                 }
                 .disabled(visibleItemIDs.isEmpty || isWorking)
 
-                if activeFolderID == nil {
-                    Button {
-                        showingImportOptions = true
-                    } label: {
-                        Image(systemName: "plus")
-                    }
-                    .disabled(isWorking)
-                    .accessibilityLabel("Import to vault")
+                Button {
+                    guard let vaultID = session.activeVaultID else { return }
+                    importDestination = VaultImportDestination(
+                        vaultID: vaultID,
+                        securityEpoch: session.securityEpoch,
+                        folderID: activeFolderID
+                    )
+                    showingImportOptions = true
+                } label: {
+                    Image(systemName: "plus")
                 }
+                .disabled(isWorking || !contentStoresLoaded || presentationStore == nil)
+                .accessibilityLabel(activeFolderID == nil ? "Import to vault" : "Import to this folder")
 
                 Menu {
                     Button {
@@ -1541,7 +1553,7 @@ struct VaultGalleryView: View {
         if activeFolderID == nil {
             return "Import photos or files to store encrypted copies inside this vault."
         }
-        return "Move photos or files here from a selection or an item's menu."
+        return "Tap + to import photos, videos, or files directly into this folder."
     }
 
     private var galleryEmptySystemImage: String {
@@ -2082,10 +2094,14 @@ struct VaultGalleryView: View {
             message = "Choose no more than \(VaultGeneralFileStore.maximumBatchCount) files at a time."
             return
         }
-        guard let generalFileStore, !isWorking else { return }
+        guard let generalFileStore, let presentationStore,
+              let destination = importDestination,
+              destination.matches(vaultID: session.activeVaultID, securityEpoch: session.securityEpoch),
+              !isWorking else { return }
         isWorking = true
 
         let taskID = session.startSensitiveTask { _ in
+            var rootFallbackCount = 0
             defer {
                 generalFileImportProgress = nil
                 isWorking = false
@@ -2093,13 +2109,23 @@ struct VaultGalleryView: View {
             do {
                 let outcome = try await GeneralFileImportCoordinator.importFiles(
                     at: urls,
-                    using: generalFileStore
+                    using: generalFileStore,
+                    recordDidImport: { record in
+                        let placed = try await destination.place(
+                            VaultPresentedContentReference(kind: .generalFile, id: record.id)
+                        ) { item, folderID in
+                            try await presentationStore.move(item, to: folderID)
+                        }
+                        if !placed { rootFallbackCount += 1 }
+                    }
                 ) { progress in
                     generalFileImportProgress = progress
                 }
-                guard !Task.isCancelled else { return }
-                generalFileRecords = try await generalFileStore.loadManifest().files
+                guard !Task.isCancelled,
+                      destination.matches(vaultID: session.activeVaultID, securityEpoch: session.securityEpoch) else { return }
+                await reloadGeneralFiles()
                 message = GeneralFileImportPresentation.message(for: outcome)
+                    + VaultImportDestination.recoveryMessage(rootCount: rootFallbackCount)
             } catch is CancellationError {
                 return
             } catch {
@@ -2112,7 +2138,7 @@ struct VaultGalleryView: View {
         }
     }
 
-    private func reload(using store: VaultPhotoStore) async throws {
+    private func reload(using store: VaultPhotoStore, reconcileFolders: Bool = true) async throws {
         let manifest = try await store.loadManifest()
 
         records = manifest.photos
@@ -2124,11 +2150,17 @@ struct VaultGalleryView: View {
         if visibleSelectableItems.isEmpty {
             leaveSelectionMode()
         }
-        await reconcilePresentationStore()
+        if reconcileFolders { await reconcilePresentationStore() }
     }
 
     @MainActor
-    private func handleImportEvent(_ event: PickedVaultPhotoEvent) async {
+    private func handleImportEvent(
+        _ event: PickedVaultPhotoEvent,
+        destination: VaultImportDestination?
+    ) async {
+        guard let destination,
+              destination.matches(vaultID: session.activeVaultID, securityEpoch: session.securityEpoch),
+              let presentationStore else { return }
         switch event {
         case .started(let total):
             guard !isWorking else { return }
@@ -2142,14 +2174,21 @@ struct VaultGalleryView: View {
                       session.activeVaultID == capability.vaultID,
                       !Task.isCancelled else { return }
                 do {
-                    _ = try await store.importPhoto(
+                    let record = try await store.importPhoto(
                         originalData: photo.originalData,
                         thumbnailData: photo.thumbnailData,
                         displayName: photo.displayName
                     )
+                    let placed = try await destination.place(
+                        VaultPresentedContentReference(kind: .photo, id: record.id)
+                    ) { item, folderID in
+                        try await presentationStore.move(item, to: folderID)
+                    }
                     try Task.checkCancellation()
+                    guard destination.matches(vaultID: session.activeVaultID, securityEpoch: session.securityEpoch) else { return }
                     progress.importedCount += 1
-                    if progress.mode == .move, let identifier = photo.sourceAssetIdentifier {
+                    if !placed { progress.rootFallbackCount += 1 }
+                    if placed, progress.mode == .move, let identifier = photo.sourceAssetIdentifier {
                         progress.identifiersToDelete.append(identifier)
                     }
                 } catch is CancellationError {
@@ -2167,10 +2206,17 @@ struct VaultGalleryView: View {
                       session.activeVaultID == capability.vaultID,
                       !Task.isCancelled else { return }
                 do {
-                    _ = try await generalFileStore.importFile(at: video.fileURL)
+                    let record = try await generalFileStore.importFile(at: video.fileURL)
+                    let placed = try await destination.place(
+                        VaultPresentedContentReference(kind: .generalFile, id: record.id)
+                    ) { item, folderID in
+                        try await presentationStore.move(item, to: folderID)
+                    }
                     try Task.checkCancellation()
+                    guard destination.matches(vaultID: session.activeVaultID, securityEpoch: session.securityEpoch) else { return }
                     progress.importedCount += 1
-                    if progress.mode == .move,
+                    if !placed { progress.rootFallbackCount += 1 }
+                    if placed, progress.mode == .move,
                        let identifier = video.sourceAssetIdentifier {
                         progress.identifiersToDelete.append(identifier)
                     }
@@ -2210,7 +2256,9 @@ struct VaultGalleryView: View {
         }
 
         do {
-            try await reload(using: store)
+            // Refresh both content catalogs before pruning membership. A mixed
+            // Photos batch can create photo and general-file (video) records.
+            try await reload(using: store, reconcileFolders: false)
             await reloadGeneralFiles()
         } catch {
             guard !Task.isCancelled, session.hasActiveAccess else {
@@ -2255,7 +2303,9 @@ struct VaultGalleryView: View {
                     importedCount: progress.importedCount,
                     failedCount: progress.failedCount
                 )
-                message = "\(base) iOS did not delete every original, so KeyHollow treats this batch as copied."
+                message = progress.rootFallbackCount > 0
+                    ? "\(base) Originals were kept because folder placement was incomplete."
+                    : "\(base) iOS did not delete every original, so KeyHollow treats this batch as copied."
             }
         } else if progress.importedCount > 0 {
             message = importResultMessage(
@@ -2265,6 +2315,10 @@ struct VaultGalleryView: View {
             )
         } else if progress.failedCount > 0 {
             message = unreadableSelectionMessage(count: progress.failedCount)
+        }
+        if progress.rootFallbackCount > 0 {
+            message = (message ?? "")
+                + VaultImportDestination.recoveryMessage(rootCount: progress.rootFallbackCount)
         }
         isWorking = false
     }

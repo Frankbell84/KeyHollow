@@ -118,6 +118,7 @@ enum GeneralFileImportCoordinator {
     static func importFiles(
         at urls: [URL],
         using store: VaultGeneralFileStore,
+        recordDidImport: (VaultGeneralFileRecord) async throws -> Void = { _ in },
         progressDidChange: (GeneralFileImportProgressState) -> Void
     ) async throws -> VaultGeneralFileImportResult {
         guard urls.count <= VaultGeneralFileStore.maximumBatchCount else {
@@ -129,7 +130,9 @@ enum GeneralFileImportCoordinator {
         for url in urls {
             try Task.checkCancellation()
             do {
-                _ = try await store.importFile(at: url)
+                let record = try await store.importFile(at: url)
+                try await recordDidImport(record)
+                try Task.checkCancellation()
                 progress.advance(succeeded: true)
             } catch is CancellationError {
                 throw CancellationError()

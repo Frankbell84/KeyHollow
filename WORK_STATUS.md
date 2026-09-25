@@ -1,38 +1,47 @@
 # KeyHollow Work Status
 
-Updated: 2026-09-19
+Updated: 2026-09-24
 
 This is the authoritative operational resume point. Historical Build 38
 evidence remains in `docs/PROJECT_CHECKPOINT.md`.
 
-## Latest checkpoint: integrated video viewer (Build 57 candidate)
+## Latest checkpoint: import directly into the current folder
 
-PR #90 delivered Build 56 from `6a69e868d9ff4b0162c19d8814fb2a12a30ceb92`.
-PR CI `35417577448`, main CI `35418441412`, signing preflight
-`35419421968`, and upload `35419599338` passed. Apple processed it and
-assigned it to KeyHollow Internal (one tester); delivery UUID
-`4bf3318d-6339-4d7b-8a85-6aacd042d04c`. Full delivery evidence is in PR #90.
+The user accepted Build 57's reported video-viewer fix on 2026-09-20 and
+reported success with the guided one-iPhone encrypted backup/verify/restore
+scenario on 2026-09-24. Two-phone transfer and the extended legacy/tamper/
+failure matrix remain unverified on devices. No broader acceptance is implied.
+During that test the user found imports were available only at root, and has
+now authorized the follow-up through an installable Internal test build.
 
-The user reports the full-screen thumbnail followed by a separate player still
-feels wrong, and landscape edge swipes open the phone's Control Center.
-Build 56 is not device-accepted. The current correction embeds native AVKit
-controls directly in the selected gallery page, removes the enlarged video
-placeholder and automatic second presentation, and keeps Done visible above
-the player. A completed downward content swipe closes through the existing
-application cleanup path; top-edge and lower playback-control gestures remain
-excluded. System Control Center gestures are not overridden. Photos and
-protected storage behavior remain unchanged.
+Current candidate adds the import button inside folders and captures the
+folder and vault session before opening Photos or Files. Imported photos,
+Photos videos, and general files keep the existing verified encrypted content
+path, then assign typed references through Folder Presentation. If placement
+fails, the encrypted copy remains at root, source originals are retained, and
+the message explains recovery with Select then Move. Mixed photo/video refresh
+must load both catalogs before reconciling membership. Cancellation and stale
+vault sessions must not publish success or authorize source deletion.
 
-The existing authorization to continue through an installable Internal test
-build applies. Apple sign-in was restored and the iOS build/all-status upload lists show
-Build 56 latest with no Build 57. App and thumbnail-extension build numbers
-advance together to 57 with the matching reviewed project fingerprint.
-The unpackaged fix at `ff7091194bf0e9e20cb1b4b1807fe1e571ff5b9d` passed
-macOS build, full XCTest (including five new regression tests), and Swift
-CodeQL in run `35436665265`. Require fresh exact-head/main CI for this
-packaged candidate, signing preflight and protected upload. Record final
-delivery evidence in the PR, then await portrait/landscape device tests.
-Build 53 remains the accepted rollback; no distribution expansion is authorized.
+Apple sign-in was restored; the iOS builds and all-status uploads show 57
+latest and no 58. App and thumbnail-extension build numbers advance together
+to 58, with the matching project fingerprint. Four local checkers passed.
+Require native build/
+XCTest and security CI, exact merged-main CI, signing preflight, protected
+Internal upload and Apple availability. Record final evidence in the PR.
+
+## Delivered baseline: integrated video viewer (Build 57)
+
+PR #91 delivered Build 57 from `2acd62130ea274ee03511de7f8fc0f504f2a8e4b`.
+Head `6f1a585f21bbf5f88a1166dd37a8d1cb4ea36293` and merged main have tree
+`5008ebab0f79f8d4909fd9474c5a777ae7007d5b`. PR CI `35437729909`, main CI
+`35438671296`, signing preflight `35439760929`, and upload `35439919141`
+passed. Apple processed it and assigned KeyHollow Internal (one tester).
+Delivery UUID: `c676e1e9-214b-4816-86cd-89d1466484ec`. PR #91 contains the
+complete delivery and user-test evidence. The player is embedded in the
+gallery with persistent Done and a downward content swipe, excluding phone
+edges and playback controls. Build 53 remains the accepted rollback.
+No Family, external TestFlight, App Store expansion or N150 retirement is authorized.
 
 ## Previous checkpoint: remove the video replay screen (Build 56)
 

@@ -620,3 +620,20 @@ archives. Do not use the only copy of a real backup for tamper tests.
 ## Release gate
 
 External TestFlight distribution should not begin until all critical items above pass or have a documented accepted risk. App Store security claims require the separate independent security review described in `SECURITY_ARCHITECTURE.md`.
+
+
+## Current-folder import candidate
+
+On the Internal candidate, open a nested disposable folder and use + to Copy
+one photo and one video from Photos, then import a PDF and an image from Files.
+All four must appear in that folder, open correctly, stay out of Vault Root,
+and retain their folder after lock/unlock. Repeat a root import and a sibling
+folder import; neither may change the earlier assignments. Verify an empty
+folder shows the import button, picker cancellation adds nothing, and duplicate
+folder names under different parents receive only the selected destination.
+Use disposable Photos items for Move; source deletion must be requested only
+after verified import and successful placement. Export/verify/restore the test
+vault and confirm the new memberships survive. Background/lock during a batch
+must retain already encrypted content and prevent stale picker results from
+entering a later session. If placement fails, check the root-recovery message,
+recoverable encrypted root copies, and preserved originals.
