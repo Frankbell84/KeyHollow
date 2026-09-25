@@ -5,7 +5,61 @@ Updated: 2026-09-24
 This is the authoritative operational resume point. Historical Build 38
 evidence remains in `docs/PROJECT_CHECKPOINT.md`.
 
-## Latest checkpoint: import directly into the current folder
+## Latest checkpoint: dependency and compatibility planning
+
+The user requested a source-grounded build order after correcting an inferred
+feature list and expressing concern about architectural quality. This stage
+produces documentation only. No app code, data format, build number, signing,
+upload, merge, or TestFlight assignment changes are part of it.
+
+- [Recovered Architecture Addendum](docs/ARCHITECTURE_ADDENDUM_SOURCE.md): the
+  complete recorded text of the user's 2026-09-07 document, recovered from the
+  original N150 task. The original Word binary was not copied or reverified.
+- [Dependency and compatibility plan](docs/ROADMAP_DEPENDENCY_PLAN.md): maps
+  proposals to current owners, prerequisites, risks, compatibility requirements
+  and testable milestones. Its sequencing is an engineering recommendation,
+  distinct from the source document and user commitments.
+- Audited baseline: protected `main` at
+  `36b63e06fae92615fc5b24988ef123355f8b4bf0` (Build 58).
+- Next proposed engineering step, after plan review: decide metadata/title
+  ownership, typed identity and the portable-module/restore contract (P1).
+  The first recommended product milestone is encrypted item details with
+  current-folder search and complete backup/restore support. No implementation
+  is authorized merely by this plan.
+
+### Delivered Build 58 and scoped acceptance
+
+[PR #94](https://github.com/Frankbell84/KeyHollow/pull/94) merged feature head
+`bd38d11169505edcf3bea2ad7d1b94f999bc095d` as
+`36b63e06fae92615fc5b24988ef123355f8b4bf0`; both have tree
+`9eb4a1e01c915a5d0d2d25c2ed4ea711b49598fe`. PR CI `36083879959` and exact-main
+CI `36085374604` passed the native build, 437 unit tests, 3 UI tests and Swift
+CodeQL. Signing preflight `36087230876` and upload `36087533118` passed.
+Apple delivery UUID: `a72834d9-887b-4a82-9952-eaab735d0396`.
+
+On 2026-09-24 local time, the user reported success with direct photo/video/file
+imports into a nested folder, persistence after lock/reopen, and the guided
+one-iPhone encrypted export/verify/restore scenario including those items.
+This is user-reported scenario acceptance, not itemized device logs or the full
+failure matrix. Two-iPhone transfer remains explicitly deferred; extended
+legacy/tamper/interruption/failure device cases and broader Family feedback
+remain outstanding. Connected-transfer/sync acceptance cannot inherit this
+same-device result.
+
+For Build 58, the user explicitly requested distribution to all test groups. Apple
+showed Build 58 Testing with both existing groups, KeyHollow Internal and
+Family. This supersedes older Internal-only restrictions for this Build 58
+distribution only. It does not authorize an App Store release or distribution
+of future binaries. Build 53 remains the recorded accepted rollback; no
+downgrade over future data formats is implied. N150 and the source task remain
+preserved.
+
+The documentation commit from this planning stage will have a new source SHA;
+it does not alter the installed Build 58 binary or inherit its release evidence.
+Record planning-PR checks in that PR. Older checkpoints below are historical
+and do not supersede this current status.
+
+## Previous checkpoint: import directly into the current folder
 
 The user accepted Build 57's reported video-viewer fix on 2026-09-20 and
 reported success with the guided one-iPhone encrypted backup/verify/restore

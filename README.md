@@ -32,10 +32,17 @@ KeyHollow is a security product first. Cryptographic design, key derivation, sec
 
 ## Status
 
-Native iOS implementation is in active development. Build 53 from exact signed
-binary source `1bf0907f4713b925a777240ecb5ece61b530d5bc` is the current accepted
-`KeyHollow Internal` baseline. Physical-iPhone testing confirmed that the
-previously failing encrypted-video playback, background, return, and first
-correct-passcode unlock path now works. Build 52 remains rejected, and Build 48
-is retained as the prior accepted rollback and comparison reference. No Family,
-external TestFlight, or App Store release is authorized by this acceptance.
+Build 58 was delivered from `36b63e06fae92615fc5b24988ef123355f8b4bf0`.
+The user reported successful current-folder imports and a one-iPhone encrypted
+backup/verify/restore test. It was assigned to both existing TestFlight
+groups, KeyHollow Internal and Family, at the user's explicit request.
+[PR #94](https://github.com/Frankbell84/KeyHollow/pull/94) records the exact build,
+CI, delivery, distribution, and scoped acceptance evidence. Two-device transfer
+and the extended device failure matrix remain unverified. Build 53 remains the
+recorded accepted rollback; no App Store release is implied.
+
+See [WORK_STATUS.md](WORK_STATUS.md) for the current resume point. The
+[dependency and compatibility plan](docs/ROADMAP_DEPENDENCY_PLAN.md) maps the
+user's [Architecture Addendum](docs/ARCHITECTURE_ADDENDUM_SOURCE.md) to the
+current implementation and proposes small testable stages. It is a planning
+document, not a claim that the proposed capabilities already exist.
