@@ -9,6 +9,7 @@ public struct BackupVerificationReport: Equatable, Sendable {
     public let displayName: String
     public let archiveByteCount: UInt64
     public let sourceVaultCreatedAt: Date
+    public let archiveExportedAt: Date
     public let verifiedAt: Date
     public let catalogVersion: Int
     public let photoCount: Int
@@ -22,6 +23,7 @@ public struct BackupVerificationReport: Equatable, Sendable {
         displayName: String,
         archiveByteCount: UInt64,
         sourceVaultCreatedAt: Date,
+        archiveExportedAt: Date,
         verifiedAt: Date,
         catalogVersion: Int,
         photoCount: Int,
@@ -34,6 +36,7 @@ public struct BackupVerificationReport: Equatable, Sendable {
         self.displayName = displayName
         self.archiveByteCount = archiveByteCount
         self.sourceVaultCreatedAt = sourceVaultCreatedAt
+        self.archiveExportedAt = archiveExportedAt
         self.verifiedAt = verifiedAt
         self.catalogVersion = catalogVersion
         self.photoCount = photoCount

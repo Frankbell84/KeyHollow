@@ -219,6 +219,7 @@ public struct PortableVaultVerificationReport: Equatable, Sendable {
     public let authenticatedFolderCount: Int
     public let authenticatedFolderMembershipCount: Int
     public let sourceVaultCreatedAt: Date
+    public let archiveExportedAt: Date
     public let catalogVersion: Int
     public let legacyOversizedPhotoCount: Int
 }
@@ -345,6 +346,7 @@ public final class ValidatedPortableVaultRestore: @unchecked Sendable {
     public let archiveID: UUID
     public let sourceVaultID: UUID
     public let sourceVaultCreatedAt: Date
+    let archiveExportedAt: Date
     public let destinationVaultPayload: VaultPayload
     public let manifest: VaultPhotoManifest
     public let supplementalItemCount: Int
@@ -379,6 +381,7 @@ public final class ValidatedPortableVaultRestore: @unchecked Sendable {
         archiveID = secrets.archiveID
         sourceVaultID = secrets.sourceVaultID
         sourceVaultCreatedAt = secrets.sourceVaultCreatedAt
+        archiveExportedAt = secrets.exportedAt
         destinationVaultPayload = VaultPayload(
             vaultID: UUID(),
             vaultKey: secrets.vaultKey,
@@ -995,6 +998,7 @@ public struct EncryptedVaultTransferCoordinator {
                 authenticatedFolderCount: restore.folderCount,
                 authenticatedFolderMembershipCount: restore.folderMembershipCount,
                 sourceVaultCreatedAt: restore.sourceVaultCreatedAt,
+                archiveExportedAt: restore.archiveExportedAt,
                 catalogVersion: restore.catalog.version,
                 legacyOversizedPhotoCount: restore.legacyOversizedPhotoCount
             )

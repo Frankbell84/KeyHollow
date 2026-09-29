@@ -14,7 +14,7 @@ This phase is intentionally local and read-only.
   `KeyHollowTransferCore`.
 - Return a sanitized immutable report containing only payload-catalog and
   compatibility information, authenticated content counts, source creation
-  time, and explicit legacy-size warnings.
+  time, authenticated archive export time, and explicit legacy-size warnings.
 - Copy a user-selected archive into the existing protected, disposable
   `.khvault` ingress area before verification.
 - Cancel verification and remove protected staging when the app locks,
@@ -117,6 +117,29 @@ All repository-local architecture, release-hygiene, workflow-security, privacy,
 source/environment, build-number, script-syntax, and patch-integrity gates pass
 on Windows. Exact-source macOS/Xcode compilation and runtime tests remain
 mandatory before merge consideration.
+
+## Backup creation date
+
+The report displays **Backup created** from `PortableArchiveSecrets.exportedAt`,
+which already exists inside the authenticated version-one archive header.
+TransferCore carries only that date through its existing sanitized report;
+the application maps it into the independently compiled report add-on. No
+archive encoding, cryptography, installation path or persistent history changes.
+**Vault created** and **Verified** retain their distinct meanings. This is the
+exporting device's recorded time, not an independently certified timestamp.
+
+The legacy v1/v2 verification fixtures assert a fixed authenticated export date.
+Current v3 verification preserves it across repeated checks and file timestamp
+changes; the folder-aware v4 round trip also verifies it. Existing wrong-code,
+tamper, cancellation and checked-cleanup tests still gate report publication.
+
+Physical-device acceptance for this addition: verify an older supported backup
+and a new export, confirm Backup created is distinct from the older vault's
+creation date, copy the archive through Files and verify it again later. The
+backup date must remain the same while Verified updates. Wrong-code and
+cancellation attempts must not publish a completed report. Keep original
+archives and vaults intact. Native CI and this device check remain required;
+the source change alone does not claim acceptance.
 
 ## Future boundary
 
