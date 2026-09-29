@@ -11,8 +11,14 @@ OWNERS = {
     "VaultGeneralFileThumbnailPipelineHooks": "Photos/VaultGeneralFileThumbnailPipeline.swift",
     "VaultGeneralFileThumbnailPipeline": "Photos/VaultGeneralFileThumbnailPipeline.swift",
     "VaultMediaImagePage": "Photos/VaultMediaImagePage.swift",
+    "VaultGalleryHeaderControls": "Photos/VaultGalleryHeaderControls.swift",
+    "VaultGallerySearchControls": "Photos/VaultGallerySearchControls.swift",
+    "VaultGallerySelectionControls": "Photos/VaultGallerySelectionControls.swift",
 }
 IMPORTS = {
+    "Photos/VaultGalleryHeaderControls.swift": {"SwiftUI"},
+    "Photos/VaultGallerySearchControls.swift": {"SwiftUI", "KeyHollowCatalogSearchAddOn"},
+    "Photos/VaultGallerySelectionControls.swift": {"SwiftUI", "KeyHollowGalleryUI"},
     "Photos/VaultGalleryLocationSnapshot.swift": {
         "Foundation", "KeyHollowCatalogSearchAddOn", "KeyHollowFolderPresentationAddOn",
         "KeyHollowGalleryUI", "KeyHollowGeneralFileSupportAddOn",
@@ -91,7 +97,101 @@ def gallery_ownership_violations(root, executable, imports):
     if not ownership_violations(relocated, executable, imports):
         violations.append("gallery ownership self-test: moved owner accepted")
     violations.extend(location_probe_violations(sources, executable))
+    violations.extend(controls_probe_violations(sources, executable))
     return violations
+
+
+HEADER_ROUTES = {
+    "cancelSelection": "leaveSelectionMode()",
+    "toggleSelectAll": "toggleSelectAll(visibleItemIDs)",
+    "lock": "lockVaultAndFinishCleanup()",
+    "back": "leaveSelectionMode() activeFolderID = locationSnapshot.activeFolder?.parentID",
+    "beginSelection": "isSelecting = true",
+    "importContent": (
+        "guard let vaultID = session.activeVaultID else { return } "
+        "importDestination = VaultImportDestination(vaultID: vaultID, "
+        "securityEpoch: session.securityEpoch, folderID: activeFolderID) "
+        "showingImportOptions = true"
+    ),
+    "newFolder": "requestNewFolder()",
+    "newVault": "showingNewVault = true",
+    "importVault": "showingEncryptedImport = true",
+    "exportVault": "showingEncryptedExport = true",
+    "verifyBackup": "showingBackupVerification = true",
+    "vaultFiles": "showingVaultFiles = true",
+    "securitySettings": "showingSecuritySettings = true",
+}
+SELECTION_ROUTES = {
+    "savePhotos": "saveSelectedPhotos()",
+    "exportFiles": "exportSelectedGeneralFiles()",
+    "move": "requestSelectionMove()",
+    "delete": "showingDeleteSelectionConfirmation = true",
+}
+CONTROL_INPUTS = (
+    "allVisibleSelected: selection.containsAll(visibleItemIDs)",
+    "selectionUnavailable: visibleItemIDs.isEmpty || isWorking",
+    "importUnavailable: isWorking || !contentStoresLoaded || presentationStore == nil",
+    "isAtRoot: activeFolderID == nil",
+    "transferMode: selection.transferMode",
+    "isSelectionEmpty: selection.isEmpty",
+    "hasMoveDestination: locationSnapshot.hasSelectionMoveDestination",
+    "searchText: $searchText",
+    "catalogSortOrder: $catalogSortOrder",
+    "isQueryEmpty: locationSnapshot.activeCatalogSearchQuery.isEmpty",
+)
+CONTROL_PRESENTATION = {
+    "Header": (".disabled(selectionUnavailable)", ".disabled(importUnavailable)",
+               ".disabled(isWorking)", '.accessibilityIdentifier("vault-verify-backup")'),
+    "Search": ('TextField("Search this location", text: $searchText)',
+               'Picker("Sort", selection: $catalogSortOrder)',
+               '.accessibilityLabel("Sort vault items")'),
+    "Selection": ('Label("Export Files", systemImage: "square.and.arrow.up")',
+                  ".disabled(isSelectionEmpty || isWorking)",
+                  ".disabled(isSelectionEmpty || !hasMoveDestination || isWorking)"),
+}
+
+
+def control_routes_violations(control, composition, routes):
+    compact = lambda text: re.sub(r"\s+", "", text)
+    errors = []
+    if set(re.findall(r"perform\(\.(\w+)\)", compact(control))) != set(routes):
+        errors.append("gallery control intent inventory changed")
+    for action, operation in routes.items():
+        if compact(f"case .{action}: {operation}") not in compact(composition):
+            errors.append(f"gallery control lost composition-owned action {action}")
+    return errors
+
+
+def controls_probe_violations(sources, executable):
+    errors = []
+    composition = executable(sources.get("Photos/VaultGalleryView.swift", ""))
+    compact = lambda text: re.sub(r"\s+", "", text)
+    for value in CONTROL_INPUTS:
+        if compact(value) not in compact(composition):
+            errors.append(f"gallery control input changed: {value}")
+    for name, requirements in CONTROL_PRESENTATION.items():
+        source = sources.get(f"Photos/VaultGallery{name}Controls.swift", "")
+        code = executable(source)
+        if re.search(r"\b(?:Task|async|VaultPhotoRecord|VaultGeneralFileRecord)\b|@(State\w*|Environment\w*|ObservedObject)", code):
+            errors.append(f"gallery {name} controls gained data/task/state authority")
+        for requirement in requirements:
+            if requirement not in source:
+                errors.append(f"gallery {name} controls lost presentation: {requirement}")
+        routes = {"Header": HEADER_ROUTES, "Selection": SELECTION_ROUTES}.get(name)
+        if routes is None:
+            continue
+        errors.extend(control_routes_violations(code, composition, routes))
+        # Mutate the actual production wiring; comments/strings cannot satisfy
+        # action routing because both inputs use the executable Swift scanner.
+        for action, operation in routes.items():
+            fragment = compact(f"case .{action}: {operation}")
+            mutated = compact(composition).replace(fragment, "", 1)
+            if not control_routes_violations(code, mutated, routes):
+                errors.append(f"control self-test accepted missing route {action}")
+        mutated = re.sub(r"perform\(\.(\w+)\)", "perform(.unknown)", compact(code), count=1)
+        if not control_routes_violations(mutated, composition, routes):
+            errors.append(f"control self-test accepted unknown {name} intent")
+    return errors
 
 
 LOCATION_FIELDS = {

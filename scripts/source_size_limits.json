@@ -18,7 +18,7 @@
       "reason": "Existing first-party source at the 2026-09-29 gallery checkpoint; frozen cleanup debt, not a reusable exemption. Reduce this ceiling after extraction."
     },
     "KeyHollow/Photos/VaultGalleryView.swift": {
-      "maximum": 2546,
+      "maximum": 2378,
       "reason": "Existing first-party source at the 2026-09-29 gallery checkpoint; frozen cleanup debt, not a reusable exemption. Reduce this ceiling after extraction."
     },
     "KeyHollow/Photos/VaultPhotoStore.swift": {
@@ -114,7 +114,7 @@
       "reason": "Existing first-party source at the 2026-09-29 gallery checkpoint; frozen cleanup debt, not a reusable exemption. Reduce this ceiling after extraction."
     },
     "scripts/check_architecture_boundaries.py": {
-      "maximum": 5761,
+      "maximum": 5760,
       "reason": "Existing first-party source at the 2026-09-29 gallery checkpoint; frozen cleanup debt, not a reusable exemption. Reduce this ceiling after extraction."
     },
     "scripts/check_workflow_security.py": {

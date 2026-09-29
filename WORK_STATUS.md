@@ -5,7 +5,28 @@ Updated: 2026-09-29
 This is the authoritative operational resume point. Historical Build 38
 evidence remains in `docs/PROJECT_CHECKPOINT.md`.
 
-## Latest checkpoint: gallery current-location extraction
+## Latest checkpoint: gallery presentation controls
+
+Branch `codex/gallery-presentation-controls` extracts the header/menu,
+search/sort controls and bulk-action bar into three small app-owned views.
+The gallery falls from 2,546 to 2,378 lines. Controls receive presentation values
+and send typed actions to the unchanged composition handlers; they acquire no
+protected capabilities or task ownership. All four local checkers pass, with
+source comparisons and action-routing mutation probes. Native validation of
+this third checkpoint remains pending. Full gallery decomposition is not done.
+
+PR #101 merged with explicit owner approval as
+`d75a5f0037c11639d00957b8e235b428a969fcad`, with the same source tree as its tested
+head. PR #102 at `e507513668bbc03b63a2068ade232a3cf8d639ac` passed native build,
+458 unit tests and 3 launch tests in `36582963782`; its final Swift CodeQL scan
+is still pending and it remains unmerged. This third branch preserves that
+checkpoint as its base. No new app build number, signing/upload or distribution
+change is included. Build 59 remains the accepted device baseline.
+
+Gallery modularity stays ahead of feature work. See
+[gallery refactor and growth controls](docs/GALLERY_REFACTOR.md).
+
+## Previous checkpoint: gallery current-location extraction
 
 Branch `codex/gallery-location-snapshot` continues the modular split with a
 read-only `VaultGalleryLocationSnapshot`. The gallery falls from 2,728 to 2,546
