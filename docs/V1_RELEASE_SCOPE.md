@@ -49,16 +49,28 @@ Each row is a separate reviewable stage, not one combined feature PR.
    with the existing protected-main-first release policy (documentation only).
 2. Close the backup-date gap using the existing authenticated field. Test
    legacy/current archives and distinguish vault, backup and verification dates.
-3. Complete tags and bounded filtering. Apply the foundation contract's real
+3. Before further gallery features, review a behavior-preserving gallery split.
+   `VaultGalleryView.swift` is 3,270 lines at the audited source and combines
+   catalog snapshots, thumbnail work, screen composition, import, folder/bulk
+   operations and media lifecycle. Start with cohesive existing responsibilities
+   such as catalog snapshots and thumbnail preparation; then extract only the
+   coordinators needed by the next feature. Keep state ownership explicit,
+   reuse the existing image/video/Rename coordinators, and do not turn private
+   implementation into a broad mutable API merely to move it between files.
+   Each extraction is its own review with unchanged behavior. Move any
+   file-specific architecture assertions and adversarial checker probes with
+   their responsibility; never drop them to make the split pass. This is a
+   response to the user's maintainability question, not a completed refactor.
+4. Complete tags and bounded filtering. Apply the foundation contract's real
    metadata owner and portable-data requirements with this first consumer;
    do not build an unused generic framework. Confirm the filter behavior in
    the stage design before implementation.
-4. Complete range selection and long-operation controls against the settled
+5. Complete range selection and long-operation controls against the settled
    visible catalog. Reuse session task ownership and existing storage commits.
-5. Complete the large-video design and implementation as separately reviewable
+6. Complete the large-video design and implementation as separately reviewable
    sub-stages. Preserve historical readers and data, establish measured memory
    and disk bounds, and cover backup/restore before claiming completion.
-6. Finish the guided transfer experience using the final data behavior. Complete
+7. Finish the guided transfer experience using the final data behavior. Complete
    real two-phone validation when hardware is available, then close the full
    release regression and failure matrix for the final candidate.
 
