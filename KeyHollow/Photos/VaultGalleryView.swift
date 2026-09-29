@@ -60,8 +60,7 @@ struct VaultGalleryView: View {
     @State private var folderManifest = VaultFolderPresentationManifest.empty
     @State private var activeFolderID: UUID?
     @State private var contentStoresLoaded = false
-    @State private var thumbnails: [UUID: UIImage] = [:]
-    @State private var generalFileThumbnails: [UUID: UIImage] = [:]
+    @State private var thumbnailCache = VaultGalleryThumbnailCache()
     @State private var mediaNavigationQueue: VaultMediaNavigationQueue?
     @State private var mediaNavigationSources: [VaultMediaNavigationID: VaultGalleryContentItem] = [:]
     @State private var mediaNavigationGeneration: UInt64 = 0
@@ -113,14 +112,6 @@ struct VaultGalleryView: View {
     @State private var thumbnailImageProcessor = VaultSecureImageProcessor()
     @State private var previewImageProcessor = VaultSecureImageProcessor()
     @State private var generalFileThumbnailPipeline = VaultGeneralFileThumbnailPipeline()
-
-    // This matches the previous worst-case decoded-cache envelope (48 photo +
-    // 48 Files-origin entries), but applies it as one source-neutral budget.
-    private let maximumCachedThumbnails = 96
-    @State private var thumbnailRetention =
-        VaultGalleryThumbnailRetentionPolicy<VaultGallerySelection.Item>(
-            maximumCount: 96
-        )
 
     var body: some View {
         galleryLifecycleView
@@ -370,11 +361,7 @@ struct VaultGalleryView: View {
             showingFolderEditor = false
             searchText = ""
             contentStoresLoaded = false
-            thumbnails = [:]
-            generalFileThumbnails = [:]
-            thumbnailRetention = VaultGalleryThumbnailRetentionPolicy(
-                maximumCount: maximumCachedThumbnails
-            )
+            thumbnailCache.removeAll()
             leaveSelectionMode()
             await session.performSensitiveTask { capability in
                 guard session.activeVaultID == capability.vaultID else { return }
@@ -760,10 +747,10 @@ struct VaultGalleryView: View {
                 await loadThumbnailIfNeeded(for: item)
             }
             .onAppear {
-                markThumbnailVisible(item.id)
+                thumbnailCache.markVisible(item.id)
             }
             .onDisappear {
-                markThumbnailHidden(item.id)
+                thumbnailCache.markHidden(item.id)
             }
         }
     }
@@ -874,12 +861,7 @@ struct VaultGalleryView: View {
     }
 
     private func thumbnail(for item: VaultGalleryContentItem) -> UIImage? {
-        switch item {
-        case .photo(let record):
-            thumbnails[record.id]
-        case .generalFile(let record):
-            generalFileThumbnails[record.id]
-        }
+        thumbnailCache[item.id]
     }
 
     @MainActor
@@ -968,7 +950,7 @@ struct VaultGalleryView: View {
             guard session.hasActiveAccess else { return }
             generalFileRecords = loadedRecords
             let validIDs = Set(generalFileRecords.map(\.id))
-            generalFileThumbnails = generalFileThumbnails.filter { validIDs.contains($0.key) }
+            thumbnailCache.retainGeneralFiles(withIDs: validIDs)
             retainKnownThumbnailIDs()
             reconcileSelection()
             if isSelecting && visibleSelectableItems.isEmpty {
@@ -1310,7 +1292,7 @@ struct VaultGalleryView: View {
 
         records = manifest.photos
         let validIDs = Set(manifest.photos.map(\.id))
-        thumbnails = thumbnails.filter { validIDs.contains($0.key) }
+        thumbnailCache.retainPhotos(withIDs: validIDs)
         retainKnownThumbnailIDs()
         reconcileSelection()
 
@@ -1492,7 +1474,7 @@ struct VaultGalleryView: View {
 
     @MainActor
     private func loadThumbnailIfNeeded(_ record: VaultPhotoRecord) async {
-        guard thumbnails[record.id] == nil,
+        guard thumbnailCache[.photo(record.id)] == nil,
               let store,
               let activeVaultID = session.activeVaultID,
               session.hasActiveAccess else { return }
@@ -1504,7 +1486,7 @@ struct VaultGalleryView: View {
                   !Task.isCancelled,
                   session.activeVaultID == activeVaultID else { return }
 
-            cacheThumbnail(rendered.image, for: .photo(record.id))
+            thumbnailCache.insert(rendered.image, for: .photo(record.id))
         }
     }
 
@@ -1526,7 +1508,7 @@ struct VaultGalleryView: View {
                 originalByteCount: record.originalByteCount
             )
         )
-        guard generalFileThumbnails[record.id] == nil,
+        guard thumbnailCache[.generalFile(record.id)] == nil,
               let generalFileStore,
               let presentationStore,
               let activeVaultID = session.activeVaultID,
@@ -1545,7 +1527,7 @@ struct VaultGalleryView: View {
                 )
                 guard !Task.isCancelled,
                       session.activeVaultID == activeVaultID else { return }
-                cacheThumbnail(renderedImage.image, for: .generalFile(record.id))
+                thumbnailCache.insert(renderedImage.image, for: .generalFile(record.id))
             } catch is CancellationError {
                 return
             } catch {
@@ -1555,53 +1537,10 @@ struct VaultGalleryView: View {
         }
     }
 
-    @MainActor
-    private func cacheThumbnail(
-        _ image: UIImage,
-        for id: VaultGallerySelection.Item
-    ) {
-        switch id {
-        case .photo(let rawID):
-            thumbnails[rawID] = image
-        case .generalFile(let rawID):
-            generalFileThumbnails[rawID] = image
-        }
-        thumbnailRetention.recordAccess(id)
-        trimThumbnailCache()
-    }
-
-    private func markThumbnailVisible(_ id: VaultGallerySelection.Item) {
-        thumbnailRetention.markVisible(id)
-        if cachedThumbnailIDs.contains(id) {
-            thumbnailRetention.recordAccess(id)
-        }
-    }
-
-    private func markThumbnailHidden(_ id: VaultGallerySelection.Item) {
-        thumbnailRetention.markHidden(id)
-        trimThumbnailCache()
-    }
-
-    private var cachedThumbnailIDs: Set<VaultGallerySelection.Item> {
-        Set(thumbnails.keys.map(VaultGallerySelection.Item.photo))
-            .union(generalFileThumbnails.keys.map(VaultGallerySelection.Item.generalFile))
-    }
-
-    private func trimThumbnailCache() {
-        for id in thumbnailRetention.evictionCandidates(cachedKeys: cachedThumbnailIDs) {
-            switch id {
-            case .photo(let rawID):
-                thumbnails.removeValue(forKey: rawID)
-            case .generalFile(let rawID):
-                generalFileThumbnails.removeValue(forKey: rawID)
-            }
-        }
-    }
-
     private func retainKnownThumbnailIDs() {
         let known = Set(records.map { VaultGallerySelection.Item.photo($0.id) })
             .union(generalFileRecords.map { VaultGallerySelection.Item.generalFile($0.id) })
-        thumbnailRetention.retainOnly(known)
+        thumbnailCache.retainKnownItems(known)
     }
 
     private func importResultMessage(action: String, importedCount: Int, failedCount: Int) -> String {
@@ -1896,7 +1835,7 @@ struct VaultGalleryView: View {
             do {
                 try await generalFileStore.delete([record])
                 generalFileRecords = try await generalFileStore.loadManifest().files
-                generalFileThumbnails.removeValue(forKey: record.id)
+                thumbnailCache.remove(.generalFile(record.id))
                 await reconcilePresentationStore()
             } catch is CancellationError {
                 return
@@ -2042,7 +1981,7 @@ struct VaultGalleryView: View {
                         }
                         try await generalFileStore.delete([record])
                         generalFileRecords = try await generalFileStore.loadManifest().files
-                        generalFileThumbnails.removeValue(forKey: record.id)
+                        thumbnailCache.remove(.generalFile(record.id))
                         await reconcilePresentationStore()
                     }
                     didDelete = true
