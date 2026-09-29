@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import re
+import runpy
 import sys
 from collections.abc import Callable
 from pathlib import Path
@@ -24,6 +25,7 @@ PRESENTATION_FILES = {
     "KeyHollow/App/KeyHollowApp.swift",
     "KeyHollow/Photos/SecurePhotoPicker.swift",
     "KeyHollow/Photos/VaultGalleryView.swift",
+    "KeyHollow/Photos/VaultMediaImagePage.swift",
 }
 PRESENTATION_PREFIXES = (
     "KeyHollow/UI/",
@@ -1280,6 +1282,8 @@ def target_body(project: str, target: str) -> str | None:
 
 def main() -> int:
     violations = checker_probe_violations()
+    if runpy.run_path(str(ROOT / "scripts/check_source_size.py"))["main"]():
+        violations.append("repository source-size limits failed")
     swift_files = sorted(SOURCE_ROOT.rglob("*.swift"))
 
     project = PROJECT_FILE.read_text(encoding="utf-8")
@@ -3937,6 +3941,15 @@ def main() -> int:
         for detail in gallery_video_revocation_boundary_violations(gallery_source)
     )
     gallery_executable = swift_executable_text(gallery_source)
+    gallery_catalog_source = (SOURCE_ROOT / "Photos/VaultGalleryContentSnapshot.swift").read_text(encoding="utf-8")
+    gallery_catalog_executable = swift_executable_text(gallery_catalog_source)
+    gallery_thumbnail_source = (SOURCE_ROOT / "Photos/VaultGeneralFileThumbnailPipeline.swift").read_text(encoding="utf-8")
+    gallery_image_source = (SOURCE_ROOT / "Photos/VaultMediaImagePage.swift").read_text(encoding="utf-8")
+    gallery_image_executable = swift_executable_text(gallery_image_source)
+    gallery_checks = runpy.run_path(str(ROOT / "scripts/gallery_boundaries.py"))
+    violations.extend(gallery_checks["gallery_ownership_violations"](
+        SOURCE_ROOT, swift_executable_text, imports
+    ))
     image_preview_coordinator_file = (
         SOURCE_ROOT / "Photos" / "VaultImagePreviewCoordinator.swift"
     )
@@ -4624,7 +4637,6 @@ def main() -> int:
         "VaultGalleryGridView(",
         "VaultGalleryItemTileView(",
         "VaultMediaNavigationPager(",
-        "case .imagePreview:",
         "case .fileManagement:",
         "generalFileStore.loadFile(record)",
         "generalFileStore.prepareExport(files)",
@@ -4642,26 +4654,21 @@ def main() -> int:
         "@State private var searchText = \"\"",
         "@State private var catalogSortOrder: VaultCatalogSortOrder = .vaultOrder",
         "VaultCatalogSearchQuery(searchText)",
-        "sortOrder.orderedOffsets(",
         "sortOrder: catalogSortOrder",
         'Picker("Sort", selection: $catalogSortOrder)',
         '.accessibilityLabel("Sort vault items")',
         "makeVisibleGallerySnapshot().filtering(with: activeCatalogSearchQuery)",
-        "query.matches($0.presentationItem.title)",
         "visibleGalleryFolders.filter { query.matches($0.name) }",
         "selection.reconcile(validItems: filteredVisibleGallerySnapshot.selectableItems)",
         "searchText = \"\"",
         'TextField("Search this location", text: $searchText)',
         'return "No Results"',
         "priority: .utility",
-        "actor VaultGeneralFileThumbnailPipeline",
-        "private var waiters: [PermitWaiter]",
         "@State private var thumbnailImageProcessor = VaultSecureImageProcessor()",
         "@State private var previewImageProcessor = VaultSecureImageProcessor()",
         "@State private var generalFileThumbnailPipeline = VaultGeneralFileThumbnailPipeline()",
         "@StateObject private var imagePreview = VaultImagePreviewCoordinator()",
         "let renderedImage = try await generalFileThumbnailPipeline.image(",
-        "cacheMissImageProcessor.prepareThumbnail(",
         "try await imagePreview.prepare(",
         "retiringTask?.cancel()",
         "await imagePreview.dismissAndWait()",
@@ -4673,6 +4680,20 @@ def main() -> int:
                 f"composition is missing {required!r}"
             )
 
+    for owner, source, requirements in (
+        ("VaultGalleryContentSnapshot.swift", gallery_catalog_source, (
+            "sortOrder.orderedOffsets(", "query.matches($0.presentationItem.title)",
+            "case .imagePreview:", "case .videoPlayback:",
+        )),
+        ("VaultGeneralFileThumbnailPipeline.swift", gallery_thumbnail_source, (
+            "actor VaultGeneralFileThumbnailPipeline", "private var waiters: [PermitWaiter]",
+            "cacheMissImageProcessor.prepareThumbnail(",
+        )),
+    ):
+        for required in requirements:
+            if required not in source:
+                violations.append(f"{owner}: extracted responsibility is missing {required!r}")
+
     for required in (
         "VaultMediaNavigationID(source: .photo, rawValue: record.id)",
         "VaultMediaNavigationID(source: .generalFile, rawValue: record.id)",
@@ -4681,6 +4702,11 @@ def main() -> int:
         "uniqueKeysWithValues: orderedSources.compactMap { source in",
         "try VaultMediaNavigationQueue(",
         "items: mediaNavigationItems",
+    ):
+        if required not in gallery_catalog_executable:
+            violations.append(f"VaultGalleryContentSnapshot.swift: media routing is missing {required!r}")
+
+    for required in (
         "@State private var mediaNavigationQueue: VaultMediaNavigationQueue?",
         "@State private var mediaNavigationSources: [VaultMediaNavigationID: VaultGalleryContentItem] = [:]",
         "@State private var mediaNavigationGeneration: UInt64 = 0",
@@ -4696,7 +4722,6 @@ def main() -> int:
         ".interactiveDismissDisabled()",
         "onSelectionChange: selectMediaNavigationItem",
         "mediaNavigationActiveContent(item)",
-        "VaultSecureZoomableImageSurface(",
         "imagePreview.imageWillAttach(item.id)",
         "imagePreview.imageDidRelease(item.id)",
     ):
@@ -4790,10 +4815,10 @@ def main() -> int:
         and media_active_content_body.count("VaultMediaImagePage(") == 1
         and "Image(uiImage:" not in media_active_content_body
         and "VaultSecureImagePreviewView(" not in media_active_content_body
-        and gallery_executable.count("VaultSecureZoomableImageSurface(") == 1
+        and gallery_image_executable.count("VaultSecureZoomableImageSurface(") == 1
         and "@ObservedObject var coordinator: VaultImagePreviewCoordinator"
-        in gallery_executable
-        and "try await Task.sleep(for: .milliseconds(250))" in gallery_executable
+        in gallery_image_executable
+        and "try await Task.sleep(for: .milliseconds(250))" in gallery_image_executable
     ):
         violations.append(
             "KeyHollow/Photos/VaultGalleryView.swift: unified images must use "
@@ -5127,127 +5152,17 @@ def main() -> int:
             "selection, and closing presentation state"
         )
 
-    pipeline_start = gallery_source.find(
-        "actor VaultGeneralFileThumbnailPipeline {"
-    )
-    pipeline_end = gallery_source.find(
-        "/// Application composition coordinator", pipeline_start
-    )
-    pipeline_source = gallery_source[pipeline_start:pipeline_end]
-    load_or_generate_start = pipeline_source.find(
-        "func loadOrGenerate<Value: Sendable>("
-    )
-    generate_thumbnail_start = pipeline_source.find(
-        "private func generateThumbnail("
-    )
-    load_or_generate_source = pipeline_source[
-        load_or_generate_start:generate_thumbnail_start
-    ]
-    image_entry_source = pipeline_source[:load_or_generate_start]
-    generate_thumbnail_source = pipeline_source[generate_thumbnail_start:]
-    cache_check = "if let cachedValue = try await loadCached()"
-    cache_checks = [
-        match.start()
-        for match in re.finditer(re.escape(cache_check), load_or_generate_source)
-    ]
-    permit_position = load_or_generate_source.find(
-        "guard await acquire() else { throw CancellationError() }"
-    )
-    generation_position = load_or_generate_source.find(
-        "return try await generate()"
-    )
-    original_load_position = generate_thumbnail_source.find(
-        "generalFileStore.loadFile(record)"
-    )
-    miss_prepare_position = generate_thumbnail_source.find(
-        "cacheMissImageProcessor.prepareThumbnail("
-    )
-    for required in (
-        "private let cachedThumbnailDecoder = VaultSecureImageProcessor()",
-        "private let cacheMissImageProcessor = VaultSecureImageProcessor()",
-        "cachedThumbnailDecoder.decodeThumbnail(",
-        "catch let cancellation as CancellationError",
-        "CheckedContinuation<Bool, Never>",
-        "withTaskCancellationHandler",
-        "cancelWaiter(id: waiterID)",
-        "continuation.resume(returning: false)",
-        "defer { release() }",
-    ):
-        if required not in pipeline_source:
-            violations.append(
-                "KeyHollow/Photos/VaultGalleryView.swift: general-file "
-                f"thumbnail cache/miss isolation is missing {required!r}"
-            )
-    if not (
-        load_or_generate_start >= 0
-        and generate_thumbnail_start > load_or_generate_start
-        and len(cache_checks) == 2
-        and cache_checks[0] < permit_position < cache_checks[1]
-        and cache_checks[1] < generation_position
-        and original_load_position < miss_prepare_position
-        and "return try await loadOrGenerate(" in image_entry_source
-        and "try await generateThumbnail(" in image_entry_source
-        and pipeline_source.count("generateThumbnail(") == 2
-    ):
-        violations.append(
-            "KeyHollow/Photos/VaultGalleryView.swift: encrypted thumbnail "
-            "cache hits must bypass the full-payload permit, queued misses "
-            "must recheck the cache, and original preparation must remain "
-            "inside the bounded miss lane"
-        )
+    violations.extend(gallery_checks["thumbnail_pipeline_violations"](
+        swift_executable_text(gallery_thumbnail_source), match_position
+    ))
+    violations.extend(gallery_checks["thumbnail_probe_violations"](
+        swift_executable_text(gallery_thumbnail_source), match_position
+    ))
 
-    if video_thumbnail_integration_active:
-        for required in (
-            "import KeyHollowEncryptedVideoAddOn",
-            "VaultEncryptedVideoPolicy.kind(",
-            "VaultEncryptedVideoThumbnailRenderer.render(",
-        ):
-            if required not in gallery_source:
-                violations.append(
-                    "KeyHollow/Photos/VaultGalleryView.swift: encrypted-video "
-                    f"thumbnail integration is incomplete; missing {required!r}"
-                )
-
-        video_prepare_position = match_position(
-            r"generalFileStore\.prepareExport\s*\(\s*\[\s*record\s*\]\s*\)",
-            generate_thumbnail_source,
-        )
-        video_render_position = match_position(
-            r"VaultEncryptedVideoThumbnailRenderer\.render\s*\(",
-            generate_thumbnail_source,
-        )
-        video_cleanup_position = match_position(
-            r"await\s+[A-Za-z_][A-Za-z0-9_\.]*discardExport\s*\(",
-            generate_thumbnail_source,
-            video_render_position,
-        )
-        video_store_position = match_position(
-            r"presentationStore\.storeThumbnail\s*\(",
-            generate_thumbnail_source,
-            video_render_position,
-        )
-        if not (
-            permit_position >= 0
-            and video_prepare_position < video_render_position
-            and video_render_position < video_cleanup_position < video_store_position
-        ):
-            violations.append(
-                "KeyHollow/Photos/VaultGalleryView.swift: video cold-thumbnail "
-                "misses must prepare, render, clean up plaintext, and persist "
-                "inside the existing VaultGeneralFileThumbnailPipeline permit"
-            )
-
-        for parallel_lane in (
-            "videoThumbnails.render(",
-            "videoThumbnailPipeline",
-            "acquireVideoPermit",
-            "videoThumbnailWaiters",
-        ):
-            if parallel_lane in gallery_source:
-                violations.append(
-                    "KeyHollow/Photos/VaultGalleryView.swift: video thumbnails "
-                    f"introduced a parallel full-payload lane ({parallel_lane})"
-                )
+    for parallel_lane in ("videoThumbnails.render(", "videoThumbnailPipeline",
+                          "acquireVideoPermit", "videoThumbnailWaiters"):
+        if parallel_lane in gallery_executable:
+            violations.append(f"VaultGalleryView.swift: parallel thumbnail lane returned ({parallel_lane})")
 
     video_playback_coordinator_file = (
         SOURCE_ROOT / "Photos" / "VaultVideoPlaybackCoordinator.swift"
@@ -5464,10 +5379,6 @@ def main() -> int:
                 "encrypted-video module import",
             ),
             (
-                r"case\s+\.videoPlayback\s*:",
-                "video playback route",
-            ),
-            (
                 r"VaultVideoPlaybackCoordinator\s*\(\s*\)",
                 "app-owned playback coordinator",
             ),
@@ -5525,13 +5436,13 @@ def main() -> int:
 
         open_route_start = match_position(
             r"\bvar\s+openRoute\s*:\s*VaultGalleryOpenRoute\b",
-            gallery_executable,
+            gallery_catalog_executable,
         )
-        open_route_end = gallery_executable.find(
+        open_route_end = gallery_catalog_executable.find(
             "private static func",
             open_route_start,
         )
-        open_route_source = gallery_executable[
+        open_route_source = gallery_catalog_executable[
             open_route_start:open_route_end
             if open_route_start >= 0 and open_route_end > open_route_start
             else open_route_start

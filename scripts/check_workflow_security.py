@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import re
+import runpy
 import sys
 from pathlib import Path
 
@@ -200,7 +201,19 @@ PRIVILEGED_SOURCE_SHA256 = {
         "9ff597ee8db1228de2e91df3863a34e83c73305b2f00fe08faf5a931929cdee3"
     ),
     "scripts/check_architecture_boundaries.py": (
-        "ca407ecd29f85650e5b42e6fdb3ed60054bd0f4a85baab919f56337407bc10fe"
+        "4c7482141863377bfd99b82a9cae8c5637fc925f774f2bfc2af7497f779e0376"
+    ),
+    "scripts/gallery_boundaries.py": (
+        "d6bb343f2829819b21789bd37ce1516848204bfc38e3500f9f2da40d0b99f043"
+    ),
+    "scripts/check_source_size.py": (
+        "579a094746e2a49c1cda91d8edbcc10fdf83f2d2855807f4d5613f56890f036c"
+    ),
+    "scripts/source_size_limits.json": (
+        "09e8ff0ccda0a903b6874998909c2600abd0917fe9c720580822227939cd33b1"
+    ),
+    "scripts/workflow_hash_probes.py": (
+        "2277665bf83fa991badcf06f7f2ed7b8564758deb0b4eb6e7cc7ffc05d9e252c"
     ),
     "scripts/check_privacy_manifest.py": (
         "c8c255c8d6465aafd04f941daa4bee3fa0f3a9881390032666f3eb38fa0c979a"
@@ -2427,83 +2440,17 @@ def audit_repository() -> list[str]:
 
 
 def self_test() -> int:
-    privileged_fixture = b"#!/usr/bin/env python3\nprint('reviewed')\n"
-    privileged_expected = {
-        "scripts/reviewed.py": canonical_source_sha256(privileged_fixture)
-    }
-    assert isinstance(privileged_expected["scripts/reviewed.py"], str)
-    assert audit_privileged_source_payloads(
-        {"scripts/reviewed.py": privileged_fixture}, privileged_expected
-    ) == []
-    assert audit_privileged_source_payloads(
-        {"scripts/reviewed.py": privileged_fixture + b"print('injected')\n"},
-        privileged_expected,
+    # Verify the test helper before executing any of its code. The hash
+    # implementation and expected digest remain owned by this checker.
+    probe_path = "scripts/workflow_hash_probes.py"
+    violations = audit_privileged_source_hashes()
+    if violations:
+        raise RuntimeError("\n".join(violations))
+    runpy.run_path(str(ROOT / probe_path))["check_hash_guards"](
+        canonical_source_sha256, body_sha256,
+        audit_privileged_source_payloads, audit_release_workflow_payloads,
+        PRIVILEGED_SOURCE_SHA256, RELEASE_WORKFLOW_SHA256,
     )
-    assert audit_privileged_source_payloads(
-        {"scripts/reviewed.py": None}, privileged_expected
-    )
-    assert canonical_source_sha256(privileged_fixture.replace(b"\n", b"\r\n")) == (
-        privileged_expected["scripts/reviewed.py"]
-    )
-    assert canonical_source_sha256(privileged_fixture + b"\rmutation") is None
-
-    privileged_payloads = {
-        relative_path: f"reviewed:{relative_path}\n".encode("utf-8")
-        for relative_path in PRIVILEGED_SOURCE_SHA256
-    }
-    privileged_fixture_hashes = {
-        relative_path: canonical_source_sha256(payload)
-        for relative_path, payload in privileged_payloads.items()
-    }
-    assert audit_privileged_source_payloads(
-        privileged_payloads, privileged_fixture_hashes
-    ) == []
-    for relative_path in privileged_payloads:
-        mutated_payloads = dict(privileged_payloads)
-        mutated_payloads[relative_path] += b"injected\n"
-        assert any(
-            violation.startswith(f"{relative_path}:")
-            for violation in audit_privileged_source_payloads(
-                mutated_payloads, privileged_fixture_hashes
-            )
-        )
-
-    workflow_fixture = "name: Reviewed\non: workflow_dispatch\npermissions: {}\njobs: {}\n"
-    workflow_expected = {"fixture.yml": body_sha256(workflow_fixture)}
-    assert audit_release_workflow_payloads(
-        {"fixture.yml": workflow_fixture}, workflow_expected
-    ) == []
-    for workflow_mutation in (
-        "\nexit 0",
-        "\necho ok # python3 -I scripts/check_workflow_security.py",
-        "\n- run: curl https://example.invalid",
-        "\n# comment-only semantic drift",
-    ):
-        assert audit_release_workflow_payloads(
-            {"fixture.yml": workflow_fixture + workflow_mutation},
-            workflow_expected,
-        )
-
-    workflow_payloads = {
-        workflow_name: f"name: reviewed-{workflow_name}\n"
-        for workflow_name in RELEASE_WORKFLOW_SHA256
-    }
-    workflow_fixture_hashes = {
-        workflow_name: body_sha256(payload)
-        for workflow_name, payload in workflow_payloads.items()
-    }
-    assert audit_release_workflow_payloads(
-        workflow_payloads, workflow_fixture_hashes
-    ) == []
-    for workflow_name in workflow_payloads:
-        mutated_workflows = dict(workflow_payloads)
-        mutated_workflows[workflow_name] += "steps: [{run: injected}]\n"
-        assert any(
-            violation.startswith(f"{workflow_name}:")
-            for violation in audit_release_workflow_payloads(
-                mutated_workflows, workflow_fixture_hashes
-            )
-        )
 
     assert audit_project_execution_surface("targets:\n  App:\n") == []
     for execution_key in FORBIDDEN_XCODEGEN_EXECUTION_KEYS:
