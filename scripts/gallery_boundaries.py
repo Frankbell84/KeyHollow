@@ -139,7 +139,7 @@ def thumbnail_pipeline_violations(pipeline_source, match_position):
         and len(cache_checks) == 2
         and cache_checks[0] < permit_position < cache_checks[1]
         and cache_checks[1] < generation_position
-        and original_load_position < miss_prepare_position
+        and 0 <= original_load_position < miss_prepare_position
         and "return try await loadOrGenerate(" in image_entry_source
         and "try await generateThumbnail(" in image_entry_source
         and pipeline_source.count("generateThumbnail(") == 2
@@ -182,7 +182,7 @@ def thumbnail_pipeline_violations(pipeline_source, match_position):
     )
     if not (
         permit_position >= 0
-        and video_prepare_position < video_render_position
+        and 0 <= video_prepare_position < video_render_position
         and video_render_position < video_cleanup_position < video_store_position
     ):
         violations.append(
@@ -214,6 +214,7 @@ def thumbnail_probe_violations(source, match_position):
         "guard await acquire() else { throw CancellationError() }",
         "defer { release() }",
         "cancelWaiter(id: waiterID)",
+        "generalFileStore.loadFile(record)",
         "await generalFileStore.discardExport(prepared)",
     ):
         if anchor not in source:

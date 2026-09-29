@@ -118,7 +118,7 @@
       "reason": "Existing first-party source at the 2026-09-29 gallery checkpoint; frozen cleanup debt, not a reusable exemption. Reduce this ceiling after extraction."
     },
     "scripts/check_workflow_security.py": {
-      "maximum": 3121,
+      "maximum": 3120,
       "reason": "Existing first-party source at the 2026-09-29 gallery checkpoint; frozen cleanup debt, not a reusable exemption. Reduce this ceiling after extraction."
     },
     "scripts/verify_release_environment.py": {

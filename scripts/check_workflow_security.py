@@ -204,13 +204,13 @@ PRIVILEGED_SOURCE_SHA256 = {
         "4c7482141863377bfd99b82a9cae8c5637fc925f774f2bfc2af7497f779e0376"
     ),
     "scripts/gallery_boundaries.py": (
-        "a69da4f497fbf3fa868f77b123ef174ecb940c1764aad1598fa43e94257cc0bc"
+        "d6bb343f2829819b21789bd37ce1516848204bfc38e3500f9f2da40d0b99f043"
     ),
     "scripts/check_source_size.py": (
         "579a094746e2a49c1cda91d8edbcc10fdf83f2d2855807f4d5613f56890f036c"
     ),
     "scripts/source_size_limits.json": (
-        "ca2fcfb030c7d3dfd3bdb974fd504dbfb3d87e6173933c22dec39ba9edc7088c"
+        "09e8ff0ccda0a903b6874998909c2600abd0917fe9c720580822227939cd33b1"
     ),
     "scripts/workflow_hash_probes.py": (
         "2277665bf83fa991badcf06f7f2ed7b8564758deb0b4eb6e7cc7ffc05d9e252c"
@@ -2443,10 +2443,9 @@ def self_test() -> int:
     # Verify the test helper before executing any of its code. The hash
     # implementation and expected digest remain owned by this checker.
     probe_path = "scripts/workflow_hash_probes.py"
-    payload = (ROOT / probe_path).read_bytes()
-    assert not audit_privileged_source_payloads(
-        {probe_path: payload}, {probe_path: PRIVILEGED_SOURCE_SHA256[probe_path]}
-    ), "workflow hash probe source drifted"
+    violations = audit_privileged_source_hashes()
+    if violations:
+        raise RuntimeError("\n".join(violations))
     runpy.run_path(str(ROOT / probe_path))["check_hash_guards"](
         canonical_source_sha256, body_sha256,
         audit_privileged_source_payloads, audit_release_workflow_payloads,
