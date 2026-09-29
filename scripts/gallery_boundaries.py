@@ -14,8 +14,10 @@ OWNERS = {
     "VaultGalleryHeaderControls": "Photos/VaultGalleryHeaderControls.swift",
     "VaultGallerySearchControls": "Photos/VaultGallerySearchControls.swift",
     "VaultGallerySelectionControls": "Photos/VaultGallerySelectionControls.swift",
+    "VaultGalleryThumbnailCache": "UI/VaultGalleryThumbnailCache.swift",
 }
 IMPORTS = {
+    "UI/VaultGalleryThumbnailCache.swift": {"UIKit", "KeyHollowGalleryUI"},
     "Photos/VaultGalleryHeaderControls.swift": {"SwiftUI"},
     "Photos/VaultGallerySearchControls.swift": {"SwiftUI", "KeyHollowCatalogSearchAddOn"},
     "Photos/VaultGallerySelectionControls.swift": {"SwiftUI", "KeyHollowGalleryUI"},
@@ -98,7 +100,67 @@ def gallery_ownership_violations(root, executable, imports):
         violations.append("gallery ownership self-test: moved owner accepted")
     violations.extend(location_probe_violations(sources, executable))
     violations.extend(controls_probe_violations(sources, executable))
+    violations.extend(thumbnail_cache_probe_violations(sources, executable))
     return violations
+
+
+def thumbnail_cache_probe_violations(sources, executable):
+    cache = executable(sources.get("UI/VaultGalleryThumbnailCache.swift", ""))
+    gallery = executable(sources.get("Photos/VaultGalleryView.swift", ""))
+    compact = lambda text: re.sub(r"\s+", "", text)
+    cache_requirements = (
+        "private var photos: [UUID: UIImage] = [:]",
+        "private var generalFiles: [UUID: UIImage] = [:]",
+        "private var retention: VaultGalleryThumbnailRetentionPolicy<VaultGallerySelection.Item>",
+        "init(maximumCount: Int = 96)",
+        "self = Self(maximumCount: retention.maximumCount)",
+    )
+    gallery_requirements = (
+        "@State private var thumbnailCache = VaultGalleryThumbnailCache()",
+        "thumbnailCache[item.id]",
+        "thumbnailCache.markVisible(item.id)",
+        "thumbnailCache.markHidden(item.id)",
+        "thumbnailCache.retainPhotos(withIDs: validIDs)",
+        "thumbnailCache.retainGeneralFiles(withIDs: validIDs)",
+        "thumbnailCache.retainKnownItems(known)",
+        "thumbnailCache.insert(rendered.image, for: .photo(record.id))",
+        "thumbnailCache.insert(renderedImage.image, for: .generalFile(record.id))",
+    )
+
+    def check(cache_code, gallery_code):
+        errors = []
+        for code, requirements in ((cache_code, cache_requirements),
+                                   (gallery_code, gallery_requirements)):
+            if any(compact(value) not in compact(code) for value in requirements):
+                errors.append("gallery thumbnail cache ownership/wiring changed")
+        if re.search(r"\b(?:Task|async|Data|VaultPhotoRecord|VaultGeneralFileRecord)\b|@(State|Published)", cache_code):
+            errors.append("thumbnail cache gained loading/task/record authority")
+        if re.search(r"\b(?:thumbnails|generalFileThumbnails|thumbnailRetention)\b", gallery_code):
+            errors.append("gallery regained duplicate thumbnail state")
+        reset_start = gallery_code.find(".task(id: session.activeVaultID)")
+        reset_end = gallery_code.find("await session.performSensitiveTask", reset_start)
+        if not (0 <= reset_start < reset_end and
+                "thumbnailCache.removeAll()" in gallery_code[reset_start:reset_end]):
+            errors.append("vault reset must clear images and retention before loading")
+        return errors
+
+    errors = check(cache, gallery)
+    if errors:
+        return errors
+    for value in cache_requirements:
+        if not check(compact(cache).replace(compact(value), "", 1), gallery):
+            errors.append(f"thumbnail cache self-test accepted missing {value}")
+    for value in (*gallery_requirements, "thumbnailCache.removeAll()"):
+        # Keep the lifecycle marker readable for the reset-specific assertion.
+        mutated = re.sub(re.escape(value).replace(r"\ ", r"\s+"), "", gallery, count=1)
+        if mutated == gallery or not check(cache, mutated):
+            errors.append(f"thumbnail cache self-test accepted missing {value}")
+    for addition in ("let task: Task<Void, Never>", "let record: VaultPhotoRecord"):
+        if not check(cache + "\n" + addition, gallery):
+            errors.append("thumbnail cache self-test accepted protected loading authority")
+    if not check(cache, gallery + "\nvar thumbnails: [UUID: UIImage]"):
+        errors.append("thumbnail cache self-test accepted duplicate composition state")
+    return errors
 
 
 HEADER_ROUTES = {

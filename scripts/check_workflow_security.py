@@ -204,13 +204,13 @@ PRIVILEGED_SOURCE_SHA256 = {
         "7d2dc7012805634a531888f281e8c869fcfe3753a7fe43c9b73c1abcc200ab03"
     ),
     "scripts/gallery_boundaries.py": (
-        "19d7766e4d9161ae959c2550f42464192e101014a6ec2bf8f64c62f2063ce005"
+        "d16b2c483cfee04c8da72a01cec5cdd59e4ab75a89139799b866db357f5bebc3"
     ),
     "scripts/check_source_size.py": (
         "579a094746e2a49c1cda91d8edbcc10fdf83f2d2855807f4d5613f56890f036c"
     ),
     "scripts/source_size_limits.json": (
-        "11d33f078f28882bfebe034bb9e25cff8af0d06c576111b7759446d7d2b77332"
+        "a07027c2ff63507a6659a46c840d28ada9a19e797d3b24b03475d899bd1b35d4"
     ),
     "scripts/workflow_hash_probes.py": (
         "2277665bf83fa991badcf06f7f2ed7b8564758deb0b4eb6e7cc7ffc05d9e252c"

@@ -59,8 +59,9 @@ static pass is not a substitute. Existing oversized tests do not grow.
 
 At `e507513668bbc03b63a2068ade232a3cf8d639ac`, PR #102 passed its native build,
 458 unit tests and 3 launch tests in CI `36582963782`, including all seven
-location tests. Swift CodeQL remained in progress when this checkpoint was
-prepared; PR #102 remains separate and unmerged.
+location tests. Swift CodeQL subsequently passed; PR #102 merged as
+`4613e9aced6bf6f4b855e370e3c131f7ea8d611b` with the same source tree. The exact
+merged main also passed both CI jobs in `36585812456`.
 
 ## Third extraction: gallery controls
 
@@ -86,6 +87,38 @@ selection, lifecycle, security and launch suite remains required in native CI.
 Physical verification must include header/menu actions, Back/Lock, selecting
 and deselecting, search/sort/clear, mixed selection and confirmation dialogs.
 This checkpoint does not add product behavior or establish device acceptance.
+
+At `8dbb6ce7bd038c030dc151e1c3b30b50f0f5cc11`, PR #103 passed native build,
+458 unit tests, 3 launch tests and Swift CodeQL in CI `36585530978`. It merged
+as `de249a7a06bfec318e2e9ef45ac242816afe1846`, with the same source tree.
+
+## Fourth extraction: decoded thumbnail cache
+
+Branch `codex/gallery-thumbnail-cache` begins at the third checkpoint's merge.
+`UI/VaultGalleryThumbnailCache.swift` owns the two decoded-image dictionaries
+and the existing retention policy. The app-owned value receives typed item
+identities and `UIImage` values, without records, stores, keys, sessions, loading
+closures or task authority. Its state stays private behind cache operations.
+The existing retention policy remains in `KeyHollowGalleryUI`; no compiled
+module dependency or public add-on interface changes.
+
+The gallery falls from 2,378 to 2,317 lines. It still owns protected loading,
+the decoding actors and shared thumbnail pipeline, session-barrier registration,
+cancellation checks and post-load vault checks. A vault reset clears both
+image dictionaries and retention state at the original point before loading.
+The cache preserves the 96-image shared budget, visible-tile protection and
+least-recently-used hidden eviction. Photo and file catalog pruning remain
+separate so one catalog refresh cannot remove the other's decoded images.
+
+A reverse source comparison covers every cache substitution and confirms all
+other composition code is unchanged. Ownership/import checks forbid protected
+storage, session, network, task and record authority in the cache; mutation
+probes enforce composition wiring and the reset barrier. Ten focused native
+tests cover typed UUID collisions, shared/default budgets, visible-tile pressure,
+reappearance order, independent catalog pruning, stale visibility, reset and
+image-reference release, and independent value copies. Existing retention,
+thumbnail concurrency, lifecycle and media tests remain required in CI.
+Physical acceptance still requires the gallery regression checklist below.
 
 ## Enforced prevention
 

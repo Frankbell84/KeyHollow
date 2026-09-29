@@ -5,7 +5,33 @@ Updated: 2026-09-29
 This is the authoritative operational resume point. Historical Build 38
 evidence remains in `docs/PROJECT_CHECKPOINT.md`.
 
-## Latest checkpoint: gallery presentation controls
+## Latest checkpoint: gallery thumbnail cache ownership
+
+Branch `codex/gallery-thumbnail-cache` isolates decoded image storage and
+retention in an 86-line app-owned `VaultGalleryThumbnailCache`. The gallery
+falls from 2,378 to 2,317 lines. Composition retains authenticated loading,
+actor lifetimes, cancellation checks and vault-reset timing; the cache receives
+only typed identities and decoded images. Its existing shared 96-image budget,
+visible-tile protection, per-catalog pruning and reset behavior are preserved.
+Ten focused regression tests cover the real image cache and reference release.
+All four local checkers pass, including ownership/reset mutation probes and the
+lowered source-size ceiling. Native validation of this fourth checkpoint is pending; gallery decomposition
+remains incomplete and stays ahead of feature work.
+
+PR #102 merged as `4613e9aced6bf6f4b855e370e3c131f7ea8d611b`, and PR #103 merged
+as `de249a7a06bfec318e2e9ef45ac242816afe1846`. Each merge has the same source tree
+as its tested head. PR #103 head `8dbb6ce7bd038c030dc151e1c3b30b50f0f5cc11`
+passed native build, 458 unit tests, 3 launch tests and Swift CodeQL in
+`36585530978`. The previous main at `4613e9a` also passed both jobs in
+`36585812456`. This branch starts from the PR #103 merge. The older checkpoints
+below record what was known when they were prepared; the merge/CI evidence in
+this paragraph supersedes their pending statements.
+
+No feature, build-number, signing/upload or distribution change is included.
+Build 59 remains the accepted device binary. See
+[gallery refactor and growth controls](docs/GALLERY_REFACTOR.md).
+
+## Historical checkpoint: gallery presentation controls
 
 Branch `codex/gallery-presentation-controls` extracts the header/menu,
 search/sort controls and bulk-action bar into three small app-owned views.
@@ -26,7 +52,7 @@ change is included. Build 59 remains the accepted device baseline.
 Gallery modularity stays ahead of feature work. See
 [gallery refactor and growth controls](docs/GALLERY_REFACTOR.md).
 
-## Previous checkpoint: gallery current-location extraction
+## Historical checkpoint: gallery current-location extraction
 
 Branch `codex/gallery-location-snapshot` continues the modular split with a
 read-only `VaultGalleryLocationSnapshot`. The gallery falls from 2,728 to 2,546
@@ -45,7 +71,7 @@ the accepted Build 59 source. No new TestFlight build or upload is included.
 See [gallery refactor and growth controls](docs/GALLERY_REFACTOR.md) for the
 responsibility map, checks, remaining debt and release limits.
 
-## Previous checkpoint: gallery modularity takes priority
+## Historical checkpoint: gallery modularity takes priority
 
 The user prioritized splitting the oversized gallery and preventing future
 growth before more feature work. Branch `codex/gallery-responsibility-split`
