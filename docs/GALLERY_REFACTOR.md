@@ -27,6 +27,34 @@ Follow-up extractions should address cohesive catalog/folder, import, bulk and
 media coordination responsibilities in bounded reviews before feature growth.
 Avoid simply moving the entire problem into a giant view model.
 
+## Second extraction: current-location metadata
+
+The first checkpoint at `fc2386850ff3fc2299add1449e9e49556db3e484` passed native
+build, the full regression/security suite, packaged-resource checks and Swift
+CodeQL in [CI 36558435050](https://github.com/Frankbell84/KeyHollow/actions/runs/36558435050).
+PR #101 is ready for review; its merge remains pending explicit authorization.
+
+Branch `codex/gallery-location-snapshot` extracts `VaultGalleryLocationSnapshot`
+from that tested checkpoint. This 232-line app-owned value captures photo/file
+records, folder metadata, the active location, query, sort order and the existing
+depth bound. It owns only derived folder counts, breadcrumbs, visible content,
+search/order, move-destination values and empty-state text. The composition
+creates it on demand; it does not retain a new observable state owner.
+
+The gallery falls from 2,728 to 2,546 lines. Calculation bodies are preserved;
+the existing store depth constant is supplied as a value by composition.
+Protected stores, session access, writes, imports, sensitive tasks, media
+lifetimes and lock/cancellation handling retain their previous owners.
+No compiled module dependencies or public add-on interfaces change.
+
+The moved architecture assertions now run against the location owner. Negative
+probes reject missing immutable inputs, altered query wiring, task authority
+and missing composition inputs. Seven focused native regression tests cover
+typed-ID collisions, root/parent/child isolation, direct counts, ordered media
+and selection, bounded breadcrumbs, move permissions, snapshot value isolation
+and existing empty-state behavior. These native tests require macOS CI; a local
+static pass is not a substitute. Existing oversized tests do not grow.
+
 ## Enforced prevention
 
 The existing architecture CI gate invokes `check_source_size.py` and checks

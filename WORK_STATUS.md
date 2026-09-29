@@ -5,7 +5,26 @@ Updated: 2026-09-29
 This is the authoritative operational resume point. Historical Build 38
 evidence remains in `docs/PROJECT_CHECKPOINT.md`.
 
-## Latest checkpoint: gallery modularity takes priority
+## Latest checkpoint: gallery current-location extraction
+
+Branch `codex/gallery-location-snapshot` continues the modular split with a
+read-only `VaultGalleryLocationSnapshot`. The gallery falls from 2,728 to 2,546
+lines; its calculation bodies move intact, with the existing folder-depth
+bound supplied by composition. No store/session/task authority moves into the
+new value. Seven focused regression tests cover current-location and metadata
+behavior. All four local checkers pass; native validation of this stage is
+pending. Further gallery decomposition remains ahead of feature work.
+
+The first checkpoint in PR #101, commit
+`fc2386850ff3fc2299add1449e9e49556db3e484`, passed full native CI and Swift CodeQL
+in run `36558435050`. It is ready for review, with its merge awaiting explicit
+authorization. This branch is based on that tested commit; main remains at
+the accepted Build 59 source. No new TestFlight build or upload is included.
+
+See [gallery refactor and growth controls](docs/GALLERY_REFACTOR.md) for the
+responsibility map, checks, remaining debt and release limits.
+
+## Previous checkpoint: gallery modularity takes priority
 
 The user prioritized splitting the oversized gallery and preventing future
 growth before more feature work. Branch `codex/gallery-responsibility-split`

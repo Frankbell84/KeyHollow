@@ -7,11 +7,17 @@ OWNERS = {
     "VaultGalleryContentItem": "Photos/VaultGalleryContentSnapshot.swift",
     "VaultGalleryOpenRoute": "Photos/VaultGalleryContentSnapshot.swift",
     "VaultGalleryContentSnapshot": "Photos/VaultGalleryContentSnapshot.swift",
+    "VaultGalleryLocationSnapshot": "Photos/VaultGalleryLocationSnapshot.swift",
     "VaultGeneralFileThumbnailPipelineHooks": "Photos/VaultGeneralFileThumbnailPipeline.swift",
     "VaultGeneralFileThumbnailPipeline": "Photos/VaultGeneralFileThumbnailPipeline.swift",
     "VaultMediaImagePage": "Photos/VaultMediaImagePage.swift",
 }
 IMPORTS = {
+    "Photos/VaultGalleryLocationSnapshot.swift": {
+        "Foundation", "KeyHollowCatalogSearchAddOn", "KeyHollowFolderPresentationAddOn",
+        "KeyHollowGalleryUI", "KeyHollowGeneralFileSupportAddOn",
+        "KeyHollowNestedFolderAddOn", "KeyHollowPhotoCore",
+    },
     "Photos/VaultGalleryContentSnapshot.swift": {
         "Foundation", "KeyHollowCatalogSearchAddOn", "KeyHollowEncryptedVideoAddOn",
         "KeyHollowGalleryUI", "KeyHollowGeneralFileSupportAddOn",
@@ -84,6 +90,67 @@ def gallery_ownership_violations(root, executable, imports):
     relocated["Photos/Other.swift"] = relocated.pop(image_owner)
     if not ownership_violations(relocated, executable, imports):
         violations.append("gallery ownership self-test: moved owner accepted")
+    violations.extend(location_probe_violations(sources, executable))
+    return violations
+
+
+LOCATION_FIELDS = {
+    "records": "[VaultPhotoRecord]",
+    "generalFileRecords": "[VaultGeneralFileRecord]",
+    "folderManifest": "VaultFolderPresentationManifest",
+    "activeFolderID": "UUID?",
+    "searchText": "String",
+    "catalogSortOrder": "VaultCatalogSortOrder",
+    "maximumFolderDepth": "Int",
+}
+LOCATION_EXPRESSIONS = (
+    "VaultCatalogSearchQuery(searchText)",
+    "sortOrder: catalogSortOrder",
+    "makeVisibleGallerySnapshot().filtering(with: activeCatalogSearchQuery)",
+    "visibleGalleryFolders.filter { query.matches($0.name) }",
+    "maximumDepth: maximumFolderDepth",
+)
+
+
+def location_snapshot_violations(source, composition, executable):
+    violations = []
+    code = executable(source)
+    compact = lambda text: re.sub(r"\s+", "", text)
+    for field, kind in LOCATION_FIELDS.items():
+        if compact(f"private let {field}: {kind}") not in compact(code):
+            violations.append(f"gallery location must capture immutable {field}")
+    if re.search(r"\b(?:Task|async|mutating|ObservableObject)\b|@(State|Published)", code):
+        violations.append("gallery location gained task or mutable observable authority")
+    for expression in LOCATION_EXPRESSIONS:
+        if compact(expression) not in compact(code):
+            violations.append(f"gallery location calculation changed: {expression}")
+    if 'return "No Results"' not in source:
+        violations.append("gallery location lost the existing empty-search presentation")
+    arguments = [
+        f"{field}: {field}" for field in LOCATION_FIELDS if field != "maximumFolderDepth"
+    ] + ["maximumFolderDepth: VaultFolderPresentationStore.maximumFolderDepth"]
+    construction = "VaultGalleryLocationSnapshot(" + ",".join(arguments) + ")"
+    if compact(construction) not in compact(executable(composition)):
+        violations.append("gallery location must receive current metadata and the store's depth bound")
+    return violations
+
+
+def location_probe_violations(sources, executable):
+    source = sources.get("Photos/VaultGalleryLocationSnapshot.swift", "")
+    composition = sources.get("Photos/VaultGalleryView.swift", "")
+    violations = location_snapshot_violations(source, composition, executable)
+    if violations:
+        return violations
+    for anchor in (*LOCATION_EXPRESSIONS, 'return "No Results"', "private let records"):
+        mutated = source.replace(anchor, "", 1)
+        if not location_snapshot_violations(mutated, composition, executable):
+            violations.append(f"gallery location self-test accepted removal: {anchor}")
+    if not location_snapshot_violations(source + "\nlet task: Task<Void, Never>", composition, executable):
+        violations.append("gallery location self-test accepted task ownership")
+    for anchor in ("records: records", "VaultFolderPresentationStore.maximumFolderDepth"):
+        mutated = composition.replace(anchor, "", 1)
+        if not location_snapshot_violations(source, mutated, executable):
+            violations.append(f"gallery location self-test accepted unwired input: {anchor}")
     return violations
 
 

@@ -144,7 +144,7 @@ struct VaultGalleryView: View {
     }
 
     private var galleryCoreView: some View {
-        let snapshot = filteredVisibleGallerySnapshot
+        let snapshot = locationSnapshot.filteredVisibleGallerySnapshot
 
         return VStack(spacing: 0) {
             galleryHeader(visibleItemIDs: snapshot.selectableItems)
@@ -154,7 +154,7 @@ struct VaultGalleryView: View {
                 catalogSearchBar
                 Divider()
                 if activeFolderID != nil {
-                    VaultFolderBreadcrumbView(segments: folderBreadcrumbSegments) {
+                    VaultFolderBreadcrumbView(segments: locationSnapshot.folderBreadcrumbSegments) {
                         navigateToFolder($0)
                     }
                     Divider()
@@ -164,10 +164,10 @@ struct VaultGalleryView: View {
             VaultGalleryGridView(
                 isContentLoaded: contentStoresLoaded,
                 isWorking: isWorking,
-                emptyTitle: galleryEmptyTitle,
-                emptyDescription: galleryEmptyDescription,
-                emptySystemImage: galleryEmptySystemImage,
-                folders: filteredVisibleGalleryFolders,
+                emptyTitle: locationSnapshot.galleryEmptyTitle,
+                emptyDescription: locationSnapshot.galleryEmptyDescription,
+                emptySystemImage: locationSnapshot.galleryEmptySystemImage,
+                folders: locationSnapshot.filteredVisibleGalleryFolders,
                 items: snapshot.presentations
             ) { folder in
                 VaultFolderTileView(
@@ -415,7 +415,7 @@ struct VaultGalleryView: View {
         }
         .onChange(of: searchText) { _, _ in
             guard isSelecting else { return }
-            selection.reconcile(validItems: filteredVisibleGallerySnapshot.selectableItems)
+            selection.reconcile(validItems: locationSnapshot.filteredVisibleGallerySnapshot.selectableItems)
         }
         .onDisappear {
             // A full-screen media cover temporarily removes the gallery from
@@ -652,7 +652,7 @@ struct VaultGalleryView: View {
                 } else {
                     Button {
                         leaveSelectionMode()
-                        activeFolderID = activeFolder?.parentID
+                        activeFolderID = locationSnapshot.activeFolder?.parentID
                     } label: {
                         Label("Back", systemImage: "chevron.left")
                     }
@@ -736,7 +736,7 @@ struct VaultGalleryView: View {
             }
         }
         .overlay {
-            Text(isSelecting ? "\(selection.count) Selected" : galleryTitle)
+            Text(isSelecting ? "\(selection.count) Selected" : locationSnapshot.galleryTitle)
                 .font(.headline)
                 .lineLimit(1)
                 .padding(.horizontal, 120)
@@ -757,7 +757,7 @@ struct VaultGalleryView: View {
                 .autocorrectionDisabled()
                 .accessibilityLabel("Search this vault location")
 
-            if !activeCatalogSearchQuery.isEmpty {
+            if !locationSnapshot.activeCatalogSearchQuery.isEmpty {
                 Button {
                     searchText = ""
                 } label: {
@@ -865,186 +865,19 @@ struct VaultGalleryView: View {
         } label: {
             Label("Move", systemImage: "folder")
         }
-        .disabled(selection.isEmpty || !hasSelectionMoveDestination || isWorking)
+        .disabled(selection.isEmpty || !locationSnapshot.hasSelectionMoveDestination || isWorking)
     }
 
-    private var sortedFolders: [VaultFolderRecord] {
-        let source = folderManifest.folders
-        if catalogSortOrder == .vaultOrder {
-            return source.sorted {
-                $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
-            }
-        }
-        let offsets = catalogSortOrder.orderedOffsets(
-            for: source.enumerated().map { offset, folder in
-                VaultCatalogSortDescriptor(
-                    title: folder.name,
-                    timestamp: folder.createdAt,
-                    stableOrdinal: offset
-                )
-            }
+    private var locationSnapshot: VaultGalleryLocationSnapshot {
+        VaultGalleryLocationSnapshot(
+            records: records,
+            generalFileRecords: generalFileRecords,
+            folderManifest: folderManifest,
+            activeFolderID: activeFolderID,
+            searchText: searchText,
+            catalogSortOrder: catalogSortOrder,
+            maximumFolderDepth: VaultFolderPresentationStore.maximumFolderDepth
         )
-        return offsets.map { source[$0] }
-    }
-
-    private var nestedFolderHierarchy: VaultNestedFolderHierarchy? {
-        try? VaultNestedFolderHierarchy(
-            folders: folderManifest.folders.enumerated().map { offset, folder in
-                VaultNestedFolderDescriptor(
-                    id: folder.id,
-                    parentID: folder.parentID,
-                    name: folder.name,
-                    createdAt: folder.createdAt,
-                    stableOrdinal: offset
-                )
-            },
-            maximumDepth: VaultFolderPresentationStore.maximumFolderDepth
-        )
-    }
-
-    private var visibleFolders: [VaultFolderRecord] {
-        sortedFolders.filter { $0.parentID == activeFolderID }
-    }
-
-    private var visibleGalleryFolders: [VaultGalleryFolder] {
-        let counts = directEntryCountByFolderID
-        return visibleFolders.map {
-            VaultGalleryFolder(
-                id: $0.id,
-                name: $0.name,
-                itemCount: counts[$0.id, default: 0]
-            )
-        }
-    }
-
-    private var directEntryCountByFolderID: [UUID: Int] {
-        var counts: [UUID: Int] = [:]
-        counts.reserveCapacity(folderManifest.folders.count)
-        for membership in folderManifest.memberships {
-            counts[membership.folderID, default: 0] += 1
-        }
-        for folder in folderManifest.folders {
-            if let parentID = folder.parentID {
-                counts[parentID, default: 0] += 1
-            }
-        }
-        return counts
-    }
-
-    private var activeCatalogSearchQuery: VaultCatalogSearchQuery {
-        VaultCatalogSearchQuery(searchText)
-    }
-
-    private var filteredVisibleGalleryFolders: [VaultGalleryFolder] {
-        let query = activeCatalogSearchQuery
-        guard !query.isEmpty else { return visibleGalleryFolders }
-        return visibleGalleryFolders.filter { query.matches($0.name) }
-    }
-
-    private var filteredVisibleGallerySnapshot: VaultGalleryContentSnapshot {
-        makeVisibleGallerySnapshot().filtering(with: activeCatalogSearchQuery)
-    }
-
-    private func makeVisibleGallerySnapshot() -> VaultGalleryContentSnapshot {
-        var folderIDByItem: [VaultPresentedContentReference: UUID] = [:]
-        folderIDByItem.reserveCapacity(folderManifest.memberships.count)
-        for membership in folderManifest.memberships {
-            folderIDByItem[membership.item] = membership.folderID
-        }
-
-        var items: [VaultGalleryContentItem] = []
-        items.reserveCapacity(records.count + generalFileRecords.count)
-        for record in records where folderIDByItem[
-            VaultPresentedContentReference(kind: .photo, id: record.id)
-        ] == activeFolderID {
-            items.append(.photo(record))
-        }
-        for record in generalFileRecords where folderIDByItem[
-            VaultPresentedContentReference(kind: .generalFile, id: record.id)
-        ] == activeFolderID {
-            items.append(.generalFile(record))
-        }
-
-        return VaultGalleryContentSnapshot(
-            items: items,
-            sortOrder: catalogSortOrder
-        )
-    }
-
-    private var visiblePhotoRecords: [VaultPhotoRecord] {
-        makeVisibleGallerySnapshot().orderedSources.compactMap {
-            guard case .photo(let record) = $0 else { return nil }
-            return record
-        }
-    }
-
-    private var visibleGeneralFileRecords: [VaultGeneralFileRecord] {
-        makeVisibleGallerySnapshot().orderedSources.compactMap {
-            guard case .generalFile(let record) = $0 else { return nil }
-            return record
-        }
-    }
-
-    private var activeFolder: VaultFolderRecord? {
-        guard let activeFolderID else { return nil }
-        return folderManifest.folders.first { $0.id == activeFolderID }
-    }
-
-    private var folderBreadcrumbSegments: [VaultFolderBreadcrumbSegment] {
-        var segments = [VaultFolderBreadcrumbSegment(folderID: nil, title: "Vault")]
-        guard let activeFolderID,
-              let hierarchy = nestedFolderHierarchy,
-              let path = try? hierarchy.breadcrumb(to: activeFolderID) else {
-            return segments
-        }
-        segments.append(contentsOf: path.map {
-            VaultFolderBreadcrumbSegment(folderID: $0.id, title: $0.name)
-        })
-        return segments
-    }
-
-    private var moveDestinationFolders: [VaultMoveDestinationFolder] {
-        folderManifest.folders.map {
-            VaultMoveDestinationFolder(
-                id: $0.id,
-                parentID: $0.parentID,
-                name: $0.name
-            )
-        }
-    }
-
-    private var galleryTitle: String {
-        activeFolder?.name ?? "Vault"
-    }
-
-    private var galleryEmptyTitle: String {
-        if !activeCatalogSearchQuery.isEmpty {
-            return "No Results"
-        }
-        return activeFolderID == nil ? "Empty Vault" : "Empty Folder"
-    }
-
-    private var galleryEmptyDescription: String {
-        if !activeCatalogSearchQuery.isEmpty {
-            return "Try a different search in this vault location."
-        }
-        if activeFolderID == nil {
-            return "Import photos or files to store encrypted copies inside this vault."
-        }
-        return "Tap + to import photos, videos, or files directly into this folder."
-    }
-
-    private var galleryEmptySystemImage: String {
-        if !activeCatalogSearchQuery.isEmpty {
-            return "magnifyingglass"
-        }
-        return activeFolderID == nil
-            ? "photo.on.rectangle.angled"
-            : "folder"
-    }
-
-    private var hasSelectionMoveDestination: Bool {
-        activeFolderID != nil || sortedFolders.contains { $0.id != activeFolderID }
     }
 
     private var folderEditorTitle: String {
@@ -1059,19 +892,13 @@ struct VaultGalleryView: View {
         folderNameDraft.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    private func assignedFolderID(
-        for item: VaultPresentedContentReference
-    ) -> UUID? {
-        folderManifest.memberships.first { $0.item == item }?.folderID
-    }
-
     @ViewBuilder
     private func moveDestinationAction(
         for item: VaultPresentedContentReference
     ) -> some View {
-        let currentFolderID = assignedFolderID(for: item)
+        let currentFolderID = locationSnapshot.assignedFolderID(for: item)
         let hasDestination = currentFolderID != nil
-            || sortedFolders.contains { $0.id != currentFolderID }
+            || locationSnapshot.sortedFolders.contains { $0.id != currentFolderID }
 
         if hasDestination {
             Button {
@@ -1377,7 +1204,7 @@ struct VaultGalleryView: View {
     }
 
     private func requestItemMove(_ item: VaultPresentedContentReference) {
-        let catalog = moveCatalog(for: Set([item]))
+        let catalog = locationSnapshot.moveCatalog(for: Set([item]))
         guard catalog.rootIsValid || !catalog.validFolderIDs.isEmpty else { return }
         moveRequest = VaultMoveRequest(
             target: .item(item),
@@ -1389,7 +1216,7 @@ struct VaultGalleryView: View {
     private func requestSelectionMove() {
         let items = selectedPresentedReferences
         guard !items.isEmpty else { return }
-        let catalog = moveCatalog(for: items)
+        let catalog = locationSnapshot.moveCatalog(for: items)
         guard catalog.rootIsValid || !catalog.validFolderIDs.isEmpty else { return }
         let noun = items.count == 1 ? "item" : "items"
         moveRequest = VaultMoveRequest(
@@ -1399,20 +1226,11 @@ struct VaultGalleryView: View {
         )
     }
 
-    private func moveCatalog(
-        for items: Set<VaultPresentedContentReference>
-    ) -> VaultMoveDestinationCatalog {
-        return VaultMoveDestinationCatalog(
-            folders: moveDestinationFolders,
-            currentFolderIDs: items.map { assignedFolderID(for: $0) }
-        )
-    }
-
     private func requestFolderMove(id: UUID) {
         guard let folder = folderManifest.folders.first(where: { $0.id == id }) else {
             return
         }
-        guard let hierarchy = nestedFolderHierarchy,
+        guard let hierarchy = locationSnapshot.nestedFolderHierarchy,
               let destinations = try? hierarchy.validParentDestinations(for: id) else {
             message = "Folder destinations are temporarily unavailable. Protected vault contents were not changed."
             return
@@ -1428,7 +1246,7 @@ struct VaultGalleryView: View {
             target: .folder(folder),
             prompt: "Choose a new parent for “\(folder.name)”.",
             catalog: VaultMoveDestinationCatalog(
-                folders: moveDestinationFolders,
+                folders: locationSnapshot.moveDestinationFolders,
                 rootIsValid: rootIsValid,
                 validFolderIDs: validFolderIDs
             )
@@ -2495,11 +2313,11 @@ struct VaultGalleryView: View {
     }
 
     private var selectedPhotoRecords: [VaultPhotoRecord] {
-        visiblePhotoRecords.filter { selection.contains(.photo($0.id)) }
+        locationSnapshot.visiblePhotoRecords.filter { selection.contains(.photo($0.id)) }
     }
 
     private var selectedGeneralFileRecords: [VaultGeneralFileRecord] {
-        visibleGeneralFileRecords.filter { selection.contains(.generalFile($0.id)) }
+        locationSnapshot.visibleGeneralFileRecords.filter { selection.contains(.generalFile($0.id)) }
     }
 
     private var selectedPresentedReferences: Set<VaultPresentedContentReference> {
@@ -2513,7 +2331,7 @@ struct VaultGalleryView: View {
     }
 
     private var visibleSelectableItems: [VaultGallerySelection.Item] {
-        filteredVisibleGallerySnapshot.selectableItems
+        locationSnapshot.filteredVisibleGallerySnapshot.selectableItems
     }
 
     private var allValidSelectableItems: [VaultGallerySelection.Item] {
