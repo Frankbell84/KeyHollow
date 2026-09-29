@@ -201,19 +201,22 @@ PRIVILEGED_SOURCE_SHA256 = {
         "9ff597ee8db1228de2e91df3863a34e83c73305b2f00fe08faf5a931929cdee3"
     ),
     "scripts/check_architecture_boundaries.py": (
-        "7d2dc7012805634a531888f281e8c869fcfe3753a7fe43c9b73c1abcc200ab03"
+        "2b452fc713556af2b5ffc5a84c8e64692ddc38448918c3ed4f9c386286780032"
+    ),
+    "scripts/gallery_folder_boundaries.py": (
+        "f84b17d62aa3fd03e558af3cb71ac7880fc4294bb452404a54297f69fc9e6d33"
     ),
     "scripts/gallery_boundaries.py": (
-        "d16b2c483cfee04c8da72a01cec5cdd59e4ab75a89139799b866db357f5bebc3"
+        "c00c075ba05df29482d88c26c180ca67531f1f70c0768108bf65475883f2b349"
     ),
     "scripts/check_source_size.py": (
         "579a094746e2a49c1cda91d8edbcc10fdf83f2d2855807f4d5613f56890f036c"
     ),
     "scripts/source_size_limits.json": (
-        "a07027c2ff63507a6659a46c840d28ada9a19e797d3b24b03475d899bd1b35d4"
+        "142e17b7358f5a5e701b1f900762fd60cc59bf2be2fa46bafcfb891ad629205e"
     ),
     "scripts/workflow_hash_probes.py": (
-        "2277665bf83fa991badcf06f7f2ed7b8564758deb0b4eb6e7cc7ffc05d9e252c"
+        "e444ba22eb71b290a7ed16a034524e2be7f387e84c5c5826bd4c6c4d335d1c64"
     ),
     "scripts/check_privacy_manifest.py": (
         "c8c255c8d6465aafd04f941daa4bee3fa0f3a9881390032666f3eb38fa0c979a"
@@ -2452,17 +2455,9 @@ def self_test() -> int:
         PRIVILEGED_SOURCE_SHA256, RELEASE_WORKFLOW_SHA256,
     )
 
-    assert audit_project_execution_surface("targets:\n  App:\n") == []
-    for execution_key in FORBIDDEN_XCODEGEN_EXECUTION_KEYS:
-        assert audit_project_execution_surface(
-            f"targets:\n  App:\n    {execution_key}: injected\n"
-        )
-
-    assert nonisolated_python_invocations(
-        "steps:\n  - run: python3 -I scripts/reviewed.py"
-    ) == []
-    assert nonisolated_python_invocations(
-        "steps:\n  - run: python3 scripts/reviewed.py"
+    runpy.run_path(str(ROOT / probe_path))["check_execution_guards"](
+        audit_project_execution_surface, FORBIDDEN_XCODEGEN_EXECUTION_KEYS,
+        nonisolated_python_invocations,
     )
 
     pinned = "uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803"

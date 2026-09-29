@@ -18,19 +18,6 @@ private enum VaultImportMode {
     case move
 }
 
-private enum VaultMoveTarget {
-    case item(VaultPresentedContentReference)
-    case selection(Set<VaultPresentedContentReference>)
-    case folder(VaultFolderRecord)
-}
-
-private struct VaultMoveRequest: Identifiable {
-    let id = UUID()
-    let target: VaultMoveTarget
-    let prompt: String
-    let catalog: VaultMoveDestinationCatalog
-}
-
 private struct VaultImportProgress {
     let mode: VaultImportMode
     let total: Int
@@ -86,11 +73,7 @@ struct VaultGalleryView: View {
     @State private var showingBackupVerification = false
     @State private var showingVaultFiles = false
     @State private var showingDeleteSelectionConfirmation = false
-    @State private var showingFolderEditor = false
-    @State private var folderBeingRenamed: VaultFolderRecord?
-    @State private var folderNameDraft = ""
-    @State private var folderPendingDeletion: VaultFolderRecord?
-    @State private var moveRequest: VaultMoveRequest?
+    @State private var folderActions = VaultGalleryFolderActions()
     @State private var importMode: VaultImportMode = .copy
     @State private var isSelecting = false
     @State private var selection = VaultGallerySelection()
@@ -251,13 +234,16 @@ struct VaultGalleryView: View {
 
     private var galleryMoveDestinationView: some View {
         galleryPresentationView
-            .sheet(item: $moveRequest) { request in
+            .sheet(item: Binding(
+                get: { folderActions.moveRequest },
+                set: { if $0 == nil { folderActions.dismissMove() } }
+            )) { request in
                 VaultMoveDestinationPicker(
                     catalog: request.catalog,
                     prompt: request.prompt,
-                    cancel: { moveRequest = nil },
+                    cancel: { folderActions.dismissMove() },
                     move: { destinationID in
-                        moveRequest = nil
+                        folderActions.dismissMove()
                         performMove(request.target, to: destinationID)
                     }
                 )
@@ -295,15 +281,17 @@ struct VaultGalleryView: View {
         } message: {
             Text("This permanently removes the selected encrypted copies from this vault. Originals outside KeyHollow are not affected.")
         }
-        .alert(folderEditorTitle, isPresented: $showingFolderEditor) {
-            TextField("Folder name", text: $folderNameDraft)
-            Button(folderEditorActionTitle) {
+        .alert(folderActions.editorTitle, isPresented: Binding(
+            get: { folderActions.isEditorPresented },
+            set: { if !$0 { folderActions.dismissEditor() } }
+        )) {
+            TextField("Folder name", text: $folderActions.nameDraft)
+            Button(folderActions.editorActionTitle) {
                 saveFolderName()
             }
-            .disabled(normalizedFolderNameDraft.isEmpty)
+            .disabled(folderActions.normalizedName.isEmpty)
             Button("Cancel", role: .cancel) {
-                folderBeingRenamed = nil
-                folderNameDraft = ""
+                folderActions.clearNameDraft()
             }
         } message: {
             Text("Folders organize encrypted items without changing or duplicating their protected contents.")
@@ -311,19 +299,19 @@ struct VaultGalleryView: View {
         .confirmationDialog(
             "Delete Folder?",
             isPresented: Binding(
-                get: { folderPendingDeletion != nil },
-                set: { if !$0 { folderPendingDeletion = nil } }
+                get: { folderActions.pendingDeletion != nil },
+                set: { if !$0 { folderActions.dismissDeletion() } }
             ),
             titleVisibility: .visible
         ) {
             Button("Delete Folder", role: .destructive) {
-                if let folder = folderPendingDeletion {
+                if let folder = folderActions.pendingDeletion {
                     deleteFolder(folder)
                 }
-                folderPendingDeletion = nil
+                folderActions.dismissDeletion()
             }
             Button("Cancel", role: .cancel) {
-                folderPendingDeletion = nil
+                folderActions.dismissDeletion()
             }
         } message: {
             Text("The folder will be removed. Its direct items and child folders will return to the same parent location and will not be deleted.")
@@ -354,11 +342,7 @@ struct VaultGalleryView: View {
             showingPicker = false
             showingFilePicker = false
             showingImportOptions = false
-            folderBeingRenamed = nil
-            folderPendingDeletion = nil
-            moveRequest = nil
-            folderNameDraft = ""
-            showingFolderEditor = false
+            folderActions.reset()
             searchText = ""
             contentStoresLoaded = false
             thumbnailCache.removeAll()
@@ -372,11 +356,7 @@ struct VaultGalleryView: View {
         .onChange(of: session.securityEpoch) { _, _ in
             itemRename.cancel(in: session)
             searchText = ""
-            folderBeingRenamed = nil
-            folderPendingDeletion = nil
-            moveRequest = nil
-            folderNameDraft = ""
-            showingFolderEditor = false
+            folderActions.reset()
             cancelMediaNavigationForLifecycle()
         }
         .onChange(of: activeFolderID) { _, _ in
@@ -699,18 +679,6 @@ struct VaultGalleryView: View {
         )
     }
 
-    private var folderEditorTitle: String {
-        folderBeingRenamed == nil ? "New Folder" : "Rename Folder"
-    }
-
-    private var folderEditorActionTitle: String {
-        folderBeingRenamed == nil ? "Create" : "Save"
-    }
-
-    private var normalizedFolderNameDraft: String {
-        folderNameDraft.trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
     @ViewBuilder
     private func moveDestinationAction(
         for item: VaultPresentedContentReference
@@ -999,75 +967,32 @@ struct VaultGalleryView: View {
     }
 
     private func requestNewFolder() {
-        folderBeingRenamed = nil
-        folderNameDraft = ""
-        showingFolderEditor = true
+        folderActions.requestNewFolder()
     }
 
     private func requestFolderRename(id: UUID) {
-        guard let folder = folderManifest.folders.first(where: { $0.id == id }) else {
-            return
-        }
-        folderBeingRenamed = folder
-        folderNameDraft = folder.name
-        showingFolderEditor = true
+        folderActions.requestRename(id: id, location: locationSnapshot)
     }
 
     private func requestFolderDeletion(id: UUID) {
-        folderPendingDeletion = folderManifest.folders.first { $0.id == id }
+        folderActions.requestDeletion(id: id, location: locationSnapshot)
     }
 
     private func requestItemMove(_ item: VaultPresentedContentReference) {
-        let catalog = locationSnapshot.moveCatalog(for: Set([item]))
-        guard catalog.rootIsValid || !catalog.validFolderIDs.isEmpty else { return }
-        moveRequest = VaultMoveRequest(
-            target: .item(item),
-            prompt: "Choose a destination for this item.",
-            catalog: catalog
-        )
+        folderActions.requestItemMove(item, location: locationSnapshot)
     }
 
     private func requestSelectionMove() {
-        let items = selectedPresentedReferences
-        guard !items.isEmpty else { return }
-        let catalog = locationSnapshot.moveCatalog(for: items)
-        guard catalog.rootIsValid || !catalog.validFolderIDs.isEmpty else { return }
-        let noun = items.count == 1 ? "item" : "items"
-        moveRequest = VaultMoveRequest(
-            target: .selection(items),
-            prompt: "Choose a destination for \(items.count) selected \(noun).",
-            catalog: catalog
-        )
+        folderActions.requestSelectionMove(selectedPresentedReferences, location: locationSnapshot)
     }
 
     private func requestFolderMove(id: UUID) {
-        guard let folder = folderManifest.folders.first(where: { $0.id == id }) else {
-            return
+        if let failure = folderActions.requestFolderMove(id: id, location: locationSnapshot) {
+            message = failure
         }
-        guard let hierarchy = locationSnapshot.nestedFolderHierarchy,
-              let destinations = try? hierarchy.validParentDestinations(for: id) else {
-            message = "Folder destinations are temporarily unavailable. Protected vault contents were not changed."
-            return
-        }
-        let validFolderIDs = Set(destinations.compactMap { $0 })
-        let rootIsValid = destinations.contains { $0 == nil }
-        guard rootIsValid || !validFolderIDs.isEmpty else {
-            message = "There is no other valid location for this folder."
-            return
-        }
-
-        moveRequest = VaultMoveRequest(
-            target: .folder(folder),
-            prompt: "Choose a new parent for “\(folder.name)”.",
-            catalog: VaultMoveDestinationCatalog(
-                folders: locationSnapshot.moveDestinationFolders,
-                rootIsValid: rootIsValid,
-                validFolderIDs: validFolderIDs
-            )
-        )
     }
 
-    private func performMove(_ target: VaultMoveTarget, to folderID: UUID?) {
+    private func performMove(_ target: VaultGalleryMoveTarget, to folderID: UUID?) {
         switch target {
         case .item(let item):
             move(item, to: folderID)
@@ -1079,40 +1004,22 @@ struct VaultGalleryView: View {
     }
 
     private func saveFolderName() {
-        let name = normalizedFolderNameDraft
-        guard !name.isEmpty,
+        guard let mutation = folderActions.nameMutation(parentID: activeFolderID),
               let presentationStore,
               !isWorking else { return }
 
-        let folderToRename = folderBeingRenamed
-        let destinationParentID = activeFolderID
-        showingFolderEditor = false
-        folderBeingRenamed = nil
-        folderNameDraft = ""
+        folderActions.dismissEditor()
+        folderActions.clearNameDraft()
         isWorking = true
 
         let taskID = session.startSensitiveTask { _ in
             defer { isWorking = false }
             do {
-                if let folderToRename {
-                    try await presentationStore.renameFolder(id: folderToRename.id, to: name)
-                } else {
-                    _ = try await presentationStore.createFolder(
-                        named: name,
-                        in: destinationParentID
-                    )
-                }
-                folderManifest = try await presentationStore.loadManifest()
-            } catch VaultFolderPresentationStore.StoreError.duplicateFolderName {
-                message = "A folder with that name already exists."
-            } catch VaultFolderPresentationStore.StoreError.invalidFolderName {
-                message = "Use a folder name between 1 and 80 characters."
-            } catch VaultFolderPresentationStore.StoreError.folderDepthLimitReached {
-                message = "This folder would exceed the maximum folder depth."
+                folderManifest = try await mutation.perform(using: presentationStore)
             } catch is CancellationError {
                 return
             } catch {
-                message = "The encrypted folder could not be saved."
+                message = mutation.failureMessage(for: error)
             }
         }
         if taskID == nil { isWorking = false }
@@ -1137,21 +1044,17 @@ struct VaultGalleryView: View {
 
     private func moveFolder(_ folder: VaultFolderRecord, to parentID: UUID?) {
         guard let presentationStore, !isWorking else { return }
+        let mutation = VaultGalleryFolderMutation.moveFolder(id: folder.id, parentID: parentID)
         isWorking = true
 
         let taskID = session.startSensitiveTask { _ in
             defer { isWorking = false }
             do {
-                try await presentationStore.moveFolder(id: folder.id, to: parentID)
-                folderManifest = try await presentationStore.loadManifest()
-            } catch VaultFolderPresentationStore.StoreError.duplicateFolderName {
-                message = "That location already contains a folder with this name."
-            } catch VaultFolderPresentationStore.StoreError.folderDepthLimitReached {
-                message = "That move would exceed the maximum folder depth."
+                folderManifest = try await mutation.perform(using: presentationStore)
             } catch is CancellationError {
                 return
             } catch {
-                message = "The folder could not be moved. Protected vault contents were not changed."
+                message = mutation.failureMessage(for: error)
             }
         }
         if taskID == nil { isWorking = false }
@@ -1162,13 +1065,13 @@ struct VaultGalleryView: View {
         to folderID: UUID?
     ) {
         guard let presentationStore, !isWorking else { return }
+        let mutation = VaultGalleryFolderMutation.moveItem(item, folderID: folderID)
         isWorking = true
 
         let taskID = session.startSensitiveTask { _ in
             defer { isWorking = false }
             do {
-                try await presentationStore.move(item, to: folderID)
-                folderManifest = try await presentationStore.loadManifest()
+                folderManifest = try await mutation.perform(using: presentationStore)
                 selection.remove(selectionItem(for: item))
                 if isSelecting && visibleSelectableItems.isEmpty {
                     leaveSelectionMode()
@@ -1176,7 +1079,7 @@ struct VaultGalleryView: View {
             } catch is CancellationError {
                 return
             } catch {
-                message = "The item could not be moved. Protected vault contents were not changed."
+                message = mutation.failureMessage(for: error)
             }
         }
         if taskID == nil { isWorking = false }
@@ -1190,13 +1093,13 @@ struct VaultGalleryView: View {
         let destinationName = folderID.flatMap { destinationID in
             folderManifest.folders.first { $0.id == destinationID }?.name
         } ?? "Vault Root"
+        let mutation = VaultGalleryFolderMutation.moveSelection(items, folderID: folderID)
         isWorking = true
 
         let taskID = session.startSensitiveTask { _ in
             defer { isWorking = false }
             do {
-                try await presentationStore.move(items, to: folderID)
-                folderManifest = try await presentationStore.loadManifest()
+                folderManifest = try await mutation.perform(using: presentationStore)
                 guard !Task.isCancelled else { return }
                 let movedCount = items.count
                 leaveSelectionMode()
@@ -1205,7 +1108,7 @@ struct VaultGalleryView: View {
             } catch is CancellationError {
                 return
             } catch {
-                message = "The selected items could not be moved. Protected vault contents were not changed."
+                message = mutation.failureMessage(for: error)
             }
         }
         if taskID == nil { isWorking = false }
@@ -1213,25 +1116,21 @@ struct VaultGalleryView: View {
 
     private func deleteFolder(_ folder: VaultFolderRecord) {
         guard let presentationStore, !isWorking else { return }
+        let mutation = VaultGalleryFolderMutation.deleteFolder(id: folder.id)
         isWorking = true
 
         let taskID = session.startSensitiveTask { _ in
             defer { isWorking = false }
             do {
-                try await presentationStore.deleteFolder(id: folder.id)
-                folderManifest = try await presentationStore.loadManifest()
+                folderManifest = try await mutation.perform(using: presentationStore)
                 if activeFolderID == folder.id {
                     activeFolderID = nil
                     leaveSelectionMode()
                 }
-            } catch VaultFolderPresentationStore.StoreError.duplicateFolderName {
-                message = "Move or rename the conflicting child folder before deleting this folder."
-            } catch VaultFolderPresentationStore.StoreError.folderDepthLimitReached {
-                message = "The folder could not be removed without exceeding the folder depth limit."
             } catch is CancellationError {
                 return
             } catch {
-                message = "The folder could not be deleted. Protected vault contents were not changed."
+                message = mutation.failureMessage(for: error)
             }
         }
         if taskID == nil { isWorking = false }

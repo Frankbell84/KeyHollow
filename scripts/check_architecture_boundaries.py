@@ -3951,7 +3951,7 @@ def main() -> int:
     gallery_image_executable = swift_executable_text(gallery_image_source)
     gallery_checks = runpy.run_path(str(ROOT / "scripts/gallery_boundaries.py"))
     violations.extend(gallery_checks["gallery_ownership_violations"](
-        SOURCE_ROOT, swift_executable_text, imports
+        SOURCE_ROOT, swift_executable_text, imports, swift_declaration_body
     ))
     image_preview_coordinator_file = (
         SOURCE_ROOT / "Photos" / "VaultImagePreviewCoordinator.swift"
@@ -4646,7 +4646,6 @@ def main() -> int:
         "GeneralFileShareSheet(urls: prepared.urls)",
         'Label("Export to Files", systemImage: "square.and.arrow.up")',
         'Label("Move", systemImage: "folder")',
-        "presentationStore.move(items, to: folderID)",
         "selectedPresentedReferences",
         "let snapshot = locationSnapshot.filteredVisibleGallerySnapshot",
         "VaultGalleryContentSnapshot",

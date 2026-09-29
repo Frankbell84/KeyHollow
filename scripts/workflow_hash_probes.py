@@ -1,4 +1,4 @@
-"""Mutation probes for the workflow checker's source and workflow hash guards.
+"""Mutation probes for workflow integrity and reviewed execution boundaries.
 
 Callbacks keep the production hash logic owned by the security checker. This
 helper is hash-verified there before loading; it has no release authority.
@@ -90,3 +90,21 @@ def check_hash_guards(
                 mutated_workflows, workflow_fixture_hashes
             )
         )
+
+
+def check_execution_guards(
+    audit_project_execution_surface, FORBIDDEN_XCODEGEN_EXECUTION_KEYS,
+    nonisolated_python_invocations,
+):
+    assert audit_project_execution_surface("targets:\n  App:\n") == []
+    for execution_key in FORBIDDEN_XCODEGEN_EXECUTION_KEYS:
+        assert audit_project_execution_surface(
+            f"targets:\n  App:\n    {execution_key}: injected\n"
+        )
+
+    assert nonisolated_python_invocations(
+        "steps:\n  - run: python3 -I scripts/reviewed.py"
+    ) == []
+    assert nonisolated_python_invocations(
+        "steps:\n  - run: python3 scripts/reviewed.py"
+    )
