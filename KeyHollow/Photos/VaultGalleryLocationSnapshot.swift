@@ -153,6 +153,10 @@ struct VaultGalleryLocationSnapshot {
         }
     }
 
+    func folder(id: UUID) -> VaultFolderRecord? {
+        folderManifest.folders.first { $0.id == id }
+    }
+
     var activeFolder: VaultFolderRecord? {
         guard let activeFolderID else { return nil }
         return folderManifest.folders.first { $0.id == activeFolderID }

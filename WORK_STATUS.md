@@ -5,7 +5,35 @@ Updated: 2026-09-29
 This is the authoritative operational resume point. Historical Build 38
 evidence remains in `docs/PROJECT_CHECKPOINT.md`.
 
-## Latest checkpoint: gallery thumbnail cache ownership
+## Latest checkpoint: gallery folder actions
+
+Branch `codex/gallery-folder-actions` separates transient folder editor and
+move-request state from folder metadata dispatch. `VaultGalleryFolderActions`
+(145 lines) owns the private dialog state and captured move catalogs;
+`VaultGalleryFolderMutation` (73 lines) applies a captured command to the existing
+authenticated folder store and preserves operation-specific failure messages.
+The gallery falls from 2,317 to 2,216 lines. It retains session-task registration,
+busy/cancellation handling, folder-manifest publication, selection changes and
+active-folder navigation. No protected-content authority moves into these owners.
+
+All four local checkers pass. Thirteen focused tests cover dialog reset,
+captured typed selections/destinations, folder-command dispatch through temporary
+encrypted storage, canceled/revoked writes and unchanged failure guidance.
+Native CI results and merge status belong to this branch's GitHub PR and must
+be checked there; this preparation checkpoint does not assert device acceptance.
+Further gallery decomposition remains ahead of feature work.
+
+PR #104 merged as `1132dab6ed6bf42533577b6ca18ea41fac621224`, with the same source
+tree as tested head `39ee1bb99b010f3855f2b3c3c9e1eaacd8f4af81`. Its CI
+`36620610539` passed native build, 468 unit tests, 3 launch tests and Swift CodeQL;
+the exact merged main also passed both jobs in `36623496994`. This branch starts
+from that verified merge. This evidence supersedes older pending statements.
+Build 59 remains the accepted device binary. No feature, format, build-number,
+signing/upload or distribution change is included.
+
+See [gallery refactor and growth controls](docs/GALLERY_REFACTOR.md).
+
+## Historical checkpoint: gallery thumbnail cache ownership
 
 Branch `codex/gallery-thumbnail-cache` isolates decoded image storage and
 retention in an 86-line app-owned `VaultGalleryThumbnailCache`. The gallery
@@ -15,8 +43,8 @@ only typed identities and decoded images. Its existing shared 96-image budget,
 visible-tile protection, per-catalog pruning and reset behavior are preserved.
 Ten focused regression tests cover the real image cache and reference release.
 All four local checkers pass, including ownership/reset mutation probes and the
-lowered source-size ceiling. Native validation of this fourth checkpoint is pending; gallery decomposition
-remains incomplete and stays ahead of feature work.
+lowered source-size ceiling. Native validation was pending when this fourth
+checkpoint was prepared; gallery decomposition remains incomplete and stays ahead of feature work.
 
 PR #102 merged as `4613e9aced6bf6f4b855e370e3c131f7ea8d611b`, and PR #103 merged
 as `de249a7a06bfec318e2e9ef45ac242816afe1846`. Each merge has the same source tree

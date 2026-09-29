@@ -120,6 +120,51 @@ image-reference release, and independent value copies. Existing retention,
 thumbnail concurrency, lifecycle and media tests remain required in CI.
 Physical acceptance still requires the gallery regression checklist below.
 
+PR #104 at `39ee1bb99b010f3855f2b3c3c9e1eaacd8f4af81` passed native build,
+468 unit tests, 3 launch tests and Swift CodeQL in CI `36620610539`. It merged
+as `1132dab6ed6bf42533577b6ca18ea41fac621224` with the same source tree; the
+merged main also passed both jobs in `36623496994`.
+
+## Fifth extraction: folder interactions and metadata commands
+
+Branch `codex/gallery-folder-actions` starts from that verified merge.
+`UI/VaultGalleryFolderActions.swift` owns transient editor/deletion state and
+immutable item, selection and folder move requests. Only the name draft is
+directly writable by a UI binding. The value derives permissions from the
+current immutable location snapshot, retains typed photo/file identity, and
+has no session, task, store or mutation callback. Vault and security-epoch
+resets clear its state at the same points as before.
+
+`UI/VaultGalleryFolderMutation.swift` is a captured metadata command and error
+presentation adapter. It takes the existing authenticated folder store for
+one call, applies the same store operation and returns its refreshed manifest.
+It has no independent task, session, key, retained store or content-store
+access. The same compiled Folder Presentation implementation remains the
+sole owner of folder persistence, validation, authorization and encryption.
+No add-on module or public API changes.
+
+The gallery falls from 2,317 to 2,216 lines. Composition still registers each
+sensitive task, captures intent before starting it, handles busy/refused-task
+state and cancellation, publishes the returned manifest, clears selections
+and updates the active location. Move and editor sheet/alert ordering stays
+unchanged. Non-folder operation bodies remain unchanged under the reviewed
+source-substitution comparison. Import/media cleanup stays with its prior owner.
+
+Seven interaction tests cover name normalization/capture, absent folders,
+typed-ID collisions, immutable batch destinations, empty/invalid destinations,
+subtree exclusion and reset. Six command tests use temporary encrypted storage
+to cover every dispatch, preserved identities/memberships, failed writes,
+cancellation, revocation and the existing recovery messages. The full native
+suite and security scan remain required; exact results are recorded in the PR.
+
+`gallery_folder_boundaries.py` carries the moved batch-store assertion and
+negative probes for dispatch, registered task ownership, busy/refused-task
+handling, cancellation, private dialog state and lifecycle reset. The new
+helper is hash-pinned. Existing project-execution and isolated-Python probes
+move intact into the already verified workflow probe helper; production
+security enforcement and pre-execution hash verification stay in the checker.
+Both oversized checker ceilings shrink, and no size allowance is raised.
+
 ## Enforced prevention
 
 The existing architecture CI gate invokes `check_source_size.py` and checks

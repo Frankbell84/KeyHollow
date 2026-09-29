@@ -1,6 +1,7 @@
 """Checks for gallery responsibilities extracted from the composition view."""
 
 import re
+import runpy
 
 
 OWNERS = {
@@ -15,8 +16,17 @@ OWNERS = {
     "VaultGallerySearchControls": "Photos/VaultGallerySearchControls.swift",
     "VaultGallerySelectionControls": "Photos/VaultGallerySelectionControls.swift",
     "VaultGalleryThumbnailCache": "UI/VaultGalleryThumbnailCache.swift",
+    "VaultGalleryFolderActions": "UI/VaultGalleryFolderActions.swift",
+    "VaultGalleryMoveRequest": "UI/VaultGalleryFolderActions.swift",
+    "VaultGalleryMoveTarget": "UI/VaultGalleryFolderActions.swift",
+    "VaultGalleryFolderMutation": "UI/VaultGalleryFolderMutation.swift",
 }
 IMPORTS = {
+    "UI/VaultGalleryFolderActions.swift": {
+        "Foundation", "KeyHollowFolderPresentationAddOn", "KeyHollowGalleryUI",
+        "KeyHollowNestedFolderAddOn",
+    },
+    "UI/VaultGalleryFolderMutation.swift": {"Foundation", "KeyHollowFolderPresentationAddOn"},
     "UI/VaultGalleryThumbnailCache.swift": {"UIKit", "KeyHollowGalleryUI"},
     "Photos/VaultGalleryHeaderControls.swift": {"SwiftUI"},
     "Photos/VaultGallerySearchControls.swift": {"SwiftUI", "KeyHollowCatalogSearchAddOn"},
@@ -55,7 +65,9 @@ def ownership_violations(sources, executable, imports):
         text = code.get(owner, "")
         forbidden = ["VaultSession", "VaultAccessCapability", "URLSession", "SymmetricKey", "VaultUnlockService"]
         if owner != "Photos/VaultGeneralFileThumbnailPipeline.swift":
-            forbidden += ["VaultPhotoStore", "VaultGeneralFileStore", "VaultFolderPresentationStore", "FileManager"]
+            forbidden += ["VaultPhotoStore", "VaultGeneralFileStore", "FileManager"]
+            if owner != "UI/VaultGalleryFolderMutation.swift":
+                forbidden.append("VaultFolderPresentationStore")
         if re.search(r"\b(?:" + "|".join(forbidden) + r")\b", text):
             violations.append(f"{owner}: extracted responsibility gained protected storage/session/network authority")
         if re.search(r"\b(?:public|open)\s+(?:struct|class|actor|enum|func|var|let)\b", text):
@@ -63,7 +75,7 @@ def ownership_violations(sources, executable, imports):
     return violations
 
 
-def gallery_ownership_violations(root, executable, imports):
+def gallery_ownership_violations(root, executable, imports, body):
     sources = {path.relative_to(root).as_posix(): path.read_text(encoding="utf-8")
                for path in sorted(root.rglob("*.swift"))}
     violations = ownership_violations(sources, executable, imports)
@@ -101,6 +113,8 @@ def gallery_ownership_violations(root, executable, imports):
     violations.extend(location_probe_violations(sources, executable))
     violations.extend(controls_probe_violations(sources, executable))
     violations.extend(thumbnail_cache_probe_violations(sources, executable))
+    folder_checks = runpy.run_path(str(root.parent / "scripts/gallery_folder_boundaries.py"))
+    violations.extend(folder_checks["folder_probe_violations"](sources, executable, body))
     return violations
 
 
