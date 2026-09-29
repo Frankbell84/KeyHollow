@@ -31,23 +31,6 @@ private struct VaultMoveRequest: Identifiable {
     let catalog: VaultMoveDestinationCatalog
 }
 
-private extension VaultCatalogSortOrder {
-    var title: String {
-        switch self {
-        case .vaultOrder:
-            "Vault Order"
-        case .newestFirst:
-            "Newest First"
-        case .oldestFirst:
-            "Oldest First"
-        case .nameAscending:
-            "Name A–Z"
-        case .nameDescending:
-            "Name Z–A"
-        }
-    }
-}
-
 private struct VaultImportProgress {
     let mode: VaultImportMode
     let total: Int
@@ -634,221 +617,79 @@ struct VaultGalleryView: View {
     private func galleryHeader(
         visibleItemIDs: [VaultGallerySelection.Item]
     ) -> some View {
-        HStack(spacing: 18) {
-            if isSelecting {
-                Button("Cancel") { leaveSelectionMode() }
-
-                Spacer()
-
-                Button(
-                    selection.containsAll(visibleItemIDs) ? "Deselect All" : "Select All"
-                ) {
-                    toggleSelectAll(visibleItemIDs)
-                }
-                .disabled(visibleItemIDs.isEmpty || isWorking)
-            } else {
-                if activeFolderID == nil {
-                    Button("Lock") { lockVaultAndFinishCleanup() }
-                } else {
-                    Button {
-                        leaveSelectionMode()
-                        activeFolderID = locationSnapshot.activeFolder?.parentID
-                    } label: {
-                        Label("Back", systemImage: "chevron.left")
-                    }
-                }
-
-                Spacer()
-
-                Button("Select") {
-                    isSelecting = true
-                }
-                .disabled(visibleItemIDs.isEmpty || isWorking)
-
-                Button {
-                    guard let vaultID = session.activeVaultID else { return }
-                    importDestination = VaultImportDestination(
-                        vaultID: vaultID,
-                        securityEpoch: session.securityEpoch,
-                        folderID: activeFolderID
-                    )
-                    showingImportOptions = true
-                } label: {
-                    Image(systemName: "plus")
-                }
-                .disabled(isWorking || !contentStoresLoaded || presentationStore == nil)
-                .accessibilityLabel(activeFolderID == nil ? "Import to vault" : "Import to this folder")
-
-                Menu {
-                    Button {
-                        requestNewFolder()
-                    } label: {
-                        Label("New Folder", systemImage: "folder.badge.plus")
-                    }
-
-                    Button {
-                        showingNewVault = true
-                    } label: {
-                        Label("Create New Vault", systemImage: "lock.badge.plus")
-                    }
-
-                    Button {
-                        showingEncryptedImport = true
-                    } label: {
-                        Label("Import Encrypted Vault", systemImage: "square.and.arrow.down.on.square")
-                    }
-
-                    Button {
-                        showingEncryptedExport = true
-                    } label: {
-                        Label("Export Encrypted Vault", systemImage: "square.and.arrow.up.on.square")
-                    }
-
-                    Button {
-                        showingBackupVerification = true
-                    } label: {
-                        Label("Verify Backup", systemImage: "checkmark.shield")
-                    }
-                    .accessibilityIdentifier("vault-verify-backup")
-
-                    Button {
-                        showingVaultFiles = true
-                    } label: {
-                        Label("Vault Files", systemImage: "folder.fill")
-                    }
-
-                    Button {
-                        showingSecuritySettings = true
-                    } label: {
-                        Label("Vault Security", systemImage: "shield.lefthalf.filled")
-                    }
-
-                    Button {
-                        lockVaultAndFinishCleanup()
-                    } label: {
-                        Label("Lock KeyHollow", systemImage: "lock.fill")
-                    }
-                } label: {
-                    Image(systemName: "ellipsis.circle")
-                }
-                .disabled(isWorking)
-                .accessibilityLabel("Vault options")
+        VaultGalleryHeaderControls(
+            isSelecting: isSelecting,
+            isAtRoot: activeFolderID == nil,
+            title: locationSnapshot.galleryTitle,
+            selectionCount: selection.count,
+            allVisibleSelected: selection.containsAll(visibleItemIDs),
+            selectionUnavailable: visibleItemIDs.isEmpty || isWorking,
+            importUnavailable: isWorking || !contentStoresLoaded || presentationStore == nil,
+            isWorking: isWorking
+        ) { action in
+            switch action {
+            case .cancelSelection:
+                leaveSelectionMode()
+            case .toggleSelectAll:
+                toggleSelectAll(visibleItemIDs)
+            case .lock:
+                lockVaultAndFinishCleanup()
+            case .back:
+                leaveSelectionMode()
+                activeFolderID = locationSnapshot.activeFolder?.parentID
+            case .beginSelection:
+                isSelecting = true
+            case .importContent:
+                guard let vaultID = session.activeVaultID else { return }
+                importDestination = VaultImportDestination(
+                    vaultID: vaultID,
+                    securityEpoch: session.securityEpoch,
+                    folderID: activeFolderID
+                )
+                showingImportOptions = true
+            case .newFolder:
+                requestNewFolder()
+            case .newVault:
+                showingNewVault = true
+            case .importVault:
+                showingEncryptedImport = true
+            case .exportVault:
+                showingEncryptedExport = true
+            case .verifyBackup:
+                showingBackupVerification = true
+            case .vaultFiles:
+                showingVaultFiles = true
+            case .securitySettings:
+                showingSecuritySettings = true
             }
         }
-        .overlay {
-            Text(isSelecting ? "\(selection.count) Selected" : locationSnapshot.galleryTitle)
-                .font(.headline)
-                .lineLimit(1)
-                .padding(.horizontal, 120)
-                .allowsHitTesting(false)
-        }
-        .padding(.horizontal)
-        .padding(.vertical, 12)
     }
 
     private var catalogSearchBar: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "magnifyingglass")
-                .foregroundStyle(.secondary)
-                .accessibilityHidden(true)
-
-            TextField("Search this location", text: $searchText)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-                .accessibilityLabel("Search this vault location")
-
-            if !locationSnapshot.activeCatalogSearchQuery.isEmpty {
-                Button {
-                    searchText = ""
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .foregroundStyle(.secondary)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Clear search")
-            }
-
-            Menu {
-                Picker("Sort", selection: $catalogSortOrder) {
-                    ForEach(VaultCatalogSortOrder.allCases, id: \.self) { order in
-                        Text(order.title).tag(order)
-                    }
-                }
-            } label: {
-                Image(systemName: "arrow.up.arrow.down.circle")
-                    .font(.title3)
-            }
-            .accessibilityLabel("Sort vault items")
-            .accessibilityValue(catalogSortOrder.title)
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 9)
-        .background(
-            Color(uiColor: .secondarySystemBackground),
-            in: RoundedRectangle(cornerRadius: 11)
+        VaultGallerySearchControls(
+            searchText: $searchText,
+            catalogSortOrder: $catalogSortOrder,
+            isQueryEmpty: locationSnapshot.activeCatalogSearchQuery.isEmpty
         )
-        .padding(.horizontal)
-        .padding(.vertical, 8)
     }
 
     private var selectionActionBar: some View {
-        HStack {
-            selectionTransferAction
-
-            Spacer()
-
-            selectionMoveAction
-
-            Spacer()
-
-            Button(role: .destructive) {
-                showingDeleteSelectionConfirmation = true
-            } label: {
-                Label("Delete", systemImage: "trash")
-            }
-            .disabled(selection.isEmpty || isWorking)
-        }
-        .padding(.horizontal)
-        .padding(.vertical, 12)
-        .background(.bar)
-    }
-
-    @ViewBuilder
-    private var selectionTransferAction: some View {
-        switch selection.transferMode {
-        case .none:
-            EmptyView()
-        case .photos:
-            Button {
+        VaultGallerySelectionControls(
+            transferMode: selection.transferMode,
+            isSelectionEmpty: selection.isEmpty,
+            hasMoveDestination: locationSnapshot.hasSelectionMoveDestination,
+            isWorking: isWorking
+        ) { action in
+            switch action {
+            case .savePhotos:
                 saveSelectedPhotos()
-            } label: {
-                Label("Save to Photos", systemImage: "square.and.arrow.down")
-            }
-            .disabled(isWorking)
-        case .generalFiles:
-            Button {
+            case .exportFiles:
                 exportSelectedGeneralFiles()
-            } label: {
-                Label("Export Files", systemImage: "square.and.arrow.up")
+            case .move:
+                requestSelectionMove()
+            case .delete:
+                showingDeleteSelectionConfirmation = true
             }
-            .disabled(isWorking)
-        case .mixed:
-            Menu {
-                Button {
-                    saveSelectedPhotos()
-                } label: {
-                    Label("Save Photos", systemImage: "square.and.arrow.down")
-                }
-
-                Button {
-                    exportSelectedGeneralFiles()
-                } label: {
-                    Label("Export Files", systemImage: "square.and.arrow.up")
-                }
-            } label: {
-                Label("Save / Export", systemImage: "square.and.arrow.up.on.square")
-            }
-            .disabled(isWorking)
         }
     }
 
@@ -857,15 +698,6 @@ struct VaultGalleryView: View {
         Task {
             await barrier.wait()
         }
-    }
-
-    private var selectionMoveAction: some View {
-        Button {
-            requestSelectionMove()
-        } label: {
-            Label("Move", systemImage: "folder")
-        }
-        .disabled(selection.isEmpty || !locationSnapshot.hasSelectionMoveDestination || isWorking)
     }
 
     private var locationSnapshot: VaultGalleryLocationSnapshot {

@@ -32,7 +32,9 @@ Avoid simply moving the entire problem into a giant view model.
 The first checkpoint at `fc2386850ff3fc2299add1449e9e49556db3e484` passed native
 build, the full regression/security suite, packaged-resource checks and Swift
 CodeQL in [CI 36558435050](https://github.com/Frankbell84/KeyHollow/actions/runs/36558435050).
-PR #101 is ready for review; its merge remains pending explicit authorization.
+PR #101 merged with explicit owner authorization as
+`d75a5f0037c11639d00957b8e235b428a969fcad`; the merged source tree exactly matches
+that passing checkpoint. Build 59 remains the installed accepted binary.
 
 Branch `codex/gallery-location-snapshot` extracts `VaultGalleryLocationSnapshot`
 from that tested checkpoint. This 232-line app-owned value captures photo/file
@@ -54,6 +56,36 @@ typed-ID collisions, root/parent/child isolation, direct counts, ordered media
 and selection, bounded breadcrumbs, move permissions, snapshot value isolation
 and existing empty-state behavior. These native tests require macOS CI; a local
 static pass is not a substitute. Existing oversized tests do not grow.
+
+At `e507513668bbc03b63a2068ade232a3cf8d639ac`, PR #102 passed its native build,
+458 unit tests and 3 launch tests in CI `36582963782`, including all seven
+location tests. Swift CodeQL remained in progress when this checkpoint was
+prepared; PR #102 remains separate and unmerged.
+
+## Third extraction: gallery controls
+
+Branch `codex/gallery-presentation-controls` builds on the preserved second
+checkpoint. `VaultGalleryHeaderControls` (126 lines) owns the header and menu;
+`VaultGallerySearchControls` (71 lines) owns the search/sort controls and their
+existing labels; `VaultGallerySelectionControls` (85 lines) owns the bulk
+action bar. The gallery falls from 2,546 to 2,378 lines.
+
+These remain app-owned presentation adapters with no public add-on API change.
+The header and selection views receive display summaries and emit typed intent;
+the search view receives only text/sort bindings and its query-empty flag.
+They receive no records, IDs, stores, session, keys, tasks or mutation services.
+Composition retains the existing operation handlers, import destination and
+security-epoch capture, confirmation dialogs and awaited lock-cleanup barrier.
+
+The original layouts, labels, accessibility modifiers and availability rules
+are preserved after explicit display-value/action substitution. A reverse
+source comparison confirms the remaining gallery operation code is unchanged.
+Ownership/import checks and moved presentation assertions accompany the views;
+negative probes reject unknown intents and missing action routes. The existing
+selection, lifecycle, security and launch suite remains required in native CI.
+Physical verification must include header/menu actions, Back/Lock, selecting
+and deselecting, search/sort/clear, mixed selection and confirmation dialogs.
+This checkpoint does not add product behavior or establish device acceptance.
 
 ## Enforced prevention
 
