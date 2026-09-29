@@ -32,9 +32,11 @@ KeyHollow is a security product first. Cryptographic design, key derivation, sec
 
 ## Status
 
-Build 59 is the Rename candidate in [PR #96](https://github.com/Frankbell84/KeyHollow/pull/96).
-Its final checks and delivery evidence are recorded there. It is not yet
-device-accepted; the delivered baseline remains Build 58 below.
+Build 59 Rename was delivered from `030172bb8750ccadb19b2cee6d922812d6278295`
+to KeyHollow Internal. The user reported successful iPhone testing on
+2026-09-26. [PR #96](https://github.com/Frankbell84/KeyHollow/pull/96) records
+exact checks, delivery and scoped acceptance. Two-phone transfer and the
+broader device failure matrix remain deferred.
 
 Build 58 was delivered from `36b63e06fae92615fc5b24988ef123355f8b4bf0`.
 The user reported successful current-folder imports and a one-iPhone encrypted
@@ -45,7 +47,9 @@ CI, delivery, distribution, and scoped acceptance evidence. Two-device transfer
 and the extended device failure matrix remain unverified. Build 53 remains the
 recorded accepted rollback; no App Store release is implied.
 
-See [WORK_STATUS.md](WORK_STATUS.md) for the current resume point. The
+See [WORK_STATUS.md](WORK_STATUS.md) for the current resume point and
+[local release scope](docs/V1_RELEASE_SCOPE.md) for the original seven launch
+add-ons, remaining gaps and controlled implementation order. The
 [dependency and compatibility plan](docs/ROADMAP_DEPENDENCY_PLAN.md) maps the
 user's [Architecture Addendum](docs/ARCHITECTURE_ADDENDUM_SOURCE.md) to the
 current implementation and proposes small testable stages. It is a planning

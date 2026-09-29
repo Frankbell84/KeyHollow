@@ -1,11 +1,40 @@
 # KeyHollow Work Status
 
-Updated: 2026-09-25
+Updated: 2026-09-29
 
 This is the authoritative operational resume point. Historical Build 38
 evidence remains in `docs/PROJECT_CHECKPOINT.md`.
 
-## Latest checkpoint: R1 item rename — Build 59 preparation
+## Latest checkpoint: close original local-release gaps 1-7
+
+The user has recalibrated the launch scope to the original seven local add-ons
+and authorized closing their gaps while maintaining code quality. See
+[local release scope and gap closure](docs/V1_RELEASE_SCOPE.md) for the original
+commitments, audited gaps, proposed build order and maintainability controls.
+Hollow Notes is paused and is not part of this local release. The broader
+Architecture Addendum remains future context, not the launch checklist.
+
+Build 59 Rename was delivered from protected-main commit
+`030172bb8750ccadb19b2cee6d922812d6278295`. [PR #96](https://github.com/Frankbell84/KeyHollow/pull/96)
+records candidate CI `36146751283`, exact-main CI `36160332444` (451 unit tests,
+3 UI launch tests and Swift CodeQL), signing preflight `36163093197`, and
+successful upload `36163587075`. Apple delivery UUID:
+`21523673-6cb6-404b-91a4-d9212a19b287`. Apple processing completed and Build 59
+was verified Testing with only KeyHollow Internal and its existing one tester.
+On 2026-09-26 the user reported "It works fully." This is scoped user-reported
+physical-iPhone acceptance of Rename, not itemized logs or completion of the
+two-phone transfer and broader failure matrix. Family retains the separately
+authorized Build 58 distribution. Build 53 remains the recorded rollback;
+no safe downgrade over future formats is implied.
+
+This documentation stage reconciles that acceptance and corrects the PR
+checklist to match the already established protected-main-first release order.
+It does not change the accepted Build 59 binary, app source or build numbers.
+Its own source revision requires its own checks; it cannot inherit the earlier
+release evidence. Next implementation is the backup date using the existing
+authenticated `exportedAt` field, followed by the scoped stages in the plan.
+
+## Historical checkpoint: R1 item rename — Build 59 preparation
 
 The user authorized implementing Rename through an iPhone test build. The P1
 documentation stage, PR #95 at `b8d520f66f920d02872a4fa689268a59a704a902`, passed
