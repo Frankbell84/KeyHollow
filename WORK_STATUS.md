@@ -1,11 +1,38 @@
 # KeyHollow Work Status
 
-Updated: 2026-09-25
+Updated: 2026-09-29
 
 This is the authoritative operational resume point. Historical Build 38
 evidence remains in `docs/PROJECT_CHECKPOINT.md`.
 
-## Latest checkpoint: R1 item rename — Build 59 preparation
+## Latest checkpoint: gallery modularity takes priority
+
+The user prioritized splitting the oversized gallery and preventing future
+growth before more feature work. Branch `codex/gallery-responsibility-split`
+extracts existing catalog snapshots, the shared thumbnail pipeline and image
+page presentation into separate app-owned files. The composition view falls
+from 3,270 to 2,728 lines without changing behavior; further decomposition
+remains required before calling the gallery cleanup complete.
+
+See [gallery refactor and growth controls](docs/GALLERY_REFACTOR.md). The
+architecture gate now includes a 500-line default for first-party source,
+frozen per-file ceilings for existing oversized debt, and narrowly reviewed
+exceptions when a sound modular split is not possible. Ownership/import checks
+and negative probes follow the extracted code. Native CI and exact-source
+device validation remain required before feature/release acceptance.
+All four local checkers pass, including the new growth/ownership probes.
+An exact-body comparison confirms the Swift extraction preserves the original
+implementations, with only image-page visibility widened to app-internal.
+
+Build 59 Rename was accepted by the user on 2026-09-26 at
+`030172bb8750ccadb19b2cee6d922812d6278295`; PR #96 holds its delivery evidence.
+Documentation PR #99 reconciles that acceptance and the original seven local
+add-ons. The backup-date fix is safely retained in draft PR #100 and is deferred
+behind gallery work; it is not part of this branch. No new build or upload is
+included here. Two-phone transfer and broader failure testing remain deferred.
+Hollow Notes remains paused. The earlier checkpoints below are historical.
+
+## Historical checkpoint: R1 item rename — Build 59 preparation
 
 The user authorized implementing Rename through an iPhone test build. The P1
 documentation stage, PR #95 at `b8d520f66f920d02872a4fa689268a59a704a902`, passed
