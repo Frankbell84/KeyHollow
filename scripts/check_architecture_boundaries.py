@@ -26,6 +26,7 @@ PRESENTATION_FILES = {
     "KeyHollow/Photos/SecurePhotoPicker.swift",
     "KeyHollow/Photos/VaultGalleryView.swift",
     "KeyHollow/Photos/VaultMediaImagePage.swift",
+    "KeyHollow/Photos/VaultGalleryMediaViewer.swift",
     "KeyHollow/Photos/VaultGalleryHeaderControls.swift",
     "KeyHollow/Photos/VaultGallerySearchControls.swift",
     "KeyHollow/Photos/VaultGallerySelectionControls.swift",
@@ -4639,7 +4640,7 @@ def main() -> int:
         "import KeyHollowSecurePreviewAddOn",
         "VaultGalleryGridView(",
         "VaultGalleryItemTileView(",
-        "VaultMediaNavigationPager(",
+        "VaultGalleryMediaViewer(",
         "case .fileManagement:",
         "generalFileStore.loadFile(record)",
         "generalFileStore.prepareExport(files)",
@@ -4725,67 +4726,10 @@ def main() -> int:
                 f"{required!r}"
             )
 
-    media_viewer_body = swift_block_body(
-        gallery_source,
-        "private var mediaNavigationViewer: some View",
-    )
-    media_toolbar_body = swift_block_body(
-        gallery_source,
-        "private func mediaNavigationToolbar(",
-    )
     media_active_content_body = swift_block_body(
         gallery_source,
         "private func mediaNavigationActiveContent(",
     )
-    media_load_state_body = swift_block_body(
-        gallery_source,
-        "private func mediaNavigationLoadState(",
-    )
-    if not (
-        media_viewer_body is not None
-        and contains_in_order(
-            media_viewer_body,
-            (
-                "VaultMediaNavigationPager(",
-                "queue: queue",
-                "isNavigationEnabled: !isSavingPreview",
-                "&& !isDeletingMedia",
-                "&& !isClosingMediaNavigation",
-                "&& !isMediaImageZoomed",
-                "&& isMediaNavigationContentReady(queue)",
-                "onSelectionChange: selectMediaNavigationItem",
-                "onDismissalRequested: beginMediaNavigationDismissal",
-                ".safeAreaInset(edge: .top, spacing: 0)",
-                "if queue.currentItem.kind == .video",
-                "mediaNavigationToolbar(for: queue)",
-            ),
-        )
-    ):
-        violations.append(
-            "KeyHollow/Photos/VaultGalleryView.swift: the pager must disable "
-            "all navigation while image save, active deletion, or terminal "
-            "dismissal work owns the current selection"
-        )
-
-    if not (
-        media_toolbar_body is not None
-        and contains_in_order(
-            media_toolbar_body,
-            (
-                "Button(",
-                "action: beginMediaNavigationDismissal",
-                ".disabled(",
-                "isSavingPreview",
-                "|| isDeletingMedia",
-                "|| isClosingMediaNavigation",
-            ),
-        )
-    ):
-        violations.append(
-            "KeyHollow/Photos/VaultGalleryView.swift: the visible Done action "
-            "must be disabled while image save, deletion, or dismissal is active"
-        )
-
     if not (
         media_active_content_body is not None
         and "mediaNavigationPlaceholder" not in media_active_content_body
@@ -4844,26 +4788,6 @@ def main() -> int:
             "KeyHollow/Photos/VaultGalleryView.swift: video pages must be a "
             "single player backed by the stable module-owned session, closing "
             "the selected outer viewer through the app-owned cleanup path"
-        )
-
-    if not (
-        media_load_state_body is not None
-        and contains_in_order(
-            media_load_state_body,
-            (
-                "if failedMediaID == item.id",
-                "Button(",
-                "retryMediaNavigationItem(item.id)",
-                "} else",
-                "ProgressView(",
-            ),
-        )
-        and media_load_state_body.count("retryMediaNavigationItem(item.id)") == 1
-        and media_load_state_body.count("ProgressView(") == 1
-    ):
-        violations.append(
-            "KeyHollow/Photos/VaultGalleryView.swift: failed media opens must "
-            "replace the opening spinner with one retry route"
         )
 
     gallery_tap_start = gallery_executable.find(
@@ -5380,7 +5304,7 @@ def main() -> int:
                 "module-owned player surface",
             ),
             (
-                r"onDismissalRequested:\s*beginMediaNavigationDismissal",
+                r"case\s+\.dismiss:\s*beginMediaNavigationDismissal\(\)",
                 "content-swipe application dismissal",
             ),
             (

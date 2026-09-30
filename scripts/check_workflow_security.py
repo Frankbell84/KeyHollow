@@ -201,22 +201,25 @@ PRIVILEGED_SOURCE_SHA256 = {
         "9ff597ee8db1228de2e91df3863a34e83c73305b2f00fe08faf5a931929cdee3"
     ),
     "scripts/check_architecture_boundaries.py": (
-        "2b452fc713556af2b5ffc5a84c8e64692ddc38448918c3ed4f9c386286780032"
+        "b3effd8a59bc827ae74123dfacda50c41683649d1406c09f7247f33d15859670"
+    ),
+    "scripts/gallery_media_boundaries.py": (
+        "3bf15c19f4fe58b651edd0c57ed5fe8c19b9da67833006a8ebe64f455b38be01"
     ),
     "scripts/gallery_folder_boundaries.py": (
         "f84b17d62aa3fd03e558af3cb71ac7880fc4294bb452404a54297f69fc9e6d33"
     ),
     "scripts/gallery_boundaries.py": (
-        "c00c075ba05df29482d88c26c180ca67531f1f70c0768108bf65475883f2b349"
+        "bd86a728f88242a65cbed2ecfec21cd541b91c759f4abe9e901b11a6b9b0952b"
     ),
     "scripts/check_source_size.py": (
         "579a094746e2a49c1cda91d8edbcc10fdf83f2d2855807f4d5613f56890f036c"
     ),
     "scripts/source_size_limits.json": (
-        "142e17b7358f5a5e701b1f900762fd60cc59bf2be2fa46bafcfb891ad629205e"
+        "18c577816cf536dfddd2ed6451479c7e31e21d30ccb5917636ae3883f55c1ca4"
     ),
     "scripts/workflow_hash_probes.py": (
-        "e444ba22eb71b290a7ed16a034524e2be7f387e84c5c5826bd4c6c4d335d1c64"
+        "524ff2a2d02e5c9ebd3fed7ae51e675729b2082ce5bf9e1ec613d2548145c791"
     ),
     "scripts/check_privacy_manifest.py": (
         "c8c255c8d6465aafd04f941daa4bee3fa0f3a9881390032666f3eb38fa0c979a"
@@ -225,7 +228,7 @@ PRIVILEGED_SOURCE_SHA256 = {
         "232f0b11e50aba390d23206692ba3c3ec9e72fa83af2dd30876bc3486188ee9d"
     ),
     "project.yml": (
-        "dc9b1e96cfb876692abbd96504646a020b26f5a43947b43f459090e3cf2f329d"
+        "709d2809ac80fb606264dc29ca352e8dc29d5a29216e298ef902ade6751abd9f"
     ),
 }
 
@@ -2460,50 +2463,7 @@ def self_test() -> int:
         nonisolated_python_invocations,
     )
 
-    pinned = "uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803"
-    assert not any("not pinned" in item for item in audit_generic("fixture", pinned))
-
-    unpinned = "uses: actions/checkout@v6"
-    assert any("not pinned" in item for item in audit_generic("fixture", unpinned))
-
-    injected = "steps:\n  - run: echo '${{ inputs.value }}'\n"
-    assert any(
-        "interpolated directly" in item for item in audit_generic("fixture", injected)
-    )
-
-    bracket_input = "steps:\n  - run: echo \"${{ inputs['value'] }}\"\n"
-    assert any(
-        "interpolated directly" in item
-        for item in audit_generic("fixture", bracket_input)
-    )
-    bracket_context = (
-        "steps:\n  - run: echo \"${{ github['event']['issue']['title'] }}\"\n"
-    )
-    assert any(
-        "interpolated directly" in item
-        for item in audit_generic("fixture", bracket_context)
-    )
-
-    bracket_secret = (
-        "steps:\n"
-        "  - env:\n"
-        "      VALUE: ${{ secrets['BUILD_CERTIFICATE_BASE64'] }}\n"
-        "    run: printf '%s\\n' \"$VALUE\"\n"
-    )
-    assert any(
-        "bracket-style secret" in item
-        for item in audit_generic("fixture", bracket_secret)
-    )
-
-    safe_env = (
-        "steps:\n"
-        "  - env:\n"
-        "      VALUE: ${{ inputs.value }}\n"
-        "    run: printf '%s\\n' \"$VALUE\"\n"
-    )
-    assert not any(
-        "interpolated directly" in item for item in audit_generic("fixture", safe_env)
-    )
+    runpy.run_path(str(ROOT / probe_path))["check_generic_execution_guards"](audit_generic)
 
     rotation_fixture = "\n".join(
         [

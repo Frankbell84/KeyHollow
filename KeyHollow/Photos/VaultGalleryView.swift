@@ -382,102 +382,32 @@ struct VaultGalleryView: View {
     @ViewBuilder
     private var mediaNavigationViewer: some View {
         if let queue = mediaNavigationQueue {
-            VaultMediaNavigationPager(
+            VaultGalleryMediaViewer(
                 queue: queue,
                 isNavigationEnabled: !isSavingPreview
                     && !isDeletingMedia
                     && !isClosingMediaNavigation
                     && !isMediaImageZoomed
                     && isMediaNavigationContentReady(queue),
+                isBusy: isSavingPreview || isDeletingMedia || isClosingMediaNavigation,
+                isChromeVisible: isMediaChromeVisible,
+                isImageSaveEnabled: imagePreview.active?.id == queue.selectedID,
+                previewMessage: $previewMessage,
                 onSelectionChange: selectMediaNavigationItem,
-                onDismissalRequested: beginMediaNavigationDismissal,
-                onChromeToggleRequested: {
-                    // The module-owned video session owns the native AVKit
-                    // controls. Only image pages use a content
-                    // tap to reveal or hide KeyHollow's action overlay.
-                    guard VaultMediaChromeInteractionPolicy.acceptsContentTap(
-                        for: queue.currentItem.kind
-                    ) else { return }
-                    toggleMediaChrome()
+                perform: { action in
+                    switch action {
+                    case .dismiss: beginMediaNavigationDismissal()
+                    case .toggleChrome: toggleMediaChrome()
+                    case .saveImage: saveCurrentMediaImage()
+                    case .delete: deleteCurrentMedia()
+                    }
                 }
             ) { item in
                 mediaNavigationActiveContent(item)
             }
-            .safeAreaInset(edge: .top, spacing: 0) {
-                if queue.currentItem.kind == .video {
-                    mediaNavigationToolbar(for: queue)
-                }
-            }
-            .overlay(alignment: .top) {
-                if isMediaChromeVisible && queue.currentItem.kind == .image {
-                    mediaNavigationToolbar(for: queue)
-                        .transition(.move(edge: .top).combined(with: .opacity))
-                }
-            }
-            .animation(.easeInOut(duration: 0.2), value: isMediaChromeVisible)
-            .alert("KeyHollow", isPresented: Binding(
-                get: { previewMessage != nil },
-                set: { if !$0 { previewMessage = nil } }
-            )) {
-                Button("OK") { previewMessage = nil }
-            } message: {
-                Text(previewMessage ?? "")
-            }
         } else {
             Color.black.ignoresSafeArea()
         }
-    }
-
-    private func mediaNavigationToolbar(
-        for queue: VaultMediaNavigationQueue
-    ) -> some View {
-        ZStack {
-            VStack(spacing: 1) {
-                Text(queue.currentItem.accessibilityTitle)
-                    .font(.headline)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                Text(queue.accessibilityPosition)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            .padding(.horizontal, 96)
-
-            HStack(spacing: 18) {
-                Button("Done", action: beginMediaNavigationDismissal)
-                    .disabled(
-                        isSavingPreview
-                            || isDeletingMedia
-                            || isClosingMediaNavigation
-                    )
-
-                Spacer()
-
-                if isSavingPreview || isDeletingMedia || isClosingMediaNavigation {
-                    ProgressView()
-                        .tint(.white)
-                } else if queue.currentItem.kind == .image {
-                    Button {
-                        saveCurrentMediaImage()
-                    } label: {
-                        Image(systemName: "square.and.arrow.down")
-                    }
-                    .accessibilityLabel("Save to Photos")
-                    .disabled(imagePreview.active?.id != queue.selectedID)
-                }
-
-                Button(role: .destructive) {
-                    deleteCurrentMedia()
-                } label: {
-                    Image(systemName: "trash")
-                }
-                .accessibilityLabel("Delete from Vault")
-                .disabled(isSavingPreview || isDeletingMedia || isClosingMediaNavigation)
-            }
-        }
-        .padding(.horizontal)
-        .padding(.vertical, 10)
-        .background(.ultraThinMaterial)
     }
 
     @ViewBuilder
@@ -544,41 +474,14 @@ struct VaultGalleryView: View {
         }
     }
 
-    @ViewBuilder
     private func mediaNavigationLoadState(
         for item: VaultMediaNavigationItem
     ) -> some View {
-        if failedMediaID == item.id {
-            VStack(spacing: 12) {
-                Image(systemName: "exclamationmark.triangle")
-                    .font(.title)
-                Text("Unable to Open")
-                    .font(.headline)
-                Button("Try Again") {
-                    retryMediaNavigationItem(item.id)
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(
-                    isSavingPreview
-                        || isDeletingMedia
-                        || isClosingMediaNavigation
-                )
-            }
-            .padding()
-            .foregroundStyle(.white)
-            .background(
-                .regularMaterial,
-                in: RoundedRectangle(cornerRadius: 12)
-            )
-            .accessibilityElement(children: .contain)
-        } else {
-            ProgressView("Opening…")
-                .padding()
-                .background(
-                    .regularMaterial,
-                    in: RoundedRectangle(cornerRadius: 12)
-                )
-        }
+        VaultGalleryMediaLoadState(
+            isFailed: failedMediaID == item.id,
+            isInteractionDisabled: isSavingPreview || isDeletingMedia || isClosingMediaNavigation,
+            onRetry: { retryMediaNavigationItem(item.id) }
+        )
     }
 
     private func galleryHeader(

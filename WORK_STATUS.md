@@ -1,11 +1,62 @@
 # KeyHollow Work Status
 
-Updated: 2026-09-29
+Updated: 2026-09-30
 
 This is the authoritative operational resume point. Historical Build 38
 evidence remains in `docs/PROJECT_CHECKPOINT.md`.
 
-## Latest checkpoint: gallery folder actions
+## Latest checkpoint: Build 60 gallery regression candidate
+
+The owner authorized continuing through an installable iPhone test build
+without intermediate permission requests. App Store Connect sign-in was restored
+on 2026-09-30. Its iOS Builds and all-status Build Uploads lists showed Build 59
+latest and no Build 60. The app and thumbnail extension now both specify 60,
+with the reviewed project fingerprint updated. The release workflow must still
+repeat its live build-number check immediately before upload.
+
+This candidate combines the six behavior-preserving gallery extractions since
+accepted Build 59. It is a device-regression checkpoint before moving the more
+sensitive import, bulk-operation and media-lifetime coordination. The gallery
+is 2,119 lines, down from 3,270, but decomposition is not finished. Its remaining
+ceiling stays frozen; new files remain subject to the 500-line default.
+
+See [gallery device checklist](docs/GALLERY_DEVICE_CHECKPOINT.md). PR #106
+records the exact candidate SHA, native CI, merged-main CI, no-upload signing
+preflight, protected upload and Apple availability as delivery progresses.
+Packaging changes the candidate SHA and requires fresh validation. No new
+device acceptance is claimed here. Build 59 remains the accepted binary;
+distribution of this candidate is limited to KeyHollow Internal. No feature,
+format change, Family assignment or App Store release is included.
+
+## Historical checkpoint: gallery media presentation
+
+The owner authorized continuing the gallery refactor through checks, merges and
+an iPhone test build without intermediate permission requests. Keep the stages
+focused and preserve the accepted behavior; no unrelated feature expansion is
+included. Device acceptance still requires the user's test result.
+
+Branch `codex/gallery-media-presentation` moves the full-screen viewer layout,
+toolbar and failed/opening presentation into a 149-line app-owned component.
+The gallery falls from 2,216 to 2,119 lines. Composition still owns the active
+payload, readiness, image/video coordinators, registered tasks, navigation,
+dismissal and lock cleanup. The component receives display values and routes
+typed actions back to the existing handlers. No media loading or stored payload
+is added to the presentation owner.
+
+Architecture assertions move with the presentation and gain negative probes for
+busy/readiness guards, permanent video Done placement, image-only chrome taps,
+retry, action routing and forbidden payload/task ownership. All non-presentation
+gallery code remains unchanged under the source-substitution comparison. Exact
+native CI and merge evidence belong to this branch's GitHub PR; this preparation
+checkpoint does not establish device acceptance or finish the gallery split.
+
+PR #105 merged as `f22eb9ca601ea501dda36adb335b19fb4cc3a38a`, with the same tree
+as tested head `e6e8dc33ab0a5ec7fe05449cb24f0319fc722e80`. CI `36630405835`
+passed native build, 481 unit tests, 3 launch tests and Swift CodeQL. The exact
+merged main also passed both jobs in `36633714901`. This branch starts from that
+verified merge. Build 59 remains the accepted device binary.
+
+## Historical checkpoint: gallery folder actions
 
 Branch `codex/gallery-folder-actions` separates transient folder editor and
 move-request state from folder metadata dispatch. `VaultGalleryFolderActions`
