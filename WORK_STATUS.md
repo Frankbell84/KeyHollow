@@ -5,7 +5,30 @@ Updated: 2026-09-30
 This is the authoritative operational resume point. Historical Build 38
 evidence remains in `docs/PROJECT_CHECKPOINT.md`.
 
-## Latest checkpoint: gallery media presentation
+## Latest checkpoint: Build 60 gallery regression candidate
+
+The owner authorized continuing through an installable iPhone test build
+without intermediate permission requests. App Store Connect sign-in was restored
+on 2026-09-30. Its iOS Builds and all-status Build Uploads lists showed Build 59
+latest and no Build 60. The app and thumbnail extension now both specify 60,
+with the reviewed project fingerprint updated. The release workflow must still
+repeat its live build-number check immediately before upload.
+
+This candidate combines the six behavior-preserving gallery extractions since
+accepted Build 59. It is a device-regression checkpoint before moving the more
+sensitive import, bulk-operation and media-lifetime coordination. The gallery
+is 2,119 lines, down from 3,270, but decomposition is not finished. Its remaining
+ceiling stays frozen; new files remain subject to the 500-line default.
+
+See [gallery device checklist](docs/GALLERY_DEVICE_CHECKPOINT.md). PR #106
+records the exact candidate SHA, native CI, merged-main CI, no-upload signing
+preflight, protected upload and Apple availability as delivery progresses.
+Packaging changes the candidate SHA and requires fresh validation. No new
+device acceptance is claimed here. Build 59 remains the accepted binary;
+distribution of this candidate is limited to KeyHollow Internal. No feature,
+format change, Family assignment or App Store release is included.
+
+## Historical checkpoint: gallery media presentation
 
 The owner authorized continuing the gallery refactor through checks, merges and
 an iPhone test build without intermediate permission requests. Keep the stages
