@@ -108,3 +108,50 @@ def check_execution_guards(
     assert nonisolated_python_invocations(
         "steps:\n  - run: python3 scripts/reviewed.py"
     )
+
+
+def check_generic_execution_guards(audit_generic):
+    pinned = "uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803"
+    assert not any("not pinned" in item for item in audit_generic("fixture", pinned))
+
+    unpinned = "uses: actions/checkout@v6"
+    assert any("not pinned" in item for item in audit_generic("fixture", unpinned))
+
+    injected = "steps:\n  - run: echo '${{ inputs.value }}'\n"
+    assert any(
+        "interpolated directly" in item for item in audit_generic("fixture", injected)
+    )
+
+    bracket_input = "steps:\n  - run: echo \"${{ inputs['value'] }}\"\n"
+    assert any(
+        "interpolated directly" in item
+        for item in audit_generic("fixture", bracket_input)
+    )
+    bracket_context = (
+        "steps:\n  - run: echo \"${{ github['event']['issue']['title'] }}\"\n"
+    )
+    assert any(
+        "interpolated directly" in item
+        for item in audit_generic("fixture", bracket_context)
+    )
+
+    bracket_secret = (
+        "steps:\n"
+        "  - env:\n"
+        "      VALUE: ${{ secrets['BUILD_CERTIFICATE_BASE64'] }}\n"
+        "    run: printf '%s\\n' \"$VALUE\"\n"
+    )
+    assert any(
+        "bracket-style secret" in item
+        for item in audit_generic("fixture", bracket_secret)
+    )
+
+    safe_env = (
+        "steps:\n"
+        "  - env:\n"
+        "      VALUE: ${{ inputs.value }}\n"
+        "    run: printf '%s\\n' \"$VALUE\"\n"
+    )
+    assert not any(
+        "interpolated directly" in item for item in audit_generic("fixture", safe_env)
+    )

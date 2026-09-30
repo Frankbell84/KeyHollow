@@ -165,6 +165,46 @@ move intact into the already verified workflow probe helper; production
 security enforcement and pre-execution hash verification stay in the checker.
 Both oversized checker ceilings shrink, and no size allowance is raised.
 
+PR #105 at `e6e8dc33ab0a5ec7fe05449cb24f0319fc722e80` passed native build,
+481 unit tests, 3 launch tests and Swift CodeQL in CI `36630405835`. Its merge
+`f22eb9ca601ea501dda36adb335b19fb4cc3a38a` has exactly the same source tree;
+the merged main also passed both jobs in `36633714901`.
+
+## Sixth extraction: media viewer presentation
+
+Branch `codex/gallery-media-presentation` separates the full-screen viewer's
+layout, toolbar and failed/opening state into `VaultGalleryMediaViewer.swift`
+(149 lines). The gallery falls from 2,216 to 2,119 lines. The new app-owned views
+receive queue metadata, display/availability flags, the existing alert binding,
+typed actions and an active-content builder. The existing pager still invokes
+that builder only for the current item. No public add-on interface changes.
+
+Composition retains every operation and lifetime owner: image/video state,
+payload preparation, surface attachment/release, task registration, generation
+checks, readiness, saving/deletion, dismissal and lock/background cleanup.
+The image/video content bodies and all non-presentation operations are unchanged.
+The new views do not receive stores, sessions, decoded images, keys or media
+coordinators. The permanent video toolbar and image-only fading overlay retain
+their positions, styles, gesture policy, accessibility and disabled conditions.
+
+The moved architecture assertions now check both the presentation and its
+composition inputs. Negative probes remove action routes, readiness/busy guards,
+video Done placement, image chrome policy and retry wiring, and reject a new
+task or retained image in the view. Existing media navigation, gesture, image
+and video lifetime tests remain required in native CI. This pure presentation
+move adds no new state machine that would justify duplicate runtime tests.
+
+The new checker helper is hash-pinned. Existing action-pinning and direct-input
+interpolation probes move intact into the already verified workflow probe
+helper. Production security checks and verification before helper execution
+remain in their original owner. Both oversized checker ceilings decrease;
+no new legacy allowance or size exception is introduced.
+
+The owner authorized continuing focused refactor stages and delivery through
+an iPhone test build. Exact CI/merge results remain in each PR. Physical testing
+must still revisit portrait/landscape video close and swipe behavior, photo
+paging/zoom/save, retry, deletion and lock/background cleanup before acceptance.
+
 ## Enforced prevention
 
 The existing architecture CI gate invokes `check_source_size.py` and checks
