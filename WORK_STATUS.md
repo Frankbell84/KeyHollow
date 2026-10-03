@@ -1,11 +1,50 @@
 # KeyHollow Work Status
 
-Updated: 2026-09-30
+Updated: 2026-10-03
 
 This is the authoritative operational resume point. Historical Build 38
 evidence remains in `docs/PROJECT_CHECKPOINT.md`.
 
-## Latest checkpoint: Build 60 gallery regression candidate
+## Latest checkpoint: accepted Build 60; Photos import batch extraction
+
+The owner reported "It works" for Build 60 on 2026-10-03. PR #106 records
+that owner-reported acceptance at `765dcb00d1a196c791fb39cd12ea81abf0fb1caa`,
+plus main CI `36709490783` (481 unit tests, 3 launch tests and Swift CodeQL),
+signing preflight `36712221321`, upload `36712738856`, and Apple build
+`8953a2ae-76c5-4ba3-b318-8795830c7fd0`. Build 60 supersedes Build 59 as the
+accepted device checkpoint. No additional test-by-test measurements were given.
+The deferred two-phone transfer/failure matrix remains deferred.
+
+The owner renewed authorization to continue focused cleanup, checks, merges and
+Internal delivery until another installable test point, without intermediate
+permission requests. Branch `codex/gallery-import-operations` starts from that
+accepted main and separates the Photos photo/video batch policy into
+`UI/VaultGalleryImportBatch.swift`. The gallery falls from 2,119 to 2,049 lines.
+The value owns counts, folder fallback, original-deletion eligibility and result
+messages. It receives nonescaping operations only for the current import; it
+retains no store, task, session or payload. Composition still owns the registered
+task, captured vault/epoch, concrete store dispatch, picker lifetime, catalog
+refresh and the iOS original-deletion prompt. Files import, bulk operations and
+media lifetime coordination remain unchanged and need later focused stages.
+
+Twelve focused native tests cover typed mixed batches, placement/order, copy and
+move outcomes, partial failures, missing source identifiers, cancellation and
+late successful completion. Architecture mutation probes enforce private state,
+registered task and destination wiring, cancellation, reset and original-delete
+guards. Existing protected-environment self-tests move intact into the already
+hash-verified workflow probe helper, allowing the oversized checker to shrink.
+No source-size ceiling increases or new legacy allowances are introduced.
+
+Local architecture, workflow-security, hygiene and privacy checks passed during
+implementation. Exact native CI, signing/upload and Internal availability remain to be recorded
+in this branch's PR; no new device acceptance is claimed. Apple sign-in was
+restored on 2026-10-03. iOS Builds and all-status Build Uploads showed 60 latest
+with no 61 before both products advanced to Build 61 and the project fingerprint
+was updated. The release workflow must repeat its live check before upload; this
+observation does not reserve the number. Build 60 remains accepted. Delivery
+stays Internal-only. See [import device checklist](docs/GALLERY_IMPORT_DEVICE_CHECKPOINT.md).
+
+## Historical checkpoint: Build 60 gallery regression candidate
 
 The owner authorized continuing through an installable iPhone test build
 without intermediate permission requests. App Store Connect sign-in was restored
