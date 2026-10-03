@@ -79,21 +79,26 @@ def file_import_violations(owner, gallery, executable, body):
     owner, gallery = executable(owner), executable(gallery)
     compact = lambda text: re.sub(r"\s+", "", text)
     errors = []
-    if "@MainActor\nenum VaultGalleryFileImport" not in owner or "importFiles: @MainActor (" not in owner:
-        errors.append("Files import policy must remain a stateless main-actor owner")
+    if "@MainActor\nstruct VaultGalleryFileImport" not in owner or "importFiles: @MainActor (inout Self)" not in owner:
+        errors.append("Files import policy must remain a main-actor batch value")
     if re.search(r"\b(?:VaultSession|VaultAccessCapability|VaultPhotoStore|VaultGeneralFileStore|"
                  r"VaultFolderPresentationStore|FileManager|Data|URL)\b|"
                  r"Task\s*\{|Task\.detached|@escaping|@(State|Published|Observable)", owner):
         errors.append("Files import policy gained retained payload, task, session or store authority")
+    if "private var rootFallbackCount = 0" not in owner:
+        errors.append("Files import fallback count must stay private and batch-local")
+    placement = body(owner, "mutating func place(") or ""
+    for required in ("let placed = try await destination.place(",
+                     "VaultPresentedContentReference(kind: .generalFile, id: record.id)",
+                     "move: move", "if !placed { rootFallbackCount += 1 }"):
+        if compact(required) not in compact(placement):
+            errors.append(f"Files import placement policy lost: {required}")
     operation = body(owner, "static func perform(") or ""
     ordered = (
-        "var rootFallbackCount = 0", "let outcome = try await importFiles(",
-        "let placed = try await destination.place(",
-        "VaultPresentedContentReference(kind: .generalFile, id: record.id)",
-        "move: move", "if !placed { rootFallbackCount += 1 }", "{ progressDidChange($0) }",
+        "var batch = Self()", "let outcome = try await importFiles(&batch)",
         "guard !Task.isCancelled, isCurrent() else { return nil }", "await reload()",
         "return GeneralFileImportPresentation.message(for: outcome)",
-        "+ VaultImportDestination.recoveryMessage(rootCount: rootFallbackCount)",
+        "+ VaultImportDestination.recoveryMessage(rootCount: batch.rootFallbackCount)",
         "catch is CancellationError { return nil }", "catch { return",
     )
     remaining = compact(operation)
@@ -120,11 +125,12 @@ def file_import_violations(owner, gallery, executable, body):
     for required in (
         "defer { generalFileImportProgress = nil isWorking = false }",
         "let resultMessage = await VaultGalleryFileImport.perform(",
-        "destination: destination", "importFiles: { recordDidImport, progressDidChange in",
+        "importFiles: { batch in",
         "try await GeneralFileImportCoordinator.importFiles(",
-        "at: urls, using: generalFileStore", "recordDidImport: recordDidImport",
-        "progressDidChange: progressDidChange", "try await presentationStore.move(item, to: folderID)",
-        "progressDidChange: { progress in generalFileImportProgress = progress }",
+        "at: urls, using: generalFileStore", "recordDidImport: { record in",
+        "try await batch.place(record, destination: destination) { item, folderID in",
+        "try await presentationStore.move(item, to: folderID)",
+        "progressDidChange: { generalFileImportProgress = $0 }",
         "isCurrent: { destination.matches(vaultID: session.activeVaultID, securityEpoch: session.securityEpoch) }",
         "reload: { await reloadGeneralFiles() }", "if let resultMessage { message = resultMessage }",
     ):
@@ -144,10 +150,11 @@ def file_import_probe_violations(sources, executable, body):
     errors = check(owner, gallery)
     if errors:
         return errors
-    for anchor in ("importFiles: @MainActor", "!Task.isCancelled,", "isCurrent()",
+    for anchor in ("@MainActor", "importFiles: @MainActor", "private var rootFallbackCount",
+                   "!Task.isCancelled,", "isCurrent()",
                    "await reload()", "catch is CancellationError",
                    "if !placed { rootFallbackCount += 1 }", "kind: .generalFile",
-                   "move: move", "{ progressDidChange($0) }", "return nil"):
+                   "move: move", "importFiles(&batch)", "return nil"):
         if not check(owner.replace(anchor, "", 1), gallery):
             errors.append(f"Files import self-test accepted missing policy guard: {anchor}")
     start = gallery.index("private func importGeneralFiles(")
@@ -155,7 +162,7 @@ def file_import_probe_violations(sources, executable, body):
     for anchor in ("!urls.isEmpty", "urls.count <= VaultGeneralFileStore.maximumBatchCount",
                    "!isWorking", "session.startSensitiveTask", "if taskID == nil",
                    "generalFileImportProgress = nil", "isWorking = false",
-                   "recordDidImport: recordDidImport", "progressDidChange: progressDidChange",
+                   "batch.place(record, destination: destination)", "progressDidChange: { generalFileImportProgress = $0 }",
                    "destination.matches(vaultID: session.activeVaultID, securityEpoch: session.securityEpoch)",
                    "reload: { await reloadGeneralFiles() }", "if let resultMessage"):
         part = gallery[start:end].replace(anchor, "")

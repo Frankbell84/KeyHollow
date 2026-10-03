@@ -1043,19 +1043,16 @@ struct VaultGalleryView: View {
                 isWorking = false
             }
             let resultMessage = await VaultGalleryFileImport.perform(
-                destination: destination,
-                importFiles: { recordDidImport, progressDidChange in
+                importFiles: { batch in
                     try await GeneralFileImportCoordinator.importFiles(
                         at: urls, using: generalFileStore,
-                        recordDidImport: recordDidImport,
-                        progressDidChange: progressDidChange
+                        recordDidImport: { record in
+                            try await batch.place(record, destination: destination) { item, folderID in
+                                try await presentationStore.move(item, to: folderID)
+                            }
+                        },
+                        progressDidChange: { generalFileImportProgress = $0 }
                     )
-                },
-                move: { item, folderID in
-                    try await presentationStore.move(item, to: folderID)
-                },
-                progressDidChange: { progress in
-                    generalFileImportProgress = progress
                 },
                 isCurrent: {
                     destination.matches(vaultID: session.activeVaultID, securityEpoch: session.securityEpoch)

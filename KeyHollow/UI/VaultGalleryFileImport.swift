@@ -2,37 +2,36 @@ import Foundation
 import KeyHollowFolderPresentationAddOn
 import KeyHollowGeneralFileSupportAddOn
 
-/// The gallery's Files batch policy, executed inside its registered session task.
-/// Operations are nonescaping; this owner retains no URLs, stores, session or task.
+/// Per-import policy, consumed only inside the gallery's registered session task.
+/// Retains one fallback count, never URLs, stores, sessions, tasks or operations.
 @MainActor
-enum VaultGalleryFileImport {
-    static func perform(
+struct VaultGalleryFileImport {
+    private var rootFallbackCount = 0
+
+    mutating func place(
+        _ record: VaultGeneralFileRecord,
         destination: VaultImportDestination,
-        importFiles: @MainActor (
-            _ recordDidImport: (VaultGeneralFileRecord) async throws -> Void,
-            _ progressDidChange: (GeneralFileImportProgressState) -> Void
-        ) async throws -> VaultGeneralFileImportResult,
-        move: (VaultPresentedContentReference, UUID) async throws -> Void,
-        progressDidChange: (GeneralFileImportProgressState) -> Void,
+        move: (VaultPresentedContentReference, UUID) async throws -> Void
+    ) async throws {
+        let placed = try await destination.place(
+            VaultPresentedContentReference(kind: .generalFile, id: record.id),
+            move: move
+        )
+        if !placed { rootFallbackCount += 1 }
+    }
+
+    static func perform(
+        importFiles: @MainActor (inout Self) async throws -> VaultGeneralFileImportResult,
         isCurrent: () -> Bool,
         reload: () async -> Void
     ) async -> String? {
-        var rootFallbackCount = 0
+        var batch = Self()
         do {
-            let outcome = try await importFiles(
-                { record in
-                    let placed = try await destination.place(
-                        VaultPresentedContentReference(kind: .generalFile, id: record.id),
-                        move: move
-                    )
-                    if !placed { rootFallbackCount += 1 }
-                },
-                { progressDidChange($0) }
-            )
+            let outcome = try await importFiles(&batch)
             guard !Task.isCancelled, isCurrent() else { return nil }
             await reload()
             return GeneralFileImportPresentation.message(for: outcome)
-                + VaultImportDestination.recoveryMessage(rootCount: rootFallbackCount)
+                + VaultImportDestination.recoveryMessage(rootCount: batch.rootFallbackCount)
         } catch is CancellationError {
             return nil
         } catch {

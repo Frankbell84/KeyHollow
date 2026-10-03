@@ -208,7 +208,7 @@ PRIVILEGED_SOURCE_SHA256 = {
         "b3effd8a59bc827ae74123dfacda50c41683649d1406c09f7247f33d15859670"
     ),
     "scripts/gallery_import_boundaries.py": (
-        "942594871db5da23aae3148d5c26a89d68d5bdc56c7a1c4d1e27027b7dc10e14"
+        "398d93428fd714b225e5009dabb14cbd3313d3f2869cf86822d780e468d390d6"
     ),
     "scripts/gallery_media_boundaries.py": (
         "3bf15c19f4fe58b651edd0c57ed5fe8c19b9da67833006a8ebe64f455b38be01"
@@ -223,7 +223,7 @@ PRIVILEGED_SOURCE_SHA256 = {
         "579a094746e2a49c1cda91d8edbcc10fdf83f2d2855807f4d5613f56890f036c"
     ),
     "scripts/source_size_limits.json": (
-        "90c645ff98d973c57ce044faffdfeace3ecb3cef049f7432aea64495316c0fd5"
+        "327691833007ee5279fb355f583fb0dec3f9b1445bf08e2d94fdac06a437a546"
     ),
     "scripts/workflow_hash_probes.py": (
         "fbe289e122f1bf9688dab1579e460ad1ffa3e741176e39681064ab55c79c0661"

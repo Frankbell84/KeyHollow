@@ -18,10 +18,11 @@ single-owner independent-review limitation.
 
 `UI/VaultGalleryFileImport.swift` now owns Files batch placement, root fallback,
 completion messages and successful-result cancellation/current-session guards.
-It receives nonescaping operations and retains no session, store, task or URL.
+It retains a private fallback count and uses nonescaping operations, with no
+retained session, store, task or URL.
 Composition retains the registered session task, picker handoff, admission
 checks, concrete store operations and busy/progress cleanup. The gallery shrinks
-from 2,049 to 2,044 lines; the benefit is an independently testable policy owner,
+from 2,049 to 2,041 lines; the benefit is an independently testable policy owner,
 not completion of decomposition. Bulk operations and media lifetime remain later
 stages. Eight focused tests cover order, root/folder placement, partial/rejected
 batches, cancellation, late success and stale vault/epoch completion. Architecture
