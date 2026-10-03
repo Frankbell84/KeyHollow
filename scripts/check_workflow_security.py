@@ -208,7 +208,7 @@ PRIVILEGED_SOURCE_SHA256 = {
         "b3effd8a59bc827ae74123dfacda50c41683649d1406c09f7247f33d15859670"
     ),
     "scripts/gallery_import_boundaries.py": (
-        "0593b8a7908097c12b57edc50b5b238dfcd38b22f28ccde56a0685b700861141"
+        "942594871db5da23aae3148d5c26a89d68d5bdc56c7a1c4d1e27027b7dc10e14"
     ),
     "scripts/gallery_media_boundaries.py": (
         "3bf15c19f4fe58b651edd0c57ed5fe8c19b9da67833006a8ebe64f455b38be01"

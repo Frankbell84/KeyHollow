@@ -79,7 +79,7 @@ def file_import_violations(owner, gallery, executable, body):
     owner, gallery = executable(owner), executable(gallery)
     compact = lambda text: re.sub(r"\s+", "", text)
     errors = []
-    if "@MainActor\nenum VaultGalleryFileImport" not in owner:
+    if "@MainActor\nenum VaultGalleryFileImport" not in owner or "importFiles: @MainActor (" not in owner:
         errors.append("Files import policy must remain a stateless main-actor owner")
     if re.search(r"\b(?:VaultSession|VaultAccessCapability|VaultPhotoStore|VaultGeneralFileStore|"
                  r"VaultFolderPresentationStore|FileManager|Data|URL)\b|"
@@ -90,7 +90,7 @@ def file_import_violations(owner, gallery, executable, body):
         "var rootFallbackCount = 0", "let outcome = try await importFiles(",
         "let placed = try await destination.place(",
         "VaultPresentedContentReference(kind: .generalFile, id: record.id)",
-        "move: move", "if !placed { rootFallbackCount += 1 }", "progressDidChange",
+        "move: move", "if !placed { rootFallbackCount += 1 }", "{ progressDidChange($0) }",
         "guard !Task.isCancelled, isCurrent() else { return nil }", "await reload()",
         "return GeneralFileImportPresentation.message(for: outcome)",
         "+ VaultImportDestination.recoveryMessage(rootCount: rootFallbackCount)",
@@ -144,10 +144,10 @@ def file_import_probe_violations(sources, executable, body):
     errors = check(owner, gallery)
     if errors:
         return errors
-    for anchor in ("@MainActor", "!Task.isCancelled,", "isCurrent()",
+    for anchor in ("importFiles: @MainActor", "!Task.isCancelled,", "isCurrent()",
                    "await reload()", "catch is CancellationError",
                    "if !placed { rootFallbackCount += 1 }", "kind: .generalFile",
-                   "move: move", "progressDidChange\n", "return nil"):
+                   "move: move", "{ progressDidChange($0) }", "return nil"):
         if not check(owner.replace(anchor, "", 1), gallery):
             errors.append(f"Files import self-test accepted missing policy guard: {anchor}")
     start = gallery.index("private func importGeneralFiles(")

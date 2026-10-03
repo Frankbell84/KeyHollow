@@ -8,7 +8,7 @@ import KeyHollowGeneralFileSupportAddOn
 enum VaultGalleryFileImport {
     static func perform(
         destination: VaultImportDestination,
-        importFiles: (
+        importFiles: @MainActor (
             _ recordDidImport: (VaultGeneralFileRecord) async throws -> Void,
             _ progressDidChange: (GeneralFileImportProgressState) -> Void
         ) async throws -> VaultGeneralFileImportResult,
@@ -27,7 +27,7 @@ enum VaultGalleryFileImport {
                     )
                     if !placed { rootFallbackCount += 1 }
                 },
-                progressDidChange
+                { progressDidChange($0) }
             )
             guard !Task.isCancelled, isCurrent() else { return nil }
             await reload()
