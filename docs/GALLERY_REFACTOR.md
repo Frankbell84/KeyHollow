@@ -205,6 +205,45 @@ an iPhone test build. Exact CI/merge results remain in each PR. Physical testing
 must still revisit portrait/landscape video close and swipe behavior, photo
 paging/zoom/save, retry, deletion and lock/background cleanup before acceptance.
 
+## Seventh extraction: Photos import batch policy
+
+Build 60 at `765dcb00d1a196c791fb39cd12ea81abf0fb1caa` passed main CI
+`36709490783`, signing preflight `36712221321` and upload `36712738856`.
+The owner reported "It works" on 2026-10-03; PR #106 records that scoped device
+acceptance. Further gallery decomposition remains ahead of feature work.
+
+`codex/gallery-import-operations` extracts `VaultGalleryImportBatch`, an app-only
+value that owns Photos-origin photo/video import accounting, folder fallback,
+eligibility to delete originals and the existing result messages. The gallery
+falls from 2,119 to 2,049 lines. Calls receive nonescaping encryption, placement
+and current-destination checks; no payload, store, task or session is retained.
+The same snapshot-copy behavior is preserved across each awaited import.
+
+Composition still owns session-task registration, concrete encrypted-store
+operations, captured destination and security epoch, picker completion, catalog
+refresh ordering, busy state and original-deletion prompts. The batch verifies
+placement and cancellation before counting success or accepting a source ID.
+Any missing source identifier or failed folder placement prevents the batch's
+original-deletion call. Cancellation produces no publishable snapshot. Current
+vault/epoch checks still reject a stale successful completion. Ordinary failure
+accounting and all existing result text remain unchanged. No new concurrency,
+file format, store implementation, deletion service or user-facing feature.
+
+Twelve focused tests exercise the operation boundary with injected failures,
+cancellation and typed photo/file references, including an otherwise successful
+mixed Move with one root fallback. Existing real encrypted-store, destination,
+sequential Photos adapter and lifecycle tests remain required in full native CI.
+The architecture gate adds actual-source mutation probes for these boundaries;
+its existing registered-store-operation assertions remain intact. The new
+helper is hash-pinned. Existing environment-verifier mutation tests move intact
+to the already verified workflow helper; production enforcement does not move.
+
+The physical checkpoint must cover Copy and Move for small disposable photo/video
+batches at root and in a folder, canceling the picker and the iOS deletion prompt,
+opening imported media, and background/unlock. Keep the existing backup and do
+not use irreplaceable originals for Move tests. The rest of the gallery device
+checklist remains a smoke check. Delivery evidence belongs in the stage PR.
+
 ## Enforced prevention
 
 The existing architecture CI gate invokes `check_source_size.py` and checks

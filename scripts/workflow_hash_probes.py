@@ -155,3 +155,20 @@ def check_generic_execution_guards(audit_generic):
     assert not any(
         "interpolated directly" in item for item in audit_generic("fixture", safe_env)
     )
+
+
+def check_environment_guards(audit_environment_verifier_source, ENVIRONMENT_VERIFIER_REQUIREMENTS):
+    environment_source_fixture = "\n".join(ENVIRONMENT_VERIFIER_REQUIREMENTS)
+    assert audit_environment_verifier_source(environment_source_fixture) == []
+    for required in (
+        'REQUIRED_REVIEWER_LOGIN = "Frankbell84"',
+        'environment.get("can_admins_bypass") is not False',
+        'expected_rule_types = ["branch_policy", "required_reviewers"]',
+        'required_reviewers_rule.get("prevent_self_review") is not False',
+        'reviewer.get("login") != REQUIRED_REVIEWER_LOGIN',
+        "urllib.request.build_opener(RejectRedirectHandler())",
+        "validate_github_api_url(response.geturl(), repository)",
+    ):
+        assert audit_environment_verifier_source(
+            environment_source_fixture.replace(required, "", 1)
+        )

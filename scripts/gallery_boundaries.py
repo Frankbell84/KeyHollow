@@ -5,6 +5,8 @@ import runpy
 
 
 OWNERS = {
+    "VaultImportMode": "UI/VaultGalleryImportBatch.swift",
+    "VaultGalleryImportBatch": "UI/VaultGalleryImportBatch.swift",
     "VaultGalleryContentItem": "Photos/VaultGalleryContentSnapshot.swift",
     "VaultGalleryOpenRoute": "Photos/VaultGalleryContentSnapshot.swift",
     "VaultGalleryContentSnapshot": "Photos/VaultGalleryContentSnapshot.swift",
@@ -24,6 +26,7 @@ OWNERS = {
     "VaultGalleryMediaLoadState": "Photos/VaultGalleryMediaViewer.swift",
 }
 IMPORTS = {
+    "UI/VaultGalleryImportBatch.swift": {"Foundation", "KeyHollowFolderPresentationAddOn", "KeyHollowPhotosAdapter"},
     "Photos/VaultGalleryMediaViewer.swift": {"SwiftUI", "KeyHollowMediaNavigationAddOn"},
     "UI/VaultGalleryFolderActions.swift": {
         "Foundation", "KeyHollowFolderPresentationAddOn", "KeyHollowGalleryUI",
@@ -120,6 +123,8 @@ def gallery_ownership_violations(root, executable, imports, body):
     violations.extend(folder_checks["folder_probe_violations"](sources, executable, body))
     media_checks = runpy.run_path(str(root.parent / "scripts/gallery_media_boundaries.py"))
     violations.extend(media_checks["media_probe_violations"](sources, executable, body))
+    import_checks = runpy.run_path(str(root.parent / "scripts/gallery_import_boundaries.py"))
+    violations.extend(import_checks["import_probe_violations"](sources, executable, body))
     return violations
 
 

@@ -13,20 +13,6 @@ import KeyHollowPhotoCore
 import KeyHollowPhotosAdapter
 import KeyHollowSecurePreviewAddOn
 
-private enum VaultImportMode {
-    case copy
-    case move
-}
-
-private struct VaultImportProgress {
-    let mode: VaultImportMode
-    let total: Int
-    var importedCount = 0
-    var failedCount = 0
-    var identifiersToDelete: [String] = []
-    var rootFallbackCount = 0
-}
-
 private enum VaultMediaNavigationPresentationError: Error {
     case storeUnavailable
 }
@@ -81,7 +67,7 @@ struct VaultGalleryView: View {
     @State private var catalogSortOrder: VaultCatalogSortOrder = .vaultOrder
     @State private var isWorking = false
     @State private var message: String?
-    @State private var importProgress: VaultImportProgress?
+    @State private var importProgress: VaultGalleryImportBatch?
     @State private var generalFileImportProgress: GeneralFileImportProgressState?
     @State private var isMediaImageZoomed = false
     @StateObject private var imagePreview = VaultImagePreviewCoordinator()
@@ -1116,71 +1102,60 @@ struct VaultGalleryView: View {
         case .started(let total):
             guard !isWorking else { return }
             isWorking = true
-            importProgress = VaultImportProgress(mode: importMode, total: total)
+            importProgress = VaultGalleryImportBatch(mode: importMode, total: total)
 
         case .photo(let photo):
             await session.performSensitiveTask { capability in
-                guard var progress = importProgress,
+                guard let progress = importProgress,
                       let store,
                       session.activeVaultID == capability.vaultID,
                       !Task.isCancelled else { return }
-                do {
-                    let record = try await store.importPhoto(
-                        originalData: photo.originalData,
-                        thumbnailData: photo.thumbnailData,
-                        displayName: photo.displayName
-                    )
-                    let placed = try await destination.place(
-                        VaultPresentedContentReference(kind: .photo, id: record.id)
-                    ) { item, folderID in
+                let updated = await progress.importing(
+                    sourceAssetIdentifier: photo.sourceAssetIdentifier,
+                    destination: destination,
+                    encrypt: {
+                        let record = try await store.importPhoto(
+                            originalData: photo.originalData,
+                            thumbnailData: photo.thumbnailData,
+                            displayName: photo.displayName
+                        )
+                        return VaultPresentedContentReference(kind: .photo, id: record.id)
+                    },
+                    move: { item, folderID in
                         try await presentationStore.move(item, to: folderID)
+                    },
+                    isCurrent: {
+                        destination.matches(vaultID: session.activeVaultID, securityEpoch: session.securityEpoch)
                     }
-                    try Task.checkCancellation()
-                    guard destination.matches(vaultID: session.activeVaultID, securityEpoch: session.securityEpoch) else { return }
-                    progress.importedCount += 1
-                    if !placed { progress.rootFallbackCount += 1 }
-                    if placed, progress.mode == .move, let identifier = photo.sourceAssetIdentifier {
-                        progress.identifiersToDelete.append(identifier)
-                    }
-                } catch is CancellationError {
-                    return
-                } catch {
-                    progress.failedCount += 1
-                }
-                importProgress = progress
+                )
+                if let updated { importProgress = updated }
             }
 
         case .video(let video):
             await session.performSensitiveTask { capability in
-                guard var progress = importProgress,
+                guard let progress = importProgress,
                       let generalFileStore,
                       session.activeVaultID == capability.vaultID,
                       !Task.isCancelled else { return }
-                do {
-                    let record = try await generalFileStore.importFile(at: video.fileURL)
-                    let placed = try await destination.place(
-                        VaultPresentedContentReference(kind: .generalFile, id: record.id)
-                    ) { item, folderID in
+                let updated = await progress.importing(
+                    sourceAssetIdentifier: video.sourceAssetIdentifier,
+                    destination: destination,
+                    encrypt: {
+                        let record = try await generalFileStore.importFile(at: video.fileURL)
+                        return VaultPresentedContentReference(kind: .generalFile, id: record.id)
+                    },
+                    move: { item, folderID in
                         try await presentationStore.move(item, to: folderID)
+                    },
+                    isCurrent: {
+                        destination.matches(vaultID: session.activeVaultID, securityEpoch: session.securityEpoch)
                     }
-                    try Task.checkCancellation()
-                    guard destination.matches(vaultID: session.activeVaultID, securityEpoch: session.securityEpoch) else { return }
-                    progress.importedCount += 1
-                    if !placed { progress.rootFallbackCount += 1 }
-                    if placed, progress.mode == .move,
-                       let identifier = video.sourceAssetIdentifier {
-                        progress.identifiersToDelete.append(identifier)
-                    }
-                } catch is CancellationError {
-                    return
-                } catch {
-                    progress.failedCount += 1
-                }
-                importProgress = progress
+                )
+                if let updated { importProgress = updated }
             }
 
         case .failed:
-            importProgress?.failedCount += 1
+            importProgress?.recordFailure()
 
         case .finished:
             showingPicker = false
@@ -1200,7 +1175,7 @@ struct VaultGalleryView: View {
     }
 
     @MainActor
-    private func finishImport(_ progress: VaultImportProgress) async {
+    private func finishImport(_ progress: VaultGalleryImportBatch) async {
         guard let store, session.isUnlocked, !Task.isCancelled else {
             isWorking = false
             return
@@ -1219,17 +1194,15 @@ struct VaultGalleryView: View {
             message = "Items were encrypted, but the gallery could not be refreshed."
         }
 
-        if progress.mode == .move, progress.importedCount > 0 {
+        var moveResult: PhotoMoveResult = .copiedOnly
+        if progress.shouldOfferOriginalDeletion {
             guard !Task.isCancelled, session.hasActiveAccess else {
                 isWorking = false
                 return
             }
-            let allImportedPhotosAreDeletable =
-                progress.identifiersToDelete.count == progress.importedCount
-            let result: PhotoMoveResult
-            if allImportedPhotosAreDeletable {
+            if progress.allImportedItemsAreDeletable {
                 session.beginSystemPhotoOperation()
-                result = await PhotoLibraryDeletionService.deleteOriginals(
+                moveResult = await PhotoLibraryDeletionService.deleteOriginals(
                     localIdentifiers: progress.identifiersToDelete
                 )
                 session.endSystemPhotoOperation()
@@ -1237,39 +1210,10 @@ struct VaultGalleryView: View {
                     isWorking = false
                     return
                 }
-            } else {
-                result = .copiedOnly
             }
-
-            switch result {
-            case .deleted:
-                message = importResultMessage(
-                    action: "Moved",
-                    importedCount: progress.importedCount,
-                    failedCount: progress.failedCount
-                )
-            case .copiedOnly:
-                let base = importResultMessage(
-                    action: "Encrypted",
-                    importedCount: progress.importedCount,
-                    failedCount: progress.failedCount
-                )
-                message = progress.rootFallbackCount > 0
-                    ? "\(base) Originals were kept because folder placement was incomplete."
-                    : "\(base) iOS did not delete every original, so KeyHollow treats this batch as copied."
-            }
-        } else if progress.importedCount > 0 {
-            message = importResultMessage(
-                action: "Copied",
-                importedCount: progress.importedCount,
-                failedCount: progress.failedCount
-            )
-        } else if progress.failedCount > 0 {
-            message = unreadableSelectionMessage(count: progress.failedCount)
         }
-        if progress.rootFallbackCount > 0 {
-            message = (message ?? "")
-                + VaultImportDestination.recoveryMessage(rootCount: progress.rootFallbackCount)
+        if let resultMessage = progress.completionMessage(moveResult: moveResult) {
+            message = resultMessage
         }
         isWorking = false
     }
@@ -1343,20 +1287,6 @@ struct VaultGalleryView: View {
         let known = Set(records.map { VaultGallerySelection.Item.photo($0.id) })
             .union(generalFileRecords.map { VaultGallerySelection.Item.generalFile($0.id) })
         thumbnailCache.retainKnownItems(known)
-    }
-
-    private func importResultMessage(action: String, importedCount: Int, failedCount: Int) -> String {
-        let noun = importedCount == 1 ? "item" : "items"
-        if failedCount > 0 {
-            let failedNoun = failedCount == 1 ? "item" : "items"
-            return "\(action) \(importedCount) \(noun) into KeyHollow. \(failedCount) \(failedNoun) could not be imported."
-        }
-        return "\(action) \(importedCount) \(noun) into KeyHollow."
-    }
-
-    private func unreadableSelectionMessage(count: Int) -> String {
-        let noun = count == 1 ? "item" : "items"
-        return "No items were imported. \(count) selected \(noun) could not be read or exceeded the 100 MB video limit."
     }
 
     private func openMediaNavigation(

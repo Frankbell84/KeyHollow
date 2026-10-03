@@ -203,6 +203,9 @@ PRIVILEGED_SOURCE_SHA256 = {
     "scripts/check_architecture_boundaries.py": (
         "b3effd8a59bc827ae74123dfacda50c41683649d1406c09f7247f33d15859670"
     ),
+    "scripts/gallery_import_boundaries.py": (
+        "9ccc0e055be52918a2ca2024ddb5e170a0a3c32737ba24e74896000e03431491"
+    ),
     "scripts/gallery_media_boundaries.py": (
         "3bf15c19f4fe58b651edd0c57ed5fe8c19b9da67833006a8ebe64f455b38be01"
     ),
@@ -210,16 +213,16 @@ PRIVILEGED_SOURCE_SHA256 = {
         "f84b17d62aa3fd03e558af3cb71ac7880fc4294bb452404a54297f69fc9e6d33"
     ),
     "scripts/gallery_boundaries.py": (
-        "bd86a728f88242a65cbed2ecfec21cd541b91c759f4abe9e901b11a6b9b0952b"
+        "5c406a873a1ab14efc72b537a80598855c1161d8949623d5f207cdf1bf8da7c7"
     ),
     "scripts/check_source_size.py": (
         "579a094746e2a49c1cda91d8edbcc10fdf83f2d2855807f4d5613f56890f036c"
     ),
     "scripts/source_size_limits.json": (
-        "18c577816cf536dfddd2ed6451479c7e31e21d30ccb5917636ae3883f55c1ca4"
+        "bc342eb21a85cd377ab79bf0b6070f4a1807e780f5832ef4cec93a450460cc96"
     ),
     "scripts/workflow_hash_probes.py": (
-        "524ff2a2d02e5c9ebd3fed7ae51e675729b2082ce5bf9e1ec613d2548145c791"
+        "9f17b78d3bc6ebd3502a8f467adbd64a6b4cff05ddb5522844d363041d1cb427"
     ),
     "scripts/check_privacy_manifest.py": (
         "c8c255c8d6465aafd04f941daa4bee3fa0f3a9881390032666f3eb38fa0c979a"
@@ -228,7 +231,7 @@ PRIVILEGED_SOURCE_SHA256 = {
         "232f0b11e50aba390d23206692ba3c3ec9e72fa83af2dd30876bc3486188ee9d"
     ),
     "project.yml": (
-        "709d2809ac80fb606264dc29ca352e8dc29d5a29216e298ef902ade6751abd9f"
+        "6efce54b23dbb51295c4a945557f7a5e2be4a5666dd82cfd6cbf4acc3481acab"
     ),
 }
 
@@ -2501,20 +2504,9 @@ def self_test() -> int:
         for item in audit_approved_rotation("fixture", missing_identity_check)
     )
 
-    environment_source_fixture = "\n".join(ENVIRONMENT_VERIFIER_REQUIREMENTS)
-    assert audit_environment_verifier_source(environment_source_fixture) == []
-    for required in (
-        'REQUIRED_REVIEWER_LOGIN = "Frankbell84"',
-        'environment.get("can_admins_bypass") is not False',
-        'expected_rule_types = ["branch_policy", "required_reviewers"]',
-        'required_reviewers_rule.get("prevent_self_review") is not False',
-        'reviewer.get("login") != REQUIRED_REVIEWER_LOGIN',
-        "urllib.request.build_opener(RejectRedirectHandler())",
-        "validate_github_api_url(response.geturl(), repository)",
-    ):
-        assert audit_environment_verifier_source(
-            environment_source_fixture.replace(required, "", 1)
-        )
+    runpy.run_path(str(ROOT / probe_path))["check_environment_guards"](
+        audit_environment_verifier_source, ENVIRONMENT_VERIFIER_REQUIREMENTS,
+    )
 
     exact_certificates = "\n".join(EXPECTED_CERTIFICATE_COMPARISONS)
     assert matching_command_lines(exact_certificates, "cmp -s") == (
