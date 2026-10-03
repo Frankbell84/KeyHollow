@@ -16,6 +16,10 @@ final class VaultBackupVerificationAddOnTests: XCTestCase {
             Date(timeIntervalSinceReferenceDate: 100)
         )
         XCTAssertEqual(
+            report.archiveExportedAt,
+            Date(timeIntervalSinceReferenceDate: 150)
+        )
+        XCTAssertEqual(
             report.verifiedAt,
             Date(timeIntervalSinceReferenceDate: 200)
         )
@@ -30,6 +34,7 @@ final class VaultBackupVerificationAddOnTests: XCTestCase {
             "displayName",
             "archiveByteCount",
             "sourceVaultCreatedAt",
+            "archiveExportedAt",
             "verifiedAt",
             "catalogVersion",
             "photoCount",
@@ -190,6 +195,7 @@ final class VaultBackupVerificationAddOnTests: XCTestCase {
             displayName: "Family Backup.khvault",
             archiveByteCount: 12_345,
             sourceVaultCreatedAt: Date(timeIntervalSinceReferenceDate: 100),
+            archiveExportedAt: Date(timeIntervalSinceReferenceDate: 150),
             verifiedAt: Date(timeIntervalSinceReferenceDate: 200),
             catalogVersion: catalogVersion,
             photoCount: photoCount,

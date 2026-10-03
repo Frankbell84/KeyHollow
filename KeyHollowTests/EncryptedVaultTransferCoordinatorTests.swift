@@ -447,6 +447,12 @@ final class EncryptedVaultTransferCoordinatorTests: XCTestCase {
         )
         XCTAssertEqual(receipt.encryptedFileCount, 6)
 
+        let authenticatedSecrets = try PortableArchiveContainerReader(sourceURL: roots.archive)
+            .header.open(
+                credential: credential,
+                keyDeriver: TestTransferKeyDeriver()
+            )
+
         let verification = try await coordinator.verifyArchive(
             archiveURL: roots.archive,
             credential: credential,
@@ -459,6 +465,8 @@ final class EncryptedVaultTransferCoordinatorTests: XCTestCase {
         XCTAssertEqual(verification.authenticatedFileCount, 1)
         XCTAssertEqual(verification.authenticatedFolderCount, 2)
         XCTAssertEqual(verification.authenticatedFolderMembershipCount, 2)
+        XCTAssertEqual(verification.archiveExportedAt, authenticatedSecrets.exportedAt)
+        XCTAssertNotEqual(verification.archiveExportedAt, verification.sourceVaultCreatedAt)
         XCTAssertEqual(
             verification.catalogVersion,
             PortableArchivePayloadCatalog.folderHierarchyVersion

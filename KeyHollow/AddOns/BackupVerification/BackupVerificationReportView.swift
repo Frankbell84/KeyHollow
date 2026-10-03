@@ -69,6 +69,13 @@ public struct BackupVerificationReportView: View {
                 value: "Version \(report.catalogVersion)"
             )
             reportRow(
+                "Backup created",
+                value: report.archiveExportedAt.formatted(
+                    date: .abbreviated,
+                    time: .shortened
+                )
+            )
+            reportRow(
                 "Vault created",
                 value: report.sourceVaultCreatedAt.formatted(
                     date: .abbreviated,
