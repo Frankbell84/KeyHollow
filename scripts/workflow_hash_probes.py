@@ -172,3 +172,41 @@ def check_environment_guards(audit_environment_verifier_source, ENVIRONMENT_VERI
         assert audit_environment_verifier_source(
             environment_source_fixture.replace(required, "", 1)
         )
+
+
+def check_rotation_guards(audit_approved_rotation, APPROVED_ROTATION_BINDINGS):
+    rotation_fixture = "\n".join(
+        [
+            *(f"      {key}: {value}" for key, value in APPROVED_ROTATION_BINDINGS.items()),
+            (
+                'if [[ "$APP_STORE_CONNECT_API_KEY_ID" != "$EXPECTED_API_KEY_ID" || '
+                '"$APP_STORE_CONNECT_API_ISSUER_ID" != "$EXPECTED_API_ISSUER_ID" ]]; then'
+            ),
+            (
+                'if [[ "$SIGNING_CERTIFICATE_SHA1" != '
+                '"$EXPECTED_SIGNING_CERTIFICATE_SHA1" ]]; then'
+            ),
+            (
+                'if [[ "$NORMALIZED_APP_PROFILE_UUID" != "$EXPECTED_APP_PROFILE_UUID" || '
+                '"$NORMALIZED_THUMBNAIL_PROFILE_UUID" != '
+                '"$EXPECTED_THUMBNAIL_PROFILE_UUID" ]]; then'
+            ),
+        ]
+    )
+    assert audit_approved_rotation("fixture", rotation_fixture) == []
+    changed_rotation = rotation_fixture
+    for value in APPROVED_ROTATION_BINDINGS.values():
+        changed_rotation = changed_rotation.replace(value, "UNREVIEWED", 1)
+    assert any(
+        "rotation binding drifted" in item
+        for item in audit_approved_rotation("fixture", changed_rotation)
+    )
+    missing_identity_check = rotation_fixture.replace(
+        'if [[ "$SIGNING_CERTIFICATE_SHA1" != '
+        '"$EXPECTED_SIGNING_CERTIFICATE_SHA1" ]]; then',
+        "",
+    )
+    assert any(
+        "distribution certificate comparison" in item
+        for item in audit_approved_rotation("fixture", missing_identity_check)
+    )

@@ -1,0 +1,64 @@
+name: KeyHollow Pages
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: pages-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-pages:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pages: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+      - name: Verify workflow security
+        run: python3 -I scripts/check_workflow_security.py
+      # Preserve the existing root README/Jekyll site and default theme.
+      - name: Build with Jekyll
+        uses: actions/jekyll-build-pages@44a6e6beabd48582f863aeeb6cb2151cc1716697 # v1.0.13
+        with:
+          source: ./
+          destination: ./_site
+      - name: Verify published entry points
+        run: |
+          set -euo pipefail
+          test -s _site/index.html
+          test -s _site/WORK_STATUS.html
+          test -s _site/docs/PRIVACY_POLICY_DRAFT.html
+          test -s _site/docs/TERMS_OF_USE.html
+          test -s _site/docs/SUPPORT_DRAFT.html
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b # v4.0.0; nested upload-artifact is SHA-pinned
+        with:
+          path: ./_site
+          retention-days: 1
+
+  deploy-pages:
+    if: github.repository == 'Frankbell84/KeyHollow' && github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    needs: build-pages
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy Pages
+        id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.0
