@@ -244,6 +244,38 @@ opening imported media, and background/unlock. Keep the existing backup and do
 not use irreplaceable originals for Move tests. The rest of the gallery device
 checklist remains a smoke check. Delivery evidence belongs in the stage PR.
 
+## Eighth extraction: Files import coordination
+
+Build 61 at `7f35ed7dc845b265ad9298e50a736ef434ea43ec` was accepted by the
+owner on 2026-10-03. After GitHub hardening PR #108, `codex/gallery-file-import`
+isolates the gallery-specific Files batch policy in `VaultGalleryFileImport`.
+The existing encrypted `GeneralFileImportCoordinator` remains unchanged.
+
+The new stateless main-actor owner receives nonescaping operations for import,
+placement, progress, destination validation and catalog refresh. It retains no
+URL, payload, store, session or task. Each verified record is placed before its
+progress advances; placement failure keeps the encrypted root copy and appends
+the existing recovery text. Cancellation and a stale vault/epoch suppress a
+successful completion. Refresh ordering, partial/rejected batch messages and
+unexpected-error behavior are preserved. Composition owns picker handoff,
+admission/batch-size checks, session-task registration, concrete store dispatch
+and progress/busy cleanup, including failed task registration.
+
+Explicit callback wiring means the gallery only shrinks from 2,049 to 2,044
+lines in this stage. The goal is a testable policy boundary, not line-count
+churn. Its frozen ceiling decreases accordingly. Eight focused native tests
+exercise ordering, typed membership, progress, fallback, rejection, cancellation
+and stale completion. Actual-source architecture probes protect the owner and
+composition wiring; the existing Photos assertions and probes remain intact.
+No new legacy allowance, escaping callback, concurrency or format is introduced.
+
+Build 62 packages this stage for the authorized Internal device checkpoint.
+Native CI, signing and upload evidence belong in the stage PR. The
+[Files import checklist](GALLERY_FILE_IMPORT_DEVICE_CHECKPOINT.md) covers root
+and folder import, originals, progress, picker cancellation, lock/unlock and
+gallery smoke tests. Bulk operations and media lifetime coordination remain
+separate future stages; Build 61 stays accepted until device feedback arrives.
+
 ## Enforced prevention
 
 The existing architecture CI gate invokes `check_source_size.py` and checks

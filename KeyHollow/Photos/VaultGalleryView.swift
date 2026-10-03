@@ -1038,36 +1038,31 @@ struct VaultGalleryView: View {
         isWorking = true
 
         let taskID = session.startSensitiveTask { _ in
-            var rootFallbackCount = 0
             defer {
                 generalFileImportProgress = nil
                 isWorking = false
             }
-            do {
-                let outcome = try await GeneralFileImportCoordinator.importFiles(
-                    at: urls,
-                    using: generalFileStore,
-                    recordDidImport: { record in
-                        let placed = try await destination.place(
-                            VaultPresentedContentReference(kind: .generalFile, id: record.id)
-                        ) { item, folderID in
-                            try await presentationStore.move(item, to: folderID)
-                        }
-                        if !placed { rootFallbackCount += 1 }
-                    }
-                ) { progress in
+            let resultMessage = await VaultGalleryFileImport.perform(
+                destination: destination,
+                importFiles: { recordDidImport, progressDidChange in
+                    try await GeneralFileImportCoordinator.importFiles(
+                        at: urls, using: generalFileStore,
+                        recordDidImport: recordDidImport,
+                        progressDidChange: progressDidChange
+                    )
+                },
+                move: { item, folderID in
+                    try await presentationStore.move(item, to: folderID)
+                },
+                progressDidChange: { progress in
                     generalFileImportProgress = progress
-                }
-                guard !Task.isCancelled,
-                      destination.matches(vaultID: session.activeVaultID, securityEpoch: session.securityEpoch) else { return }
-                await reloadGeneralFiles()
-                message = GeneralFileImportPresentation.message(for: outcome)
-                    + VaultImportDestination.recoveryMessage(rootCount: rootFallbackCount)
-            } catch is CancellationError {
-                return
-            } catch {
-                message = "The selected files could not be imported into this vault."
-            }
+                },
+                isCurrent: {
+                    destination.matches(vaultID: session.activeVaultID, securityEpoch: session.securityEpoch)
+                },
+                reload: { await reloadGeneralFiles() }
+            )
+            if let resultMessage { message = resultMessage }
         }
         if taskID == nil {
             generalFileImportProgress = nil

@@ -208,7 +208,7 @@ PRIVILEGED_SOURCE_SHA256 = {
         "b3effd8a59bc827ae74123dfacda50c41683649d1406c09f7247f33d15859670"
     ),
     "scripts/gallery_import_boundaries.py": (
-        "9ccc0e055be52918a2ca2024ddb5e170a0a3c32737ba24e74896000e03431491"
+        "0593b8a7908097c12b57edc50b5b238dfcd38b22f28ccde56a0685b700861141"
     ),
     "scripts/gallery_media_boundaries.py": (
         "3bf15c19f4fe58b651edd0c57ed5fe8c19b9da67833006a8ebe64f455b38be01"
@@ -217,13 +217,13 @@ PRIVILEGED_SOURCE_SHA256 = {
         "f84b17d62aa3fd03e558af3cb71ac7880fc4294bb452404a54297f69fc9e6d33"
     ),
     "scripts/gallery_boundaries.py": (
-        "5c406a873a1ab14efc72b537a80598855c1161d8949623d5f207cdf1bf8da7c7"
+        "ebd0103c60f26527b4aadfad0df8275b73ee407f3f13e4e47d2a129cbd8ea9d9"
     ),
     "scripts/check_source_size.py": (
         "579a094746e2a49c1cda91d8edbcc10fdf83f2d2855807f4d5613f56890f036c"
     ),
     "scripts/source_size_limits.json": (
-        "1131dcaa867e3e0c062d5c79d76b3cdfc2417e778600368cd69fa13c2d54a032"
+        "90c645ff98d973c57ce044faffdfeace3ecb3cef049f7432aea64495316c0fd5"
     ),
     "scripts/workflow_hash_probes.py": (
         "fbe289e122f1bf9688dab1579e460ad1ffa3e741176e39681064ab55c79c0661"
@@ -235,7 +235,7 @@ PRIVILEGED_SOURCE_SHA256 = {
         "232f0b11e50aba390d23206692ba3c3ec9e72fa83af2dd30876bc3486188ee9d"
     ),
     "project.yml": (
-        "6efce54b23dbb51295c4a945557f7a5e2be4a5666dd82cfd6cbf4acc3481acab"
+        "653e0e6d45db58ced14542d3961966a62953a019a2bcf1668e0885e87ad83b97"
     ),
 }
 
