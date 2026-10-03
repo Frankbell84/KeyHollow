@@ -5,7 +5,41 @@ Updated: 2026-10-03
 This is the authoritative operational resume point. Historical Build 38
 evidence remains in `docs/PROJECT_CHECKPOINT.md`.
 
-## Latest checkpoint: accepted Build 61; GitHub automation hardening
+## Latest checkpoint: Files import coordination; Build 62 candidate
+
+The owner authorized resuming focused gallery cleanup through the next Internal
+device checkpoint. Branch `codex/gallery-file-import` starts from main
+`5e3145d8cffae68aef0ed8ddfac32d3f2be4fef3`, after GitHub security PR #108.
+That main passed CI `37128262240` (493 unit tests, 3 launch tests and Swift
+CodeQL) and Pages `37128262216`; manual Pages run `37128441850` also passed
+under the enabled full-action-SHA policy. The owner's 2FA and repository
+hardening were verified. PR #108 records the live settings and the remaining
+single-owner independent-review limitation.
+
+`UI/VaultGalleryFileImport.swift` now owns Files batch placement, root fallback,
+completion messages and successful-result cancellation/current-session guards.
+It retains a private fallback count and uses nonescaping operations, with no
+retained session, store, task or URL.
+Composition retains the registered session task, picker handoff, admission
+checks, concrete store operations and busy/progress cleanup. The gallery shrinks
+from 2,049 to 2,041 lines; the benefit is an independently testable policy owner,
+not completion of decomposition. Bulk operations and media lifetime remain later
+stages. Eight focused tests cover order, root/folder placement, partial/rejected
+batches, cancellation, late success and stale vault/epoch completion. Architecture
+mutation probes enforce both the owner and its composition wiring.
+
+Local architecture, workflow-security, hygiene and privacy checks passed during
+implementation. Exact native CI, merge, signing, upload and Apple availability
+will be recorded in this stage's PR; this checkpoint does not claim those ran.
+App Store Connect's iOS Builds and all-status Build Uploads showed 61 latest
+and no 62 on 2026-10-03 before both products advanced to 62 and the reviewed
+project fingerprint changed. This does not reserve the number: the protected
+workflow must repeat its live check. Build 61 remains the accepted checkpoint
+until the owner reports results. Distribution is Internal-only. See the
+[Files import device checklist](docs/GALLERY_FILE_IMPORT_DEVICE_CHECKPOINT.md).
+The deferred two-phone transfer/failure matrix remains deferred.
+
+## Historical checkpoint: accepted Build 61; GitHub automation hardening
 
 The owner reported "Test works" for Build 61 on 2026-10-03 and prioritized
 GitHub security before further product work. PR #107 records acceptance of
