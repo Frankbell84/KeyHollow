@@ -5,7 +5,31 @@ Updated: 2026-10-03
 This is the authoritative operational resume point. Historical Build 38
 evidence remains in `docs/PROJECT_CHECKPOINT.md`.
 
-## Latest checkpoint: accepted Build 60; Photos import batch extraction
+## Latest checkpoint: accepted Build 61; GitHub automation hardening
+
+The owner reported "Test works" for Build 61 on 2026-10-03 and prioritized
+GitHub security before further product work. PR #107 records acceptance of
+`7f35ed7dc845b265ad9298e50a736ef434ea43ec`, main CI `37122610173` (493 unit
+tests, 3 launch tests and Swift CodeQL), signing preflight `37123846118`, upload
+`37124078843`, and Apple build `864fa597-9111-4c2b-8d43-05dc4e03c5c7`.
+Build 61 supersedes Build 60 as the accepted device checkpoint. No additional
+test-by-test measurements were provided; the two-phone matrix remains deferred.
+
+Branch `codex/github-security-hardening` makes the existing public Pages
+publisher reviewable and compatible with GitHub's full-action-SHA policy.
+The workflow preserves Jekyll/root publishing, separates read-only PR builds
+from main-only deployment, and never uses iOS release credentials. A bounded,
+hash-verified Pages policy module adds negative probes. Existing rotation probes
+move intact into the hash-verified probe helper; the legacy checker ceiling
+shrinks. App source, build numbers and release workflows remain unchanged.
+
+The owner authorized the remaining settings changes after setting up 2FA.
+Exact PR/main CI, Pages deployment and live settings evidence will be recorded
+in this stage's PR; this preparation checkpoint does not claim those have run.
+See [automation security](docs/GITHUB_AUTOMATION_SECURITY.md) for activation
+and verification. Build 61 stays Internal-only; no upload is part of this stage.
+
+## Historical checkpoint: accepted Build 60; Photos import batch extraction
 
 The owner reported "It works" for Build 60 on 2026-10-03. PR #106 records
 that owner-reported acceptance at `765dcb00d1a196c791fb39cd12ea81abf0fb1caa`,

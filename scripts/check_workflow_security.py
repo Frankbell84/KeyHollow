@@ -19,6 +19,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW_DIRECTORY = ROOT / ".github" / "workflows"
 EXPECTED_WORKFLOWS = {
+    "pages.yml",
     "ios-build.yml",
     "release-signing-preflight.yml",
     "testflight-beta.yml",
@@ -185,6 +186,9 @@ ENVIRONMENT_VERIFIER_REQUIREMENTS = (
 # Git stores these sources with LF endings; canonicalizing CRLF permits the
 # same byte-level content check in a Windows checkout with core.autocrlf=true.
 PRIVILEGED_SOURCE_SHA256 = {
+    "scripts/pages_workflow_policy.py": (
+        "529761e4ba41685b4c8fb59c0cd35fdbf70e546f6a04c6eced076bb7c6971f5a"
+    ),
     "scripts/verify_release_source.py": (
         "8a11cd7c11b9363f83d2dfd4f9ca7efa59c46664fc6ea2219c5d9582201da6cd"
     ),
@@ -219,10 +223,10 @@ PRIVILEGED_SOURCE_SHA256 = {
         "579a094746e2a49c1cda91d8edbcc10fdf83f2d2855807f4d5613f56890f036c"
     ),
     "scripts/source_size_limits.json": (
-        "bc342eb21a85cd377ab79bf0b6070f4a1807e780f5832ef4cec93a450460cc96"
+        "1131dcaa867e3e0c062d5c79d76b3cdfc2417e778600368cd69fa13c2d54a032"
     ),
     "scripts/workflow_hash_probes.py": (
-        "9f17b78d3bc6ebd3502a8f467adbd64a6b4cff05ddb5522844d363041d1cb427"
+        "fbe289e122f1bf9688dab1579e460ad1ffa3e741176e39681064ab55c79c0661"
     ),
     "scripts/check_privacy_manifest.py": (
         "c8c255c8d6465aafd04f941daa4bee3fa0f3a9881390032666f3eb38fa0c979a"
@@ -241,6 +245,9 @@ PRIVILEGED_SOURCE_SHA256 = {
 # Path.read_text() applies universal-newline normalization before these values
 # are calculated, so the pins remain stable in LF and CRLF checkouts.
 RELEASE_WORKFLOW_SHA256: dict[str, str] = {
+    "pages.yml": (
+        "9fc360a875661d0a74a8bf1eba981c0f7e137a58982c33c0282fe42e7a796c3b"
+    ),
     "ios-build.yml": (
         "9554afac60a5dc035799c25f30231f7685484025501d2cea25258c19d2a2e304"
     ),
@@ -597,6 +604,9 @@ TESTFLIGHT_LITERAL_RUN_STEPS = {
 }
 
 ALLOWED_ACTIONS = {
+    "actions/jekyll-build-pages@44a6e6beabd48582f863aeeb6cb2151cc1716697",
+    "actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b",
+    "actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346",
     "actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
     "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
     "github/codeql-action/init@cdf488f595d80d6e07e03d4674febd5ab45fa938",
@@ -2432,6 +2442,13 @@ def audit_repository() -> list[str]:
     if "testflight-beta.yml" in texts:
         violations.extend(audit_retired_beta(texts["testflight-beta.yml"]))
 
+    if "pages.yml" in texts and not audit_privileged_source_hashes():
+        policy = runpy.run_path(str(ROOT / "scripts/pages_workflow_policy.py"))
+        violations.extend(policy["audit_pages"](
+            texts["pages.yml"], audit_generic, named_job_block,
+            direct_key_value_entries, permission_blocks,
+        ))
+
     codeowners_path = ROOT / ".github" / "CODEOWNERS"
     if not codeowners_path.is_file():
         violations.append(".github/CODEOWNERS: sensitive-path ownership is missing")
@@ -2455,6 +2472,10 @@ def self_test() -> int:
     violations = audit_privileged_source_hashes()
     if violations:
         raise RuntimeError("\n".join(violations))
+    runpy.run_path(str(ROOT / "scripts/pages_workflow_policy.py"))["check_pages_guards"](
+        (WORKFLOW_DIRECTORY / "pages.yml").read_text(encoding="utf-8"),
+        audit_generic, named_job_block, direct_key_value_entries, permission_blocks,
+    )
     runpy.run_path(str(ROOT / probe_path))["check_hash_guards"](
         canonical_source_sha256, body_sha256,
         audit_privileged_source_payloads, audit_release_workflow_payloads,
@@ -2468,40 +2489,8 @@ def self_test() -> int:
 
     runpy.run_path(str(ROOT / probe_path))["check_generic_execution_guards"](audit_generic)
 
-    rotation_fixture = "\n".join(
-        [
-            *(f"      {key}: {value}" for key, value in APPROVED_ROTATION_BINDINGS.items()),
-            (
-                'if [[ "$APP_STORE_CONNECT_API_KEY_ID" != "$EXPECTED_API_KEY_ID" || '
-                '"$APP_STORE_CONNECT_API_ISSUER_ID" != "$EXPECTED_API_ISSUER_ID" ]]; then'
-            ),
-            (
-                'if [[ "$SIGNING_CERTIFICATE_SHA1" != '
-                '"$EXPECTED_SIGNING_CERTIFICATE_SHA1" ]]; then'
-            ),
-            (
-                'if [[ "$NORMALIZED_APP_PROFILE_UUID" != "$EXPECTED_APP_PROFILE_UUID" || '
-                '"$NORMALIZED_THUMBNAIL_PROFILE_UUID" != '
-                '"$EXPECTED_THUMBNAIL_PROFILE_UUID" ]]; then'
-            ),
-        ]
-    )
-    assert audit_approved_rotation("fixture", rotation_fixture) == []
-    changed_rotation = rotation_fixture
-    for value in APPROVED_ROTATION_BINDINGS.values():
-        changed_rotation = changed_rotation.replace(value, "UNREVIEWED", 1)
-    assert any(
-        "rotation binding drifted" in item
-        for item in audit_approved_rotation("fixture", changed_rotation)
-    )
-    missing_identity_check = rotation_fixture.replace(
-        'if [[ "$SIGNING_CERTIFICATE_SHA1" != '
-        '"$EXPECTED_SIGNING_CERTIFICATE_SHA1" ]]; then',
-        "",
-    )
-    assert any(
-        "distribution certificate comparison" in item
-        for item in audit_approved_rotation("fixture", missing_identity_check)
+    runpy.run_path(str(ROOT / probe_path))["check_rotation_guards"](
+        audit_approved_rotation, APPROVED_ROTATION_BINDINGS,
     )
 
     runpy.run_path(str(ROOT / probe_path))["check_environment_guards"](
@@ -3056,7 +3045,7 @@ def main() -> int:
 
     print(
         "Workflow security passed: actions are SHA-pinned, CI is read-only, "
-        "sensitive paths have owners, production delivery is exact-source/main/"
+        "Pages deployment is main-only, sensitive paths have owners, production delivery is exact-source/main/"
         "environment/branch/signing-gated, the release-signing preflight cannot "
         "publish, and the retired beta path is fail-closed."
     )
