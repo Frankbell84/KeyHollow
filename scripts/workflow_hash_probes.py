@@ -210,3 +210,80 @@ def check_rotation_guards(audit_approved_rotation, APPROVED_ROTATION_BINDINGS):
         "distribution certificate comparison" in item
         for item in audit_approved_rotation("fixture", missing_identity_check)
     )
+
+
+def check_certificate_guards(
+    matching_command_lines, collapse_shell_continuations,
+    EXPECTED_CERTIFICATE_COMPARISONS, EXPECTED_CODESIGN_CERTIFICATE_EXTRACTIONS,
+):
+    exact_certificates = "\n".join(EXPECTED_CERTIFICATE_COMPARISONS)
+    assert matching_command_lines(exact_certificates, "cmp -s") == (
+        EXPECTED_CERTIFICATE_COMPARISONS
+    )
+    for comparison_mutation in (
+        exact_certificates.replace(
+            '"$RUNNER_TEMP/keyhollow-distribution.cer"',
+            '"$APP_CERTIFICATE_DIRECTORY/cert0"',
+            1,
+        ),
+        exact_certificates.replace("/cert0", "/cert1", 1),
+        exact_certificates.replace(
+            EXPECTED_CERTIFICATE_COMPARISONS[0],
+            (
+                'if ! cmp -s "$APP_CERTIFICATE_DIRECTORY/cert0" '
+                '"$RUNNER_TEMP/keyhollow-distribution.cer"; then'
+            ),
+            1,
+        ),
+        EXPECTED_CERTIFICATE_COMPARISONS[0],
+        exact_certificates + "\n" + EXPECTED_CERTIFICATE_COMPARISONS[0],
+    ):
+        assert matching_command_lines(
+            comparison_mutation, "cmp -s"
+        ) != EXPECTED_CERTIFICATE_COMPARISONS
+
+    exact_certificate_extractions = "\n".join(
+        EXPECTED_CODESIGN_CERTIFICATE_EXTRACTIONS
+    )
+    assert matching_command_lines(
+        collapse_shell_continuations(exact_certificate_extractions),
+        "codesign --display",
+    ) == EXPECTED_CODESIGN_CERTIFICATE_EXTRACTIONS
+    multiline_certificate_extractions = (
+        "codesign --display \\\n"
+        '  --extract-certificates="$APP_CERTIFICATE_DIRECTORY/cert" \\\n'
+        '  "$SIGNED_APP_PATH"\n'
+        "codesign --display \\\n"
+        '  --extract-certificates="$THUMBNAIL_CERTIFICATE_DIRECTORY/cert" \\\n'
+        '  "$SIGNED_EXTENSION_PATH"'
+    )
+    assert matching_command_lines(
+        collapse_shell_continuations(multiline_certificate_extractions),
+        "codesign --display",
+    ) == EXPECTED_CODESIGN_CERTIFICATE_EXTRACTIONS
+    for extraction_mutation in (
+        exact_certificate_extractions.replace(
+            '--extract-certificates=', '--extract-certificates ', 1
+        ),
+        exact_certificate_extractions.replace(
+            '--extract-certificates="$APP_CERTIFICATE_DIRECTORY/cert" ',
+            '--extract-certificates ',
+            1,
+        ),
+        exact_certificate_extractions.replace(
+            '$APP_CERTIFICATE_DIRECTORY/cert',
+            '$THUMBNAIL_CERTIFICATE_DIRECTORY/cert',
+            1,
+        ),
+        exact_certificate_extractions.replace(
+            '"$SIGNED_APP_PATH"', '"$SIGNED_EXTENSION_PATH"', 1
+        ),
+        EXPECTED_CODESIGN_CERTIFICATE_EXTRACTIONS[0],
+        exact_certificate_extractions
+        + "\n"
+        + EXPECTED_CODESIGN_CERTIFICATE_EXTRACTIONS[0],
+    ):
+        assert matching_command_lines(
+            collapse_shell_continuations(extraction_mutation),
+            "codesign --display",
+        ) != EXPECTED_CODESIGN_CERTIFICATE_EXTRACTIONS

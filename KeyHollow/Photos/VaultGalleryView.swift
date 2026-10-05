@@ -1913,51 +1913,21 @@ struct VaultGalleryView: View {
         isWorking = true
 
         session.startSensitiveTask { _ in
-            var savedCount = 0
-            var failedCount = 0
-            var permissionDenied = false
-
             session.beginSystemPhotoOperation()
             defer {
                 session.endSystemPhotoOperation()
                 isWorking = false
             }
 
-            for photo in photos {
-                guard !Task.isCancelled else { return }
-                do {
-                    // One decrypted original is resident at a time and is
-                    // released before the next record is loaded.
-                    let decryptedPhoto = try await store.loadPhoto(photo)
-                    let result = await PhotoLibrarySaveService.savePhoto(decryptedPhoto)
-                    switch result {
-                    case .saved:
-                        savedCount += 1
-                    case .permissionDenied:
-                        permissionDenied = true
-                    case .failed:
-                        failedCount += 1
-                    }
-                } catch {
-                    failedCount += 1
-                }
-                if permissionDenied { break }
+            let completion = await VaultGalleryPhotoSaveBatch.perform(photos) { photo in
+                // One decrypted original is resident at a time and is
+                // released before the next record is loaded.
+                let decryptedPhoto = try await store.loadPhoto(photo)
+                return await PhotoLibrarySaveService.savePhoto(decryptedPhoto)
             }
-
-            guard !Task.isCancelled else { return }
-            if permissionDenied {
-                message = "Allow KeyHollow to add photos in iPhone Settings, then try again."
-            } else if savedCount > 0 {
-                let noun = savedCount == 1 ? "photo" : "photos"
-                if failedCount > 0 {
-                    message = "Saved \(savedCount) \(noun) to Photos. \(failedCount) selected photos could not be decrypted or saved."
-                } else {
-                    message = "Saved \(savedCount) \(noun) to Photos. The encrypted vault copies were kept."
-                }
-                leaveSelectionMode()
-            } else {
-                message = "The selected photos could not be authenticated, decrypted, or saved."
-            }
+            guard let completion else { return }
+            message = completion.message
+            if completion.clearSelection { leaveSelectionMode() }
         }
     }
 
@@ -1969,38 +1939,20 @@ struct VaultGalleryView: View {
 
         session.startSensitiveTask { _ in
             defer { isWorking = false }
-            var deletedCount = 0
-            var failedCount = 0
-
-            if !photos.isEmpty {
-                if let store {
-                    do {
-                        try await store.delete(photos)
-                        deletedCount += photos.count
-                    } catch is CancellationError {
-                        return
-                    } catch {
-                        failedCount += photos.count
-                    }
-                } else {
-                    failedCount += photos.count
+            guard let completion = await VaultGalleryDeletionBatch.perform(
+                photoCount: photos.count,
+                fileCount: files.count,
+                deletePhotos: {
+                    guard let store else { return false }
+                    try await store.delete(photos)
+                    return true
+                },
+                deleteFiles: {
+                    guard let generalFileStore else { return false }
+                    try await generalFileStore.delete(files)
+                    return true
                 }
-            }
-
-            if !files.isEmpty {
-                if let generalFileStore {
-                    do {
-                        try await generalFileStore.delete(files)
-                        deletedCount += files.count
-                    } catch is CancellationError {
-                        return
-                    } catch {
-                        failedCount += files.count
-                    }
-                } else {
-                    failedCount += files.count
-                }
-            }
+            ) else { return }
 
             if let store {
                 try? await reload(using: store)
@@ -2012,14 +1964,7 @@ struct VaultGalleryView: View {
             guard !Task.isCancelled else { return }
             leaveSelectionMode()
 
-            if deletedCount > 0, failedCount == 0 {
-                let noun = deletedCount == 1 ? "item" : "items"
-                message = "Deleted \(deletedCount) \(noun) from this vault."
-            } else if deletedCount > 0 {
-                message = "Deleted \(deletedCount) selected items. \(failedCount) items could not be removed."
-            } else {
-                message = "The selected items could not be deleted from the vault."
-            }
+            message = completion.message
         }
     }
 
