@@ -185,6 +185,7 @@ final class PortableVaultVerificationReportTests: XCTestCase {
                 "authenticatedFolderCount",
                 "authenticatedFolderMembershipCount",
                 "sourceVaultCreatedAt",
+                "archiveExportedAt",
                 "catalogVersion",
                 "legacyOversizedPhotoCount"
             ]
@@ -193,7 +194,7 @@ final class PortableVaultVerificationReportTests: XCTestCase {
         XCTAssertTrue(FileManager.default.fileExists(atPath: roots.archive.path))
     }
 
-    func testRepeatedVerificationReturnsSameReportAndDoesNotModifyArchive() async throws {
+    func testRepeatedVerificationPreservesExportDateDespiteFileDateChanges() async throws {
         let roots = try VerificationTestRoots.create()
         defer { roots.remove() }
         let credential = PortableArchiveCredential.recoveryCode(
@@ -205,6 +206,16 @@ final class PortableVaultVerificationReportTests: XCTestCase {
             credential: credential
         )
         let originalArchive = try Data(contentsOf: roots.archive)
+        let authenticatedSecrets = try PortableArchiveContainerReader(sourceURL: roots.archive)
+            .header.open(
+                credential: credential,
+                keyDeriver: VerificationTestKeyDeriver()
+            )
+        let replacementFileDate = Date(timeIntervalSince1970: 1_800_000_000)
+        try FileManager.default.setAttributes(
+            [.modificationDate: replacementFileDate],
+            ofItemAtPath: roots.archive.path
+        )
         let coordinator = EncryptedVaultTransferCoordinator()
 
         let firstReport = try await coordinator.verifyArchive(
@@ -216,6 +227,14 @@ final class PortableVaultVerificationReportTests: XCTestCase {
         )
         XCTAssertEqual(try Data(contentsOf: roots.archive), originalArchive)
         XCTAssertTrue(try workingDirectoryContents(roots.working).isEmpty)
+        XCTAssertEqual(firstReport.archiveExportedAt, authenticatedSecrets.exportedAt)
+        XCTAssertNotEqual(firstReport.archiveExportedAt, firstReport.sourceVaultCreatedAt)
+        XCTAssertNotEqual(firstReport.archiveExportedAt, replacementFileDate)
+
+        try FileManager.default.setAttributes(
+            [.modificationDate: Date(timeIntervalSince1970: 1_900_000_000)],
+            ofItemAtPath: roots.archive.path
+        )
 
         let secondReport = try await coordinator.verifyArchive(
             archiveURL: roots.archive,
@@ -336,6 +355,7 @@ final class PortableVaultVerificationReportTests: XCTestCase {
         XCTAssertEqual(report.authenticatedEntryCount, 3)
         XCTAssertEqual(report.sourceVaultCreatedAt, createdAt)
         XCTAssertEqual(report.catalogVersion, PortableArchivePayloadCatalog.legacyPhotoOnlyVersion)
+        XCTAssertEqual(report.archiveExportedAt, Self.legacyExportDate)
         XCTAssertEqual(report.legacyOversizedPhotoCount, 0)
         XCTAssertTrue(try workingDirectoryContents(roots.working).isEmpty)
     }
@@ -369,6 +389,7 @@ final class PortableVaultVerificationReportTests: XCTestCase {
             report.catalogVersion,
             PortableArchivePayloadCatalog.legacyGeneralFileVersion
         )
+        XCTAssertEqual(report.archiveExportedAt, Self.legacyExportDate)
         XCTAssertEqual(report.legacyOversizedPhotoCount, 0)
         XCTAssertTrue(try workingDirectoryContents(roots.working).isEmpty)
     }
@@ -713,6 +734,8 @@ final class PortableVaultVerificationReportTests: XCTestCase {
         )
     }
 
+    private static let legacyExportDate = Date(timeIntervalSince1970: 1_710_000_000)
+
     private func createLegacyArchiveContainer(
         at archiveURL: URL,
         vaultID: UUID,
@@ -745,6 +768,7 @@ final class PortableVaultVerificationReportTests: XCTestCase {
                 createdAt: createdAt
             ),
             credential: credential,
+            exportedAt: Self.legacyExportDate,
             keyDeriver: VerificationTestKeyDeriver()
         )
         let writer = try PortableArchiveContainerWriter(

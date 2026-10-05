@@ -374,6 +374,7 @@ struct BackupVerificationCenterView: View {
                     displayName: selectedArchive.displayName,
                     archiveByteCount: selectedArchive.byteCount,
                     sourceVaultCreatedAt: verified.sourceVaultCreatedAt,
+                    archiveExportedAt: verified.archiveExportedAt,
                     verifiedAt: Date(),
                     catalogVersion: verified.catalogVersion,
                     photoCount: verified.authenticatedPhotoCount,
