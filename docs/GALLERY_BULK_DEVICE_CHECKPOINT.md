@@ -1,4 +1,4 @@
-# Bulk operation device checkpoint
+# Build 63: bulk operation device checkpoint
 
 This refactor preserves the existing save/delete behavior. Use disposable
 copies for deletion checks. Build 62 is the accepted rollback checkpoint.

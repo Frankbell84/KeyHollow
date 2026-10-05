@@ -34,10 +34,13 @@ Local architecture (including mutation probes/source-size limits), workflow
 security, release hygiene and source privacy checks passed. A source comparison
 confirmed all gallery code outside the two handlers is unchanged, and the
 certificate probes moved intact. Native CI and delivery evidence will be
-recorded in this stage's PR after execution. The Apple browser session currently needs renewal before checking
-the next unused build number. Build 62 remains accepted while a new candidate
-is prepared. Distribution stays Internal-only, through the existing protected
-release workflows. See the [bulk device checklist](docs/GALLERY_BULK_DEVICE_CHECKPOINT.md).
+recorded in this stage's PR after execution. Apple sign-in was restored on
+2026-10-05; iOS Builds and all-status Build Uploads showed 62 latest and no 63.
+Both products now specify 63 with the reviewed project fingerprint updated.
+The protected workflow must repeat its live number check before upload; this
+observation does not reserve the number. Build 62 remains accepted while the
+candidate is prepared. Distribution stays Internal-only, through the existing
+protected release workflows. See the [bulk device checklist](docs/GALLERY_BULK_DEVICE_CHECKPOINT.md).
 
 ## Historical checkpoint: Files import coordination; Build 62 candidate
 
