@@ -186,6 +186,9 @@ ENVIRONMENT_VERIFIER_REQUIREMENTS = (
 # Git stores these sources with LF endings; canonicalizing CRLF permits the
 # same byte-level content check in a Windows checkout with core.autocrlf=true.
 PRIVILEGED_SOURCE_SHA256 = {
+    "scripts/gallery_bulk_boundaries.py": (
+        "d04763ccae56bc66a9b32e74444d7e480df042f2ff1496deeda396493bcd67e9"
+    ),
     "scripts/pages_workflow_policy.py": (
         "529761e4ba41685b4c8fb59c0cd35fdbf70e546f6a04c6eced076bb7c6971f5a"
     ),
@@ -217,16 +220,16 @@ PRIVILEGED_SOURCE_SHA256 = {
         "f84b17d62aa3fd03e558af3cb71ac7880fc4294bb452404a54297f69fc9e6d33"
     ),
     "scripts/gallery_boundaries.py": (
-        "ebd0103c60f26527b4aadfad0df8275b73ee407f3f13e4e47d2a129cbd8ea9d9"
+        "2489c27272c29ad66da2b936999afe4be6390ad92973ba302b2b28598a0e04e8"
     ),
     "scripts/check_source_size.py": (
         "579a094746e2a49c1cda91d8edbcc10fdf83f2d2855807f4d5613f56890f036c"
     ),
     "scripts/source_size_limits.json": (
-        "327691833007ee5279fb355f583fb0dec3f9b1445bf08e2d94fdac06a437a546"
+        "d925f07d9dbe303355081fc015df589846a4e9e7d9e7fda93e738170836c7b70"
     ),
     "scripts/workflow_hash_probes.py": (
-        "fbe289e122f1bf9688dab1579e460ad1ffa3e741176e39681064ab55c79c0661"
+        "87b75f914eced74feb2a7e8743df0a7aa0f6ed188dd99a203a83bf892f635223"
     ),
     "scripts/check_privacy_manifest.py": (
         "c8c255c8d6465aafd04f941daa4bee3fa0f3a9881390032666f3eb38fa0c979a"
@@ -2497,77 +2500,10 @@ def self_test() -> int:
         audit_environment_verifier_source, ENVIRONMENT_VERIFIER_REQUIREMENTS,
     )
 
-    exact_certificates = "\n".join(EXPECTED_CERTIFICATE_COMPARISONS)
-    assert matching_command_lines(exact_certificates, "cmp -s") == (
-        EXPECTED_CERTIFICATE_COMPARISONS
+    runpy.run_path(str(ROOT / probe_path))["check_certificate_guards"](
+        matching_command_lines, collapse_shell_continuations,
+        EXPECTED_CERTIFICATE_COMPARISONS, EXPECTED_CODESIGN_CERTIFICATE_EXTRACTIONS,
     )
-    for comparison_mutation in (
-        exact_certificates.replace(
-            '"$RUNNER_TEMP/keyhollow-distribution.cer"',
-            '"$APP_CERTIFICATE_DIRECTORY/cert0"',
-            1,
-        ),
-        exact_certificates.replace("/cert0", "/cert1", 1),
-        exact_certificates.replace(
-            EXPECTED_CERTIFICATE_COMPARISONS[0],
-            (
-                'if ! cmp -s "$APP_CERTIFICATE_DIRECTORY/cert0" '
-                '"$RUNNER_TEMP/keyhollow-distribution.cer"; then'
-            ),
-            1,
-        ),
-        EXPECTED_CERTIFICATE_COMPARISONS[0],
-        exact_certificates + "\n" + EXPECTED_CERTIFICATE_COMPARISONS[0],
-    ):
-        assert matching_command_lines(
-            comparison_mutation, "cmp -s"
-        ) != EXPECTED_CERTIFICATE_COMPARISONS
-
-    exact_certificate_extractions = "\n".join(
-        EXPECTED_CODESIGN_CERTIFICATE_EXTRACTIONS
-    )
-    assert matching_command_lines(
-        collapse_shell_continuations(exact_certificate_extractions),
-        "codesign --display",
-    ) == EXPECTED_CODESIGN_CERTIFICATE_EXTRACTIONS
-    multiline_certificate_extractions = (
-        "codesign --display \\\n"
-        '  --extract-certificates="$APP_CERTIFICATE_DIRECTORY/cert" \\\n'
-        '  "$SIGNED_APP_PATH"\n'
-        "codesign --display \\\n"
-        '  --extract-certificates="$THUMBNAIL_CERTIFICATE_DIRECTORY/cert" \\\n'
-        '  "$SIGNED_EXTENSION_PATH"'
-    )
-    assert matching_command_lines(
-        collapse_shell_continuations(multiline_certificate_extractions),
-        "codesign --display",
-    ) == EXPECTED_CODESIGN_CERTIFICATE_EXTRACTIONS
-    for extraction_mutation in (
-        exact_certificate_extractions.replace(
-            '--extract-certificates=', '--extract-certificates ', 1
-        ),
-        exact_certificate_extractions.replace(
-            '--extract-certificates="$APP_CERTIFICATE_DIRECTORY/cert" ',
-            '--extract-certificates ',
-            1,
-        ),
-        exact_certificate_extractions.replace(
-            '$APP_CERTIFICATE_DIRECTORY/cert',
-            '$THUMBNAIL_CERTIFICATE_DIRECTORY/cert',
-            1,
-        ),
-        exact_certificate_extractions.replace(
-            '"$SIGNED_APP_PATH"', '"$SIGNED_EXTENSION_PATH"', 1
-        ),
-        EXPECTED_CODESIGN_CERTIFICATE_EXTRACTIONS[0],
-        exact_certificate_extractions
-        + "\n"
-        + EXPECTED_CODESIGN_CERTIFICATE_EXTRACTIONS[0],
-    ):
-        assert matching_command_lines(
-            collapse_shell_continuations(extraction_mutation),
-            "codesign --display",
-        ) != EXPECTED_CODESIGN_CERTIFICATE_EXTRACTIONS
 
     assert matching_command_lines(
         SIGNING_IMPORT_COMMAND, "security import "

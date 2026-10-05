@@ -1,11 +1,45 @@
 # KeyHollow Work Status
 
-Updated: 2026-10-03
+Updated: 2026-10-05
 
 This is the authoritative operational resume point. Historical Build 38
 evidence remains in `docs/PROJECT_CHECKPOINT.md`.
 
-## Latest checkpoint: Files import coordination; Build 62 candidate
+## Latest checkpoint: accepted Build 62; bulk save/delete policy extraction
+
+The owner reported "It works, proceed!" on 2026-10-05. PR #109 records
+Build 62 acceptance at main `215b2a28b1826ee29f04483fa3b1c3637675d04c`,
+main CI `37136505484` (501 unit tests, 3 launch tests and Swift CodeQL),
+Pages `37136505479`, signing preflight `37138062712`, upload `37138346945`,
+and Apple build `79832076-2c9c-4f7e-9201-54051acb7d78`. Build 62 supersedes
+Build 61 as the accepted device checkpoint. No additional test-by-test
+measurements were supplied; the two-phone transfer/failure matrix stays deferred.
+
+Branch `codex/gallery-bulk-operations` starts from that accepted main. Two
+app-only values now own sequential photo-save outcomes and selected deletion
+counts across photo/file groups. Composition retains admission, typed selected
+records, registered session tasks, concrete stores, Photos handoff, catalog
+refresh, selection updates and busy cleanup. Files export and media lifetime
+remain unchanged. The gallery falls from 2,041 to 1,986 lines; decomposition
+remains ongoing. This stage introduces no new product behavior or public API.
+
+Sixteen focused native tests cover ordered saves, permission denial, partial
+and total failure, empty deletion groups, missing stores and cancellation.
+Architecture mutation probes enforce the policy owners and composition wiring.
+Existing certificate comparison/extraction probes move unchanged into the
+already hash-verified workflow test helper. Both legacy ceilings shrink; no
+new source-size allowances or weakened checks are introduced.
+
+Local architecture (including mutation probes/source-size limits), workflow
+security, release hygiene and source privacy checks passed. A source comparison
+confirmed all gallery code outside the two handlers is unchanged, and the
+certificate probes moved intact. Native CI and delivery evidence will be
+recorded in this stage's PR after execution. The Apple browser session currently needs renewal before checking
+the next unused build number. Build 62 remains accepted while a new candidate
+is prepared. Distribution stays Internal-only, through the existing protected
+release workflows. See the [bulk device checklist](docs/GALLERY_BULK_DEVICE_CHECKPOINT.md).
+
+## Historical checkpoint: Files import coordination; Build 62 candidate
 
 The owner authorized resuming focused gallery cleanup through the next Internal
 device checkpoint. Branch `codex/gallery-file-import` starts from main

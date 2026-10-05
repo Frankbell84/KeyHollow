@@ -322,3 +322,36 @@ retry, import/export and background/lock cleanup. Preserve source originals.
 
 Later gallery stages remain separate reviewable changes; no tags, bulk-control
 expansion, large-video format, transfer wizard or Notes code enters this stage.
+
+## Ninth extraction: bulk photo save and selected deletion
+
+Build 62 was accepted by the owner on 2026-10-05 at main
+`215b2a28b1826ee29f04483fa3b1c3637675d04c`; PR #109 records native CI,
+signing and Internal delivery. Branch `codex/gallery-bulk-operations` starts
+from that checkpoint and reduces the gallery from 2,041 to 1,986 lines.
+
+`UI/VaultGalleryPhotoSaveBatch.swift` owns sequential result accounting,
+permission-denial precedence, cancellation publication guards and the existing
+messages/selection decision. Its nonescaping operation handles one record at
+a time. Decryption and the Photos handoff stay in the registered gallery task;
+no decrypted payload, task, store or session is retained by the policy owner.
+
+`UI/VaultGalleryDeletionBatch.swift` owns only selected group counts and result
+messages. It skips empty groups, tries photos before files, continues after
+ordinary failures and stops on a thrown cancellation. Concrete typed store
+calls remain in composition, followed by the same photo/file catalog refresh,
+presentation reconciliation and cancellation check before selection/message
+updates. Confirmation, busy cleanup and session registration are unchanged.
+
+Sixteen native tests cover partial outcomes and cancellation in addition to
+success. Executable-source assertions and negative mutation probes guard both
+owners and their authenticated composition. Existing workflow certificate
+probes move intact into the hash-verified test helper so the legacy checker
+can shrink as the new policy helper receives its own hash pin.
+
+This is a behavior-preserving extraction. Files export's registered task and
+plaintext dismissal barrier, individual media deletion, media lifetime and
+folder moves retain their current owners. Further extraction must preserve
+those lifetimes; the gallery is still oversized cleanup debt. Build 62 remains
+the accepted binary until the owner reports on the next Internal candidate.
+See [bulk operation device checks](GALLERY_BULK_DEVICE_CHECKPOINT.md).
